@@ -37,6 +37,7 @@ import { FooterCtaSection } from './components/landing/FooterCtaSection';
 import { MarketTerminalView } from './components/market/MarketTerminalView';
 import { EnergyMetersView } from './components/energy/EnergyMetersView';
 import { OracleEpochsView } from './components/oracle/OracleEpochsView';
+import { CanonicalMerkleTree } from './components/oracle/CanonicalMerkleTree';
 import { SettlementView } from './components/settlement/SettlementView';
 import { CertificatesView } from './components/certificates/CertificatesView';
 import { OperationsView } from './components/operations/OperationsView';
@@ -253,6 +254,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // URL Hash Navigation Listener (handles /#engine, /#merkle, /#tree)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#engine') {
+        setViewMode('story');
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const el = document.getElementById('engine');
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 80);
+        });
+      } else if (hash === '#merkle' || hash === '#tree') {
+        setViewMode('terminal');
+        setActiveTab('oracle');
+        setCurrentStage('EPOCH');
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-200 flex flex-col font-sans selection:bg-emerald-900 selection:text-white relative">
       {/* Background Ambient Fluid Energy Canvas */}
@@ -397,12 +424,26 @@ export default function App() {
             )}
 
             {activeTab === 'oracle' && (
-              <OracleEpochsView
-                currentInterval={currentInterval}
-                onBuildEpoch={handleBuildEpoch}
-                epochData={epochData}
-                onSelectDetail={(detail) => setDetailDrawerData(detail)}
-              />
+              currentStage === 'EPOCH' ? (
+                <CanonicalMerkleTree
+                  initialInterval={currentInterval}
+                  onReturnToMarket={() => {
+                    setActiveTab('market');
+                    setCurrentStage('AUCTION');
+                  }}
+                  onReturnToStory={() => setViewMode('story')}
+                  onViewQuorum={() => setCurrentStage('ORACLE')}
+                  onSelectDetail={(detail) => setDetailDrawerData(detail)}
+                />
+              ) : (
+                <OracleEpochsView
+                  currentInterval={currentInterval}
+                  onBuildEpoch={handleBuildEpoch}
+                  epochData={epochData}
+                  onOpenCanonicalTree={() => setCurrentStage('EPOCH')}
+                  onSelectDetail={(detail) => setDetailDrawerData(detail)}
+                />
+              )
             )}
 
             {activeTab === 'settlement' && (

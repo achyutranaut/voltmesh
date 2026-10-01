@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { Play, Pause, RotateCcw, Layers, Cpu, Radio, Shield, Award, CheckCircle2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Layers, Cpu, Radio, Shield, Award, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export type EngineMode = 'SYSTEM' | 'ARCHITECTURE' | 'STATIONS' | 'ONE_TRANSACTION';
 
@@ -9,7 +9,27 @@ export const EnergyExchange3D: React.FC = () => {
   const [activeMode, setActiveMode] = useState<EngineMode>('SYSTEM');
   const [selectedStation, setSelectedStation] = useState<number>(0);
   const [isPlayingTx, setIsPlayingTx] = useState<boolean>(true);
-  const [txProgress, setTxProgress] = useState<number>(0);
+  const [txStageLabel, setTxStageLabel] = useState<string>('Stage 1: Inverter Reading (1,250 Wh Generated)');
+  const [webglSupported, setWebglSupported] = useState<boolean>(true);
+
+  // Mutable refs to prevent re-initializing Three.js when state changes
+  const modeRef = useRef<EngineMode>('SYSTEM');
+  const stationRef = useRef<number>(0);
+  const playingTxRef = useRef<boolean>(true);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    modeRef.current = activeMode;
+  }, [activeMode]);
+
+  useEffect(() => {
+    stationRef.current = selectedStation;
+  }, [selectedStation]);
+
+  useEffect(() => {
+    playingTxRef.current = isPlayingTx;
+  }, [isPlayingTx]);
 
   const stationsMeta = [
     { id: 0, num: '01', name: 'GENERATION', desc: 'Solar Inverter Photon Conversion & Metering', color: '#f59e0b' },
@@ -20,29 +40,49 @@ export const EnergyExchange3D: React.FC = () => {
     { id: 5, num: '06', name: 'CERTIFICATE VAULT', desc: 'ERC-1155 GAC Token Minting & Nullifier Burn', color: '#10b981' },
   ];
 
+  // Initialize Three.js ONCE on mount
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
-    // 1. Scene, Camera, Renderer
-    const width = container.clientWidth || 800;
-    const height = container.clientHeight || 500;
+    // Check WebGL availability
+    try {
+      const testCanvas = document.createElement('canvas');
+      const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+      if (!gl) {
+        setWebglSupported(false);
+        return;
+      }
+    } catch (e) {
+      setWebglSupported(false);
+      return;
+    }
 
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 540;
+
+    // 1. Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = null; // Transparent
 
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
     camera.position.set(0, 5.5, 14);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
-    container.appendChild(renderer.domElement);
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      container.appendChild(renderer.domElement);
+    } catch (err) {
+      console.error('Failed to create WebGLRenderer:', err);
+      setWebglSupported(false);
+      return;
+    }
 
     // 2. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
     const keyLight = new THREE.DirectionalLight(0xdcfce7, 2.2);
@@ -66,7 +106,7 @@ export const EnergyExchange3D: React.FC = () => {
       roughness: 0.2,
     });
 
-    // 4. Build the 6 Stations
+    // 4. Stations Group
     const stationsGroup = new THREE.Group();
     scene.add(stationsGroup);
 
@@ -75,7 +115,7 @@ export const EnergyExchange3D: React.FC = () => {
     const totalStations = 6;
     const startX = -((totalStations - 1) * stationSpacing) / 2;
 
-    // Station 1: Generation (Photovoltaic tiers)
+    // Station 1: Generation (Solar Array)
     const st1 = new THREE.Group();
     st1.position.x = startX;
     const pvBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 1.8), darkMetalMat);
@@ -117,7 +157,6 @@ export const EnergyExchange3D: React.FC = () => {
     st3.position.x = startX + stationSpacing * 2;
     const oracleBase = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.1, 0.4, 6), darkMetalMat);
     st3.add(oracleBase);
-    // 3 Monoliths around center
     for (let i = 0; i < 3; i++) {
       const angle = (i * Math.PI * 2) / 3;
       const spire = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.4, 0.25), darkMetalMat);
@@ -201,7 +240,7 @@ export const EnergyExchange3D: React.FC = () => {
     stationObjects.push(st6);
     stationsGroup.add(st6);
 
-    // Continuous Transmission Conduit along bottom
+    // Continuous Transmission Conduit
     const mainBusbar = new THREE.Mesh(
       new THREE.CylinderGeometry(0.08, 0.08, totalStations * stationSpacing + 0.4, 16),
       conduitMat
@@ -210,7 +249,7 @@ export const EnergyExchange3D: React.FC = () => {
     mainBusbar.position.set(0, -0.1, 0);
     stationsGroup.add(mainBusbar);
 
-    // 5. Active Transaction Particle Sphere (for ONE TRANSACTION mode)
+    // Transaction Particle Sphere
     const txPacket = new THREE.Mesh(
       new THREE.SphereGeometry(0.18, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0xffffff })
@@ -220,7 +259,7 @@ export const EnergyExchange3D: React.FC = () => {
     scene.add(txPacket);
 
     // Ambient floating particles
-    const particleCount = 40;
+    const particleCount = 35;
     const particleGeo = new THREE.BufferGeometry();
     const posArray = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount * 3; i += 3) {
@@ -238,7 +277,7 @@ export const EnergyExchange3D: React.FC = () => {
     const particleCloud = new THREE.Points(particleGeo, particleMat);
     scene.add(particleCloud);
 
-    // Mouse drag interaction
+    // Mouse drag rotation
     let isDragging = false;
     let prevMouseX = 0;
     let targetRotationY = 0;
@@ -260,10 +299,24 @@ export const EnergyExchange3D: React.FC = () => {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
 
+    // ResizeObserver for reliable dimensions
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) {
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        }
+      }
+    });
+    resizeObserver.observe(container);
+
     // Animation Loop
     let animId: number;
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
     let txTime = 0;
+    let lastStageIdx = -1;
 
     const animate = () => {
       const delta = clock.getDelta();
@@ -280,55 +333,69 @@ export const EnergyExchange3D: React.FC = () => {
       certGem.rotation.y += 0.015;
       certGem.rotation.x = Math.sin(elapsed * 2) * 0.15;
 
-      // Mode-specific layouts & Camera adjustments
-      if (activeMode === 'SYSTEM') {
+      const currentMode = modeRef.current;
+      const currentStation = stationRef.current;
+      const isPlaying = playingTxRef.current;
+
+      if (currentMode === 'SYSTEM') {
         camera.position.lerp(new THREE.Vector3(0, 4.8, 13.5), 0.05);
         camera.lookAt(0, 0.6, 0);
 
-        // Reset positions
-        stationObjects.forEach((st, idx) => {
+        stationObjects.forEach((st) => {
           st.position.y = THREE.MathUtils.lerp(st.position.y, 0, 0.1);
           st.position.z = THREE.MathUtils.lerp(st.position.z, 0, 0.1);
         });
-      } else if (activeMode === 'ARCHITECTURE') {
+      } else if (currentMode === 'ARCHITECTURE') {
         camera.position.lerp(new THREE.Vector3(0, 7.5, 15), 0.05);
         camera.lookAt(0, 1.2, 0);
 
-        // Explode vertically into layers
         stationObjects.forEach((st, idx) => {
           const layerOffset = idx % 2 === 0 ? 1.0 : -0.6;
           st.position.y = THREE.MathUtils.lerp(st.position.y, layerOffset, 0.08);
           st.position.z = THREE.MathUtils.lerp(st.position.z, idx * 0.2 - 0.5, 0.08);
         });
-      } else if (activeMode === 'STATIONS') {
-        const targetX = startX + selectedStation * stationSpacing;
+      } else if (currentMode === 'STATIONS') {
+        const targetX = startX + currentStation * stationSpacing;
         camera.position.lerp(new THREE.Vector3(targetX, 3.2, 6.5), 0.05);
         camera.lookAt(targetX, 0.8, 0);
 
-        stationObjects.forEach((st, idx) => {
+        stationObjects.forEach((st) => {
           st.position.y = THREE.MathUtils.lerp(st.position.y, 0, 0.1);
           st.position.z = THREE.MathUtils.lerp(st.position.z, 0, 0.1);
         });
-      } else if (activeMode === 'ONE_TRANSACTION') {
-        // Follow transaction packet
-        if (isPlayingTx) {
+      } else if (currentMode === 'ONE_TRANSACTION') {
+        if (isPlaying) {
           txTime += delta * 0.45;
           const progress = (txTime % 1.0);
-          setTxProgress(progress);
 
-          // Path along stations from startX to endX
+          if (progressBarRef.current) {
+            progressBarRef.current.style.width = `${Math.round(progress * 100)}%`;
+          }
+
           const totalDist = (totalStations - 1) * stationSpacing;
           const currentX = startX + progress * totalDist;
           const currentY = 0.8 + Math.sin(progress * Math.PI * 10) * 0.2;
           txPacket.position.set(currentX, currentY, 0);
 
-          // Color change based on station stage
-          const currentStationIdx = Math.min(5, Math.floor(progress * 6));
-          if (currentStationIdx === 0) txGlow.color.setHex(0xf59e0b);
-          else if (currentStationIdx === 1) txGlow.color.setHex(0x06b6d4);
-          else if (currentStationIdx === 2) txGlow.color.setHex(0x22c55e);
-          else if (currentStationIdx === 3) txGlow.color.setHex(0xa855f7);
-          else if (currentStationIdx === 4) txGlow.color.setHex(0x3b82f6);
+          const stageIdx = Math.min(5, Math.floor(progress * 6));
+          if (stageIdx !== lastStageIdx) {
+            lastStageIdx = stageIdx;
+            const labels = [
+              'Stage 1: Inverter Reading (1,250 Wh Generated)',
+              'Stage 2: Hardware Enclave (Ed25519 Signed)',
+              'Stage 3: 3-of-3 Oracle Quorum Reached',
+              'Stage 4: Call Auction Cleared (₹4.50 / kWh)',
+              'Stage 5: Escrow Net Cash Reconciled (₹9.00)',
+              'Stage 6: GAC ERC-1155 Token Minted',
+            ];
+            setTxStageLabel(labels[stageIdx]);
+          }
+
+          if (stageIdx === 0) txGlow.color.setHex(0xf59e0b);
+          else if (stageIdx === 1) txGlow.color.setHex(0x06b6d4);
+          else if (stageIdx === 2) txGlow.color.setHex(0x22c55e);
+          else if (stageIdx === 3) txGlow.color.setHex(0xa855f7);
+          else if (stageIdx === 4) txGlow.color.setHex(0x3b82f6);
           else txGlow.color.setHex(0x10b981);
 
           camera.position.lerp(new THREE.Vector3(currentX, 3.5, 8.5), 0.08);
@@ -336,8 +403,7 @@ export const EnergyExchange3D: React.FC = () => {
         }
       }
 
-      // Hide/Show tx packet when not in one_tx mode
-      txPacket.visible = activeMode === 'ONE_TRANSACTION';
+      txPacket.visible = currentMode === 'ONE_TRANSACTION';
 
       renderer.render(scene, camera);
       animId = requestAnimationFrame(animate);
@@ -345,19 +411,9 @@ export const EnergyExchange3D: React.FC = () => {
 
     animate();
 
-    const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth || 800;
-      const h = container.clientHeight || 500;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
-
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       container.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -365,13 +421,36 @@ export const EnergyExchange3D: React.FC = () => {
         container.removeChild(renderer.domElement);
       }
       renderer.dispose();
+      particleGeo.dispose();
+      particleMat.dispose();
+      darkMetalMat.dispose();
+      conduitMat.dispose();
     };
-  }, [activeMode, selectedStation, isPlayingTx]);
+  }, []);
 
   return (
     <div className="relative w-full h-[540px] bg-gradient-to-b from-[#09090b] via-[#121215] to-[#09090b] border border-zinc-800 rounded-none overflow-hidden select-none">
       {/* 3D Canvas Mounting Container */}
       <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+
+      {/* Fallback if WebGL fails */}
+      {!webglSupported && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-zinc-950 font-mono text-xs">
+          <AlertTriangle className="w-8 h-8 text-amber-400 mb-2" />
+          <div className="text-white font-bold text-sm">HARDWARE GRAPHICS ACCELERATION LIMITED</div>
+          <p className="text-zinc-400 max-w-md mt-1">
+            Displaying structural kinetic architecture diagram. WebGL context was not acquired.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mt-6 w-full max-w-2xl">
+            {stationsMeta.map((s) => (
+              <div key={s.id} className="p-2.5 bg-zinc-900 border border-zinc-800 rounded text-left">
+                <span className="text-[10px] text-zinc-500">{s.num}</span>
+                <div className="text-white font-bold mt-1 text-[11px]">{s.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top Header Mode HUD */}
       <div className="absolute top-3 left-4 right-4 flex flex-wrap items-center justify-between gap-3 font-mono text-xs pointer-events-none">
@@ -436,26 +515,15 @@ export const EnergyExchange3D: React.FC = () => {
             </button>
             <div>
               <div className="text-[10px] text-zinc-500 uppercase">TRACE PACKET #TX-48092</div>
-              <div className="text-white font-bold text-xs mt-0.5">
-                {txProgress < 0.17
-                  ? 'Stage 1: Inverter Reading (1,250 Wh Generated)'
-                  : txProgress < 0.34
-                  ? 'Stage 2: Hardware Enclave (Ed25519 Signed)'
-                  : txProgress < 0.51
-                  ? 'Stage 3: 3-of-3 Oracle Quorum Reached'
-                  : txProgress < 0.68
-                  ? 'Stage 4: Call Auction Cleared (₹4.50 / kWh)'
-                  : txProgress < 0.85
-                  ? 'Stage 5: Escrow Net Cash Reconciled (₹9.00)'
-                  : 'Stage 6: GAC ERC-1155 Token Minted'}
-              </div>
+              <div className="text-white font-bold text-xs mt-0.5">{txStageLabel}</div>
             </div>
           </div>
 
           <div className="w-48 bg-zinc-900 h-2 rounded-none overflow-hidden border border-zinc-800">
             <div
+              ref={progressBarRef}
               className="bg-emerald-500 h-full transition-all duration-75"
-              style={{ width: `${Math.round(txProgress * 100)}%` }}
+              style={{ width: '0%' }}
             />
           </div>
         </div>

@@ -1,107 +1,103 @@
-# 3D Experience Specification: The Energy Exchange Engine
+# Energy Exchange Engine (3D Interactive Infrastructure Experience)
 
-**Document Version:** 1.0.0  
-**Domain:** Abstract Physical Infrastructure Visualization  
-**Technology:** Three.js / WebGL / React Three Fiber / Custom GLSL Shaders
+## 1. Overview & Purpose
+
+The **Energy Exchange Engine** is a high-fidelity, interactive 3D technical model embodying the six physical, cryptographic, and financial clearing stages of the Decentralized Energy Exchange (DEX). 
+
+Rather than presenting an abstract flowchart or a generic factory metaphor, this component serves as a **kinetic physical model of the protocol architecture**:
+- Demonstrates how solar electrons physically flow from decentralized prosumer photovoltaics into hardware secure elements.
+- Visualizes how asymmetric cryptographic attestations (Ed25519) are aggregated into decentralized multi-operator oracle quorums (DISCOM MDMS, DERC Regulator, Independent Auditor).
+- Explains the deterministic discrete call auction ($k = 0.5$ midpoint clearing) matching supply and demand.
+- Depicts T+1 atomic escrow netting and automated Granular Attestation Certificate (GAC) minting with permanent nullifier burn.
 
 ---
 
-## 1. Domain Transformation: From "AI Factory" to "Energy Infrastructure Engine"
+## 2. Component Architecture
 
-We completely discard all juvenile "Agentic Factory", "Idea to Payment", and AI-cliché terminology.  
-In their place stands the **Energy Exchange Engine**—an abstract physical machine that embodies how software, cryptography, electrical engineering, and financial clearing operate synchronously.
+The experience is modularized under `src/components/energy-exchange-engine/`:
 
 ```
-                           THE ENERGY EXCHANGE ENGINE
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ [01]          [02]            [03]         [04]         [05]         [06]   │
-│ GENERATION → ATTESTATION → ORACLE QUORUM → MARKET → SETTLEMENT → CERTIFICATE│
-│ Inverter      Hardware Enclave 3-of-3 Node Double-Call  Atomic Escrow ERC-1155  │
-│ Micro-Grid    ATECC608B RoT   Consensus    Auction     Reconcile     Vault   │
-└─────────────────────────────────────────────────────────────────────────────┘
+apps/web/src/components/energy-exchange-engine/
+├── EnergyExchangeEngine.tsx     # Root orchestration container, state manager & HUD
+├── EnergyEngineScene.tsx        # Procedural Three.js scene, OrbitControls, materials, lighting & WebGL context
+├── EnergyEngineControls.tsx     # Mode selector (SYSTEM, ARCHITECTURE, STATIONS, ONE TX) & camera viewpoints
+├── EnergyEngineOverlay.tsx      # Technical HUD coordinates, grid watermark, and accessibility aria tree
+├── EnergyEngineStation.tsx      # Metadata registry and drill-down inspection modal for the 6 stations
+├── EnergyFlow.tsx               # Procedural spline busbar network and instanced kinetic energy pulses
+├── TransactionJourney.tsx       # Live microsecond telemetry ticker for the ONE TRANSACTION walkthrough
+└── energy-engine.css            # Scoped CSS styling isolating the 3D canvas and HUD
 ```
 
-The 3D model does not depict a literal brick-and-mortar power plant. It is an **architectural kinetic machine** composed of brushed dark alloy chambers, luminous high-voltage conduits, crystalline cryptographic verification modules, and monolithic settlement blocks.
+Additionally, `@/components/ui/energy-exchange-3d.tsx` and `@/components/ui/agentic-factory-3d.tsx` are provided in `components/ui` for standards compliance and reusable UI component ergonomics.
 
 ---
 
-## 2. The Six Infrastructure Stations
+## 3. The Six Energy Stations
 
-### Station 01: Generation (Solar & Storage Array)
-- **Physical Metaphor:** Monolithic stepped photovoltaic silicon tiers with pulsating copper busbars and micro-inverter capacitor banks.
-- **Visual Materials:** Dark iridescent obsidian wafers (`roughness: 0.15`, `metalness: 0.85`), thin gold circuit tracers, ambient warm solar amber internal illumination (`#f59e0b`).
-- **Dynamic State:** Energy pulses surge with variable intensity based on the active solar irradiance curve (e.g. peaking at midday Interval 48).
-
-### Station 02: Attestation (Hardware Secure Element)
-- **Physical Metaphor:** Sealed tamper-evident hardware enclave cabinet (representing ATECC608B / TPM 2.0 microchip).
-- **Visual Materials:** Matte gunmetal steel shell (`#18181b`) with a central recessed crystalline prism emitting a concentrated beam of cyan cryptographic light (`#06b6d4`).
-- **Dynamic State:** When an energy reading passes through, an Ed25519 asymmetric signature rings the cylinder with etched hexadecimal glyphs.
-
-### Station 03: Oracle Quorum (Consensus Node Array)
-- **Physical Metaphor:** Three rotating hexagonal monoliths arranged symmetrically around a central vertical spire (representing DISCOM, Regulatory, and DEX nodes).
-- **Visual Materials:** Polished dark titanium with vertical luminescent status conduits.
-- **Dynamic State:** All three monoliths must project beams inward to the focal point to reach the 3-of-3 threshold; if consensus is reached, the central spire ignites emerald (`#22c55e`).
-
-### Station 04: Market Engine (Call Auction Core)
-- **Physical Metaphor:** Symmetrical magnetic accelerator chamber with intersecting upper and lower pricing rails (Demand vs. Supply).
-- **Visual Materials:** Heavy cast iron framing with floating luminous magnetic rings (cyan bids above, emerald asks below).
-- **Dynamic State:** At gate closure, the magnetic rings compress toward the central midpoint plane ($k = 0.5$), locking the uniform clearing price with a sharp kinetic clamp animation.
-
-### Station 05: Settlement (Atomic Escrow Vault)
-- **Physical Metaphor:** Dual-locking hydraulic escrow chambers with interlocking ledger plates and transparent glass conduits showing liquid digital collateral.
-- **Visual Materials:** Dark graphite plates with inset gold contact pads and pressure valves (`#3b82f6` settlement illumination).
-- **Dynamic State:** As delivery obligations are verified, the hydraulic locks actuate, releasing cleared rupee credits from buyer escrow to seller balance.
-
-### Station 06: Certificate Vault (GAC Environmental Provenance)
-- **Physical Metaphor:** Crystalline vault containing floating emerald token facets (ERC-1155 Granular Attribute Certificates).
-- **Visual Materials:** Prismatic emerald crystal (`transmission: 0.9`, `ior: 1.52`, `roughness: 0.05`) with internal laser-etched nullifier hashes.
-- **Dynamic State:** Minting causes a crystalline facet to illuminate and register in the vault rack; retirement triggers a controlled electrical discharge that nullifies the token permanently.
+| Station # | Stage Name | Visual Metaphor | Inputs | Primary Process | Outputs |
+|---|---|---|---|---|---|
+| **01** | **GENERATION** | Inverter chamber, angled photovoltaic array, dual copper induction coils | Solar radiation flux | DC-to-AC power inversion & CT current measurement | Raw active power pulses (kWh) |
+| **02** | **ATTESTATION** | Utility meter enclosure, live procedural LCD screen, secure enclave diode | Instantaneous kW telemetry | ATECC608B Root-of-Trust Ed25519 asymmetric signature | Signed Attestation Envelope |
+| **03** | **ORACLE QUORUM** | Tri-operator server spires, rotating Merkle Root sphere, concentric copper rings | Signed meter envelopes | 3-of-3 quorum consensus across DISCOM, DERC, and Auditor | Committed Epoch Merkle Root |
+| **04** | **CALL MARKET** | Auction core with counter-rotating supply/demand rings & order ledger display | EIP-712 signed bids & asks | $k = 0.5$ midpoint uniform-price double auction | Uniform clearing price & bilateral obligations |
+| **05** | **SETTLEMENT** | Dual pressurized escrow cylinders, bridging copper conduit, settlement receipt | Matched obligations + AMI true-up | Bilateral escrow netting & DISCOM statement credit | Atomic financial settlement batch |
+| **06** | **CERTIFICATE** | Metallic gantry, floating green octahedral crystal, orbital provenance rings | Epoch Merkle inclusion proof | ERC-1155 GAC token minting & cryptographic nullifier burn | Irrevocable green certificate |
 
 ---
 
-## 3. The Four Interactive Inspection Modes
+## 4. Operational Modes
 
-| Mode | Camera Position & Behavior | Mechanical Geometry State | Informational Overlay |
-| :--- | :--- | :--- | :--- |
-| **1. SYSTEM** | Wide isometric orbital camera (`theta: 45°`, `phi: 30°`, `dist: 18m`). Smooth 360° user rotation. | All 6 stations assembled together in an integrated linear transmission block. Ambient energy particles circulate continuously. | Overall feeder capacity (kVA), active trading interval, aggregate MWh volume, and system health status. |
-| **2. ARCHITECTURE** | Camera pulls back slightly; exploded view triggered along Y and Z axes. | Machine components separate into 3 vertical layers: Physical Grid layer (bottom), Cryptographic Oracle layer (middle), Financial Settlement layer (top). | Component callout labels, busbar bandwidth, cryptographic algorithms, and RPC contract addresses. |
-| **3. STATIONS** | Smooth dolly zoom to selected station. Camera locks onto target module with local orbital control. | Focused station remains fully opaque and active; adjacent stations fade to 20% ghosted wireframe opacity. | Detailed station telemetry: sensor readings, public keys, quorum threshold counts, order matching curves, token IDs. |
-| **4. ONE TRANSACTION** | Cinematic tracking camera that follows a single energy token packet through the machine. | Stations sequentially activate and pulse as the discrete energy packet arrives and is processed. | Real-time transaction HUD showing current state: `Reading (1250 Wh)` $\to$ `Signed (Ed25519)` $\to$ `Quorum (3/3)` $\to$ `Cleared (₹4.50)` $\to$ `Escrow Settled` $\to$ `GAC Minted`. |
+1. **SYSTEM (Default)**:
+   - Full connected mechanism operating synchronously.
+   - Shows continuous energy flow along primary copper busbars with instanced pulses.
+   - Smooth auto-damping OrbitControls for 360° rotation and zoom.
+
+2. **ARCHITECTURE (Exploded Cutaway)**:
+   - Activates local clipping plane at platform height.
+   - Vertically separates layers to reveal internal electrical gears, pneumatic lines, and busbar routing.
+   - Enables structural comprehension of how the physical grid connects to the cryptographic ledger.
+
+3. **STATIONS (Inspection Focus)**:
+   - Smoothly glides the camera to focus on an individual station.
+   - Projects 3D anchor points to floating 2D HUD label pins.
+   - Opens the detailed Station Inspection Modal displaying field specifications, inputs, processes, and outputs.
+
+4. **ONE TRANSACTION (Telemetry Journey)**:
+   - Tracks a single glowing energy quantum packet traversing from Station 01 through Station 06.
+   - Displays real-time microsecond timestamp ticker (`04:32:18.102` through `04:32:19.320`).
+   - Dynamic packet illumination shifts color matching each protocol stage (Amber → Cyan → Green → Purple → Blue → Emerald).
 
 ---
 
-## 4. Materials, Lighting & Visual Rendering Pipeline
+## 5. Props & Application State Integration
 
-```
-┌────────────────────────────────────────────────────────┐
-│ THREE.JS WEBGL RENDERER                                │
-│ Tone Mapping: ACESFilmicToneMapping (Exposure: 1.05)   │
-│ Shadow Map: Soft PCF (PCFSoftShadowMap)                │
-│ Background: Transparent / Seamless with #09090b Zinc  │
-├────────────────────────────────────────────────────────┤
-│ LIGHTING ENVIRONMENT:                                  │
-│ - Key Light: DirectionalLight (Cold white, 2.8 int)   │
-│ - Fill Light: DirectionalLight (Deep blue, 1.2 int)    │
-│ - Rim Light: Sharp grazing backlight (Cyan, 3.5 int)  │
-│ - Ambient: Quiescent dark ambient (0.35 int)           │
-│ - Local Accents: PointLights at active station cores   │
-└────────────────────────────────────────────────────────┘
+`EnergyExchangeEngine` accepts props allowing live linkage to the trading platform:
+
+```tsx
+interface EnergyExchangeEngineProps {
+  height?: number | string;            // Canvas height (default: 640px)
+  className?: string;                  // Outer container styling
+  zone?: string;                       // e.g. "DL-TPDDL-Z1"
+  intervalIdx?: number;                // Current 15-min interval (0..95)
+  clearingPricePaise?: number;         // Active market clearing price (e.g. 450)
+  onStationSelect?: (id: EnergyStationId) => void; // Station click callback
+}
 ```
 
-### Material Specifications
-- **Dark Titanium Shell:** `MeshStandardMaterial` with `color: #121215`, `roughness: 0.28`, `metalness: 0.92`, `envMapIntensity: 1.2`.
-- **Luminescent Energy Conduits:** Emissive materials with custom pulse vertex shaders modulating emissive intensity between $1.0$ and $4.5$ along the spline path.
-- **Cryptographic Glass:** Physical transmission material (`roughness: 0.1`, `metalness: 0.1`, `transmission: 0.88`, `thickness: 1.2`, `ior: 1.45`).
+---
+
+## 6. Performance & WebGL Optimizations
+
+- **Resource Disposal**: Complete cleanup on component unmount of all geometries, materials, procedural canvas textures, and WebGL contexts (`renderer.forceContextLoss()`).
+- **Dynamic Draw Instancing**: Uses `THREE.InstancedMesh` with `DynamicDrawUsage` for the 72 energy pulses, keeping draw calls minimal (< 45 calls per frame).
+- **Reduced Motion Support**: Inspects `prefers-reduced-motion: reduce` to eliminate disorienting camera movements and rapid rotations.
+- **Pixel Ratio Clamping**: Caps `devicePixelRatio` to 1.8 to prevent GPU thermal throttling on high-DPI displays.
+- **Context Loss Resilience**: Listens for `webglcontextlost` and `webglcontextrestored` to gracefully recover graphics state without crash.
 
 ---
 
-## 5. Performance, Instancing & Responsive Fallbacks
+## 7. Accessibility & Mobile Behavior
 
-1. **Geometry Instancing:**
-   - Repeated elements (busbars, conduits, crystalline facets, order book depth bars) use `THREE.InstancedMesh` to keep draw calls below **45 calls per frame**.
-2. **Dynamic Resolution Scaling:**
-   - On devices with DPR $> 1.5$, canvas resolution clamps to a maximum of $1.5\times$ to avoid GPU memory saturation on mobile retina displays.
-3. **Mobile & Low-End GPU Fallback:**
-   - If WebGL 2.0 is unavailable or FPS drops below $30$, the system automatically switches to an **orthographic SVG vector interactive diagram** that maintains identical interactive station controls and telemetry overlays with zero 3D overhead.
-4. **Reduced Motion (`prefers-reduced-motion`):**
-   - Disables continuous rotation, camera tracking lerp, and particle drift. Stations remain in clean static exploded diagrams selectable via tab clicks.
+- **Screen-Reader Compatibility**: Includes a hidden `.sr-only` semantic `<ol>` document tree describing each station's technical function for non-visual users.
+- **Touch Gestures**: Single-finger drag rotates the machine; page scroll is preserved when scrolling past the component on mobile viewports.
+- **Responsive Layout**: On mobile screens (`<= 768px`), height adapts to 520px, HUD control buttons stack compactly, and the station inspection modal transforms into a bottom-docked sheet.

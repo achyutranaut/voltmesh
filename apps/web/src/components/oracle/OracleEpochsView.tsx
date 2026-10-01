@@ -16,6 +16,7 @@ interface OracleEpochsViewProps {
   onBuildEpoch: () => void;
   epochData: any;
   onSelectDetail: (detail: DetailDrawerData) => void;
+  onOpenCanonicalTree?: () => void;
 }
 
 export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
@@ -23,6 +24,7 @@ export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
   onBuildEpoch,
   epochData,
   onSelectDetail,
+  onOpenCanonicalTree,
 }) => {
   const quorumNodes: OracleNodeInfo[] = [
     {
@@ -193,6 +195,16 @@ export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
             <RefreshCw className="w-4 h-4" />
             <span>BUILD CANONICAL EPOCH MERKLE TREE</span>
           </button>
+
+          {onOpenCanonicalTree && (
+            <button
+              onClick={onOpenCanonicalTree}
+              className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-emerald-800/60 font-semibold py-2 px-3 rounded flex items-center justify-center space-x-2 transition-colors"
+            >
+              <Binary className="w-4 h-4 text-emerald-400" />
+              <span>OPEN INTERACTIVE MERKLE TREE (96 LEAVES)</span>
+            </button>
+          )}
         </div>
 
         {/* Proof Explorer Column */}

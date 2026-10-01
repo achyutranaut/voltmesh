@@ -1,0 +1,400 @@
+/* =========================================================================
+   ENERGY EXCHANGE ENGINE — TECHNICAL SCENE STYLING
+   Precision styling scoped to .energy-exchange-engine container
+   ========================================================================= */
+
+.energy-exchange-engine {
+  position: relative;
+  width: 100%;
+  height: 640px;
+  background: #050608;
+  color: #f4f5f7;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+  box-sizing: border-box;
+  contain: layout;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.energy-exchange-engine * {
+  box-sizing: border-box;
+}
+
+.energy-exchange-engine .scene-container {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  outline: none;
+}
+
+.energy-exchange-engine .scene-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.energy-exchange-engine .vignette-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 30%,
+    rgba(3, 4, 6, 0.25) 60%,
+    rgba(3, 4, 6, 0.85) 100%
+  );
+}
+
+/* Drafting technical grid watermark */
+.energy-exchange-engine .grid-watermark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Top control bar */
+.energy-exchange-engine .engine-header {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.energy-exchange-engine .engine-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(10, 12, 16, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 12px;
+  border-radius: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.energy-exchange-engine .engine-brand .dot-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: engine-pulse 2s infinite ease-in-out;
+}
+
+@keyframes engine-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.energy-exchange-engine .engine-brand strong {
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.energy-exchange-engine .engine-brand span {
+  font-size: 10px;
+  color: #71717a;
+}
+
+/* Mode pill buttons */
+.energy-exchange-engine .mode-selector {
+  display: flex;
+  gap: 2px;
+  background: rgba(10, 12, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px;
+  border-radius: 6px;
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.energy-exchange-engine .mode-btn {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  padding: 6px 12px;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.energy-exchange-engine .mode-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.energy-exchange-engine .mode-btn[aria-pressed='true'] {
+  background: #10b981;
+  color: #030712;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+}
+
+/* Bottom camera & action bar */
+.energy-exchange-engine .engine-footer {
+  position: absolute;
+  bottom: 18px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.energy-exchange-engine .footer-label {
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: #71717a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.energy-exchange-engine .camera-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(10, 12, 16, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.energy-exchange-engine .camera-controls .caption {
+  font-size: 9px;
+  color: #52525b;
+  margin-right: 6px;
+  letter-spacing: 1px;
+}
+
+.energy-exchange-engine .camera-btn {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  padding: 4px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.energy-exchange-engine .camera-btn:hover,
+.energy-exchange-engine .camera-btn[aria-pressed='true'] {
+  color: #fff;
+}
+
+.energy-exchange-engine .camera-btn[aria-pressed='true'] {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.energy-exchange-engine .camera-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+}
+
+.energy-exchange-engine .play-btn {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.energy-exchange-engine .play-btn:hover {
+  color: #10b981;
+}
+
+/* Interactive Station Pin Labels */
+.energy-exchange-engine .station-labels-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 15;
+}
+
+.energy-exchange-engine .station-label-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.energy-exchange-engine .station-label-pin.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.energy-exchange-engine .station-label-pin .stem {
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(to top, rgba(16, 185, 129, 0.8), transparent);
+  margin-left: 12px;
+}
+
+.energy-exchange-engine .station-label-pin .card {
+  background: rgba(14, 17, 23, 0.94);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 5px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+}
+
+.energy-exchange-engine .station-label-pin .card strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #fff;
+}
+
+.energy-exchange-engine .station-label-pin .card strong span {
+  color: #10b981;
+  font-size: 9px;
+}
+
+.energy-exchange-engine .station-label-pin .card small {
+  display: block;
+  font-size: 9px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+/* Active Station Detail Inspection Modal/Panel */
+.energy-exchange-engine .station-modal-panel {
+  position: absolute;
+  top: 70px;
+  right: 20px;
+  width: 310px;
+  background: rgba(13, 16, 22, 0.95);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 6px;
+  padding: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(14px);
+  z-index: 25;
+  animation: panel-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.energy-exchange-engine .station-modal-panel .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.energy-exchange-engine .station-modal-panel .close-btn {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.energy-exchange-engine .station-modal-panel .close-btn:hover {
+  color: #fff;
+}
+
+/* One Transaction Telemetry Ribbon */
+.energy-exchange-engine .transaction-ticker {
+  position: absolute;
+  top: 68px;
+  left: 20px;
+  right: 20px;
+  background: rgba(13, 16, 22, 0.92);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 10px 14px;
+  border-radius: 6px;
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  z-index: 20;
+}
+
+.energy-exchange-engine .transaction-ticker .progress-bar-bg {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.energy-exchange-engine .transaction-ticker .progress-bar-fill {
+  height: 100%;
+  background: #10b981;
+  transition: width 0.1s linear;
+}
+
+/* Responsive queries */
+@media (max-width: 768px) {
+  .energy-exchange-engine {
+    height: 520px;
+  }
+  .energy-exchange-engine .engine-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .energy-exchange-engine .mode-selector {
+    justify-content: space-between;
+  }
+  .energy-exchange-engine .mode-btn {
+    padding: 6px 8px;
+    font-size: 9px;
+  }
+  .energy-exchange-engine .station-modal-panel {
+    width: auto;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 60px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-exchange-engine * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
