@@ -1,0 +1,36 @@
+# Node
+node_modules/
+dist/
+build/
+.turbo/
+.next/
+out/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Testing & Coverage
+coverage/
+.nyc_output/

@@ -1,0 +1,22 @@
+{
+  "name": "decentralized-energy-exchange",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Mass-Scale Decentralized Energy Exchange Monorepo",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "pnpm --filter \"./packages/*\" run build",
+    "test": "pnpm --filter \"./packages/*\" run test",
+    "test:contracts": "cd contracts && forge test",
+    "test:contracts:invariant": "cd contracts && forge test --match-test invariant",
+    "contracts:build": "cd contracts && forge build",
+    "lint": "pnpm --filter \"./packages/*\" run lint",
+    "clean": "pnpm -r run clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,8 @@
+packages:
+  - 'packages/*'
+  - 'services/*'
+  - 'simulators/*'
+  - 'apps/*'
+
+allowBuilds:
+  esbuild: true
