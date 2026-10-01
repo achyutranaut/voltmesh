@@ -1,0 +1,29 @@
+{
+  "name": "@energy-dex/ingest-gateway",
+  "version": "1.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@energy-dex/attestation": "workspace:*",
+    "@energy-dex/types": "workspace:*",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@energy-dex/meter-sim": "workspace:*",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

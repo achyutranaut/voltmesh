@@ -6,7 +6,8 @@
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "build": "pnpm --filter \"./packages/*\" run build",
-    "test": "pnpm --filter \"./packages/*\" run test",
+    "test": "pnpm --filter \"./packages/*\" --filter \"./services/*\" --filter \"./simulators/*\" run test",
+    "test:e2e": "vitest run tests/e2e/lifecycle.test.ts",
     "test:contracts": "cd contracts && forge test",
     "test:contracts:invariant": "cd contracts && forge test --match-test invariant",
     "contracts:build": "cd contracts && forge build",

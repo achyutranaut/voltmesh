@@ -1,0 +1,72 @@
+import { describe, it, expect } from 'vitest';
+import { BatchMatcher, ZoneMarketConfig } from '../src/index.js';
+import { Order, OrderSide } from '@energy-dex/types';
+
+describe('BatchMatcher Service', () => {
+  const zoneConfig: ZoneMarketConfig = {
+    zoneId: 1,
+    priceFloorPaiseKWh: 200n,
+    priceCapPaiseKWh: 1200n,
+    zoneCapacityWh: 500000n,
+    gateClosureLeadSeconds: 3600,
+  };
+
+  const gateClosure = 1775000000;
+
+  const createOrder = (
+    id: string,
+    side: OrderSide,
+    quantityWh: bigint,
+    pricePaise: bigint,
+    participant: string = '0x1111111111111111111111111111111111111111'
+  ): Order => ({
+    orderId: id,
+    participant,
+    zoneId: 1,
+    intervalIdx: 100,
+    side,
+    quantityWh,
+    pricePaisePerKWh: pricePaise,
+    nonce: 1n,
+    expiry: gateClosure + 1800,
+    signature: new Uint8Array(65),
+    createdAt: 1000,
+  });
+
+  it('accepts orders, issues receipts with sequence numbers, and clears the batch', () => {
+    const matcher = new BatchMatcher();
+
+    // Order 1: Buy 2000 Wh at 600 paise
+    const buyOrder = createOrder('ord-b1', OrderSide.BUY, 2000n, 600n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    const rcpt1 = matcher.submitOrder(buyOrder, gateClosure, gateClosure - 500);
+
+    expect(rcpt1.sequenceNumber).toBe(1);
+    expect(rcpt1.orderHash.startsWith('0x')).toBe(true);
+
+    // Order 2: Sell 2000 Wh at 400 paise
+    const sellOrder = createOrder('ord-s1', OrderSide.SELL, 2000n, 400n, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+    const rcpt2 = matcher.submitOrder(sellOrder, gateClosure, gateClosure - 300);
+
+    expect(rcpt2.sequenceNumber).toBe(2);
+    expect(matcher.getOrdersCount(1, 100)).toBe(2);
+
+    // Gate closure -> Clear market
+    const result = matcher.closeAndClear(1, 100, zoneConfig, 'epoch-seed-100', gateClosure);
+
+    expect(result.clearedVolumeWh).toBe(2000n);
+    expect(result.clearingPricePaiseKWh).toBe(500n);
+    expect(result.obligations.length).toBe(1);
+    expect(result.ordersMerkleRoot.startsWith('0x')).toBe(true);
+    expect(result.obligationsMerkleRoot.startsWith('0x')).toBe(true);
+  });
+
+  it('rejects order submitted after gate closure', () => {
+    const matcher = new BatchMatcher();
+    const lateOrder = createOrder('ord-late', OrderSide.BUY, 1000n, 500n);
+
+    // Current time is 10s past gate closure
+    expect(() => matcher.submitOrder(lateOrder, gateClosure, gateClosure + 10)).toThrow(
+      'Gate closure has passed'
+    );
+  });
+});
