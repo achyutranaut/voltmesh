@@ -1,0 +1,31 @@
+{
+  "name": "@energy-dex/api",
+  "version": "1.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@energy-dex/attestation": "workspace:*",
+    "@energy-dex/clearing": "workspace:*",
+    "@energy-dex/epoch-builder": "workspace:*",
+    "@energy-dex/matcher": "workspace:*",
+    "@energy-dex/types": "workspace:*",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/jwt": "^9.0.2",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "viem": "^2.21.57",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
