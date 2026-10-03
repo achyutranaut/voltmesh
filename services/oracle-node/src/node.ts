@@ -75,6 +75,21 @@ export class OracleNode {
     intervalIdx: number,
     readings: MeterReadingPayload[]
   ): Promise<{ epoch: EpochRecord; signature: OracleSignature }> {
+    // 0. Physical plausibility & consistency verification
+    for (const r of readings) {
+      if (r.zoneId !== zoneId || r.intervalIdx !== intervalIdx) {
+        throw new Error(
+          `Oracle [${this.operatorId}] rejected reading for ${r.deviceId}: mismatched zone/interval (${r.zoneId}:${r.intervalIdx} vs ${zoneId}:${intervalIdx})`
+        );
+      }
+      if (r.energyWh < 0n) {
+        throw new Error(`Oracle [${this.operatorId}] rejected reading for ${r.deviceId}: negative energy volume`);
+      }
+      if (r.counter <= 0n) {
+        throw new Error(`Oracle [${this.operatorId}] rejected reading for ${r.deviceId}: non-positive counter`);
+      }
+    }
+
     // 1. Re-compute Merkle tree independently
     const builtEpoch = EpochBuilder.buildEpoch(zoneId, intervalIdx, readings);
 

@@ -1,5 +1,16 @@
 import { keccak256, encodePacked, stringToHex, pad } from 'viem';
-import { Order, OrderSide, DeliveryObligation, ClearingResult } from '@energy-dex/types';
+import {
+  Order,
+  OrderSide,
+  DeliveryObligation,
+  ClearingResult,
+  EnergyPosition,
+  TariffSchedule,
+  ShortfallPolicy,
+  UnderDrawPolicy,
+  ChargeItem,
+  DetailedReconciliationResult,
+} from '@energy-dex/types';
 import { BinaryMerkleTree, hashObligationLeaf } from '@energy-dex/attestation';
 
 export interface ClearingInput {
@@ -301,3 +312,409 @@ export function clearMarket(input: ClearingInput): ClearingResult {
     obligationsMerkleRoot,
   };
 }
+
+export interface DeliveryReconciliationInput {
+  contractedWh: bigint;
+  sellerVerifiedDeliveredWh: bigint;
+  buyerVerifiedConsumedWh: bigint;
+  clearingPricePaiseKWh: bigint;
+  shortfallPenaltyBps?: number;
+}
+
+export interface DeliveryReconciliationResult {
+  contractedWh: bigint;
+  deliveredWh: bigint;
+  shortfallWh: bigint;
+  clearingPricePaiseKWh: bigint;
+  netDeliveredAmountPaise: bigint;
+  shortfallPenaltyPaise: bigint;
+  finalSellerCreditPaise: bigint;
+  finalBuyerDebitPaise: bigint;
+  fulfillmentRatePct: number;
+  status: 'FULL_DELIVERY' | 'PARTIAL_DELIVERY' | 'COMPLETE_SHORTFALL';
+}
+
+/**
+ * Calculates delivery reconciliation between contracted obligations and verified physical telemetry.
+ * Formally enforces: Delivered = min(Contracted, Seller Injection, Buyer Consumption).
+ */
+export function calculateDeliveryReconciliation(
+  input: DeliveryReconciliationInput
+): DeliveryReconciliationResult {
+  const {
+    contractedWh,
+    sellerVerifiedDeliveredWh,
+    buyerVerifiedConsumedWh,
+    clearingPricePaiseKWh,
+    shortfallPenaltyBps = 2000,
+  } = input;
+
+  if (contractedWh <= 0n) {
+    throw new Error('Contracted volume must be strictly positive');
+  }
+
+  let deliveredWh = contractedWh;
+  if (sellerVerifiedDeliveredWh < deliveredWh) {
+    deliveredWh = sellerVerifiedDeliveredWh;
+  }
+  if (buyerVerifiedConsumedWh < deliveredWh) {
+    deliveredWh = buyerVerifiedConsumedWh;
+  }
+  if (deliveredWh < 0n) {
+    deliveredWh = 0n;
+  }
+
+  const shortfallWh = contractedWh - deliveredWh;
+  const netDeliveredAmountPaise = (deliveredWh * clearingPricePaiseKWh) / 1000n;
+  const shortfallPenaltyPaise = (shortfallWh * clearingPricePaiseKWh * BigInt(shortfallPenaltyBps)) / 10000000n;
+
+  const sellerUnderdelivered = sellerVerifiedDeliveredWh < contractedWh;
+  const finalSellerCreditPaise = sellerUnderdelivered && netDeliveredAmountPaise >= shortfallPenaltyPaise
+    ? netDeliveredAmountPaise - shortfallPenaltyPaise
+    : netDeliveredAmountPaise;
+
+  const finalBuyerDebitPaise = netDeliveredAmountPaise;
+  const fulfillmentRatePct = Number((deliveredWh * 10000n) / contractedWh) / 100;
+
+  let status: 'FULL_DELIVERY' | 'PARTIAL_DELIVERY' | 'COMPLETE_SHORTFALL' = 'PARTIAL_DELIVERY';
+  if (deliveredWh === contractedWh) {
+    status = 'FULL_DELIVERY';
+  } else if (deliveredWh === 0n) {
+    status = 'COMPLETE_SHORTFALL';
+  }
+
+  return {
+    contractedWh,
+    deliveredWh,
+    shortfallWh,
+    clearingPricePaiseKWh,
+    netDeliveredAmountPaise,
+    shortfallPenaltyPaise,
+    finalSellerCreditPaise,
+    finalBuyerDebitPaise,
+    fulfillmentRatePct,
+    status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 9. Standard Regulatory Schedules (DERC / UPERC Benchmarks)
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_DERC_TARIFF_SCHEDULE: TariffSchedule = {
+  tariffId: 'tariff-derc-2026-v1',
+  discomId: 'TPDDL',
+  jurisdiction: 'DERC',
+  effectiveFrom: 1735689600, // 2025-01-01
+  effectiveTo: 1798761600,   // 2027-01-01
+  wheelingChargePaiseKWh: 35n, // 35 paise / kWh wheeling
+  platformFeePaiseKWh: 10n,   // 10 paise / kWh trading platform fee
+  regulatorySurchargePaiseKWh: 0n,
+  taxGstBps: 1800,           // 18% GST on services
+};
+
+export const DEFAULT_UPERC_TARIFF_SCHEDULE: TariffSchedule = {
+  tariffId: 'tariff-uperc-2026-v1',
+  discomId: 'PVVNL',
+  jurisdiction: 'UPERC',
+  effectiveFrom: 1735689600,
+  effectiveTo: 1798761600,
+  wheelingChargePaiseKWh: 40n, // 40 paise / kWh wheeling
+  platformFeePaiseKWh: 15n,   // 15 paise / kWh trading platform fee
+  regulatorySurchargePaiseKWh: 0n,
+  taxGstBps: 1800,
+};
+
+export const DEFAULT_SHORTFALL_POLICY: ShortfallPolicy = {
+  policyId: 'policy-shortfall-standard-v1',
+  jurisdiction: 'DERC',
+  referenceTariffPaiseKWh: 700n, // ₹7.00/kWh retail reference tariff
+  replacementPenaltyBps: 2000,   // 20% penalty
+  maxPenaltyBps: 5000,
+  buyerRefundRule: 'FULL_REFUND_PLUS_PENALTY',
+  sellerPenaltyRule: 'APPC_DEDUCTION',
+};
+
+export const DEFAULT_UNDER_DRAW_POLICY: UnderDrawPolicy = {
+  policyId: 'policy-underdraw-standard-v1',
+  jurisdiction: 'DERC',
+  takeOrPayBps: 10000,           // 100% take-or-pay for scheduled and injected energy
+  gridBankingCreditRateBps: 5000,// 50% value credited if energy is absorbed into DISCOM banking
+  discomInterchangeTreatment: 'GRID_BANKING',
+};
+
+// ---------------------------------------------------------------------------
+// 10. Energy Position & Capacity Reservation Checks
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates whether an incoming order can be accepted against the participant's
+ * real energy position without exceeding solar capacity or double-selling.
+ */
+export function checkEnergyPositionReservation(
+  position: EnergyPosition,
+  orderWh: bigint
+): { valid: boolean; reason?: string } {
+  if (orderWh <= 0n) {
+    return { valid: false, reason: 'Order quantity must be positive' };
+  }
+
+  // Check 1: Invariant committedWh + reservedWh + orderWh <= declaredAvailableWh
+  const newCommitment = position.committedWh + position.reservedWh + orderWh;
+  if (newCommitment > position.declaredAvailableWh) {
+    return {
+      valid: false,
+      reason: `Order quantity (${orderWh} Wh) exceeds available position (${position.declaredAvailableWh - (position.committedWh + position.reservedWh)} Wh remaining)`,
+    };
+  }
+
+  // Check 2: Physical generation and storage discharge ceiling
+  const physicalCapacityWh = position.installedSolarCapacityW;
+  if (physicalCapacityWh > 0n && newCommitment > physicalCapacityWh) {
+    return {
+      valid: false,
+      reason: `Order quantity exceeds physical inverter capacity ceiling (${physicalCapacityWh} Wh)`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Calculates allowable offer capacity taking into account declared availability,
+ * solar forecast, physical inverter rating, and regulatory policy caps.
+ */
+export function calculateAvailableOfferLimit(
+  installedSolarCapacityW: bigint,
+  forecastWh: bigint,
+  declaredWh: bigint,
+  policyLimitWh?: bigint
+): bigint {
+  const physicalLimit = installedSolarCapacityW > 0n ? installedSolarCapacityW / 4n : 0n;
+  let limit = declaredWh;
+
+  if (forecastWh > 0n && forecastWh < limit) {
+    limit = forecastWh;
+  }
+  if (physicalLimit > 0n && physicalLimit < limit) {
+    limit = physicalLimit;
+  }
+  if (policyLimitWh !== undefined && policyLimitWh < limit) {
+    limit = policyLimitWh;
+  }
+
+  return limit > 0n ? limit : 0n;
+}
+
+// ---------------------------------------------------------------------------
+// 11. Detailed Asymmetric Delivery Reconciliation
+// ---------------------------------------------------------------------------
+
+export interface DetailedReconciliationInput {
+  obligationId: string;
+  contractedWh: bigint;
+  scheduledInjectionWh?: bigint;
+  scheduledConsumptionWh?: bigint;
+  actualSellerInjectionWh: bigint;
+  actualBuyerConsumptionWh: bigint;
+  energyPricePaiseKWh: bigint;
+  tariffSchedule?: TariffSchedule;
+  shortfallPolicy?: ShortfallPolicy;
+  underDrawPolicy?: UnderDrawPolicy;
+  buyerAddress?: string;
+  sellerAddress?: string;
+}
+
+/**
+ * Performs full real-world energy reconciliation separating:
+ * - Contractual commitment vs physical meter telemetry
+ * - Seller under-injection shortfall vs buyer under-draw deviations
+ * - Detailed transaction charges (Wheeling, Platform Fee, GST)
+ * - DISCOM grid interchange accounting (Grid Banking Credit vs Grid Retail Debit)
+ */
+export function calculateDetailedReconciliation(
+  input: DetailedReconciliationInput
+): DetailedReconciliationResult {
+  const {
+    obligationId,
+    contractedWh,
+    actualSellerInjectionWh,
+    actualBuyerConsumptionWh,
+    energyPricePaiseKWh,
+    scheduledInjectionWh = input.contractedWh,
+    scheduledConsumptionWh = input.contractedWh,
+    tariffSchedule = DEFAULT_DERC_TARIFF_SCHEDULE,
+    shortfallPolicy = DEFAULT_SHORTFALL_POLICY,
+    underDrawPolicy = DEFAULT_UNDER_DRAW_POLICY,
+    buyerAddress = '0x0000000000000000000000000000000000000000',
+    sellerAddress = '0x0000000000000000000000000000000000000000',
+  } = input;
+
+  if (contractedWh <= 0n) {
+    throw new Error('Contracted volume must be strictly positive');
+  }
+
+  // 1. Asymmetric physical delivery calculations
+  const sellerDeliveredToGrid = actualSellerInjectionWh < contractedWh ? actualSellerInjectionWh : contractedWh;
+  const buyerDrawnFromGrid = actualBuyerConsumptionWh < contractedWh ? actualBuyerConsumptionWh : contractedWh;
+
+  // Actual P2P delivered energy is the mutual intersection
+  let deliveredEnergyWh = sellerDeliveredToGrid < buyerDrawnFromGrid ? sellerDeliveredToGrid : buyerDrawnFromGrid;
+  if (deliveredEnergyWh < 0n) deliveredEnergyWh = 0n;
+
+  // Seller Deviations
+  const sellerShortfallWh = actualSellerInjectionWh < contractedWh ? contractedWh - actualSellerInjectionWh : 0n;
+  const sellerSurplusWh = actualSellerInjectionWh > contractedWh ? actualSellerInjectionWh - contractedWh : 0n;
+
+  // Buyer Deviations
+  const buyerUnderDrawWh = actualBuyerConsumptionWh < contractedWh ? contractedWh - actualBuyerConsumptionWh : 0n;
+  const buyerOverConsumptionWh = actualBuyerConsumptionWh > contractedWh ? actualBuyerConsumptionWh - contractedWh : 0n;
+
+  // 2. Financial settlement components
+  const grossEnergyCostPaise = (deliveredEnergyWh * energyPricePaiseKWh) / 1000n;
+
+  // Seller Shortfall penalty
+  let sellerShortfallPenaltyPaise = 0n;
+  if (sellerShortfallWh > 0n) {
+    const penaltyBaseRate = shortfallPolicy.referenceTariffPaiseKWh > 0n
+      ? shortfallPolicy.referenceTariffPaiseKWh
+      : energyPricePaiseKWh;
+    sellerShortfallPenaltyPaise = (sellerShortfallWh * penaltyBaseRate * BigInt(shortfallPolicy.replacementPenaltyBps)) / 10000000n;
+  }
+
+  // Buyer Under-draw take-or-pay obligation
+  // If seller delivered energy to grid up to contracted, but buyer failed to consume, buyer is liable under take-or-pay
+  let buyerUnderDrawPenaltyPaise = 0n;
+  if (buyerUnderDrawWh > 0n && sellerDeliveredToGrid > deliveredEnergyWh) {
+    const unconsumedInjectedWh = sellerDeliveredToGrid - deliveredEnergyWh;
+    const liableUnderDrawWh = (unconsumedInjectedWh * BigInt(underDrawPolicy.takeOrPayBps)) / 10000n;
+    buyerUnderDrawPenaltyPaise = (liableUnderDrawWh * energyPricePaiseKWh) / 1000n;
+  }
+
+  // Regulatory transaction charges
+  const totalWheelingChargesPaise = (deliveredEnergyWh * tariffSchedule.wheelingChargePaiseKWh) / 1000n;
+  const totalPlatformFeesPaise = (deliveredEnergyWh * tariffSchedule.platformFeePaiseKWh) / 1000n;
+  const regulatorySurchargePaise = (deliveredEnergyWh * tariffSchedule.regulatorySurchargePaiseKWh) / 1000n;
+
+  // GST (18% on fees and wheeling services)
+  const taxableServiceAmount = totalWheelingChargesPaise + totalPlatformFeesPaise;
+  const totalTaxesPaise = (taxableServiceAmount * BigInt(tariffSchedule.taxGstBps)) / 10000n;
+
+  // Detailed charge breakdown
+  const charges: ChargeItem[] = [
+    {
+      chargeType: 'ENERGY_PRICE',
+      payer: buyerAddress,
+      recipient: sellerAddress,
+      basis: 'PER_KWH',
+      ratePaiseOrBps: energyPricePaiseKWh,
+      amountPaise: grossEnergyCostPaise,
+    },
+    {
+      chargeType: 'WHEELING_CHARGE',
+      payer: buyerAddress,
+      recipient: 'DISCOM',
+      basis: 'PER_KWH',
+      ratePaiseOrBps: tariffSchedule.wheelingChargePaiseKWh,
+      amountPaise: totalWheelingChargesPaise,
+    },
+    {
+      chargeType: 'TRANSACTION_FEE',
+      payer: buyerAddress,
+      recipient: 'PLATFORM',
+      basis: 'PER_KWH',
+      ratePaiseOrBps: tariffSchedule.platformFeePaiseKWh,
+      amountPaise: totalPlatformFeesPaise,
+    },
+    {
+      chargeType: 'TAX_GST',
+      payer: buyerAddress,
+      recipient: 'TAX_AUTHORITY',
+      basis: 'PERCENTAGE',
+      ratePaiseOrBps: BigInt(tariffSchedule.taxGstBps),
+      amountPaise: totalTaxesPaise,
+    },
+  ];
+
+  if (sellerShortfallPenaltyPaise > 0n) {
+    charges.push({
+      chargeType: 'PENALTY',
+      payer: sellerAddress,
+      recipient: buyerAddress,
+      basis: 'PERCENTAGE',
+      ratePaiseOrBps: BigInt(shortfallPolicy.replacementPenaltyBps),
+      amountPaise: sellerShortfallPenaltyPaise,
+    });
+  }
+
+  // Net cash flows
+  // Seller gets: Energy cost + Buyer underdraw compensation - Shortfall penalty
+  const rawSellerCredit = grossEnergyCostPaise + buyerUnderDrawPenaltyPaise;
+  const netSellerReceivablePaise = rawSellerCredit >= sellerShortfallPenaltyPaise
+    ? rawSellerCredit - sellerShortfallPenaltyPaise
+    : 0n;
+
+  // Buyer pays: Energy cost + Buyer underdraw compensation + Wheeling + Platform Fee + Taxes
+  const netBuyerPayablePaise = grossEnergyCostPaise + buyerUnderDrawPenaltyPaise + totalWheelingChargesPaise + totalPlatformFeesPaise + totalTaxesPaise;
+
+  // DISCOM Grid physical reconciliation units:
+  // - discomCreditWh: Surplus green energy exported to grid by seller that DISCOM banks/absorbs
+  const discomCreditWh = sellerSurplusWh;
+  // - discomDebitWh: Shortfall drawn by buyer from the utility grid at standard retail tariff
+  const discomDebitWh = sellerShortfallWh < buyerDrawnFromGrid ? sellerShortfallWh : 0n;
+
+  let status: 'FULL_DELIVERY' | 'PARTIAL_DELIVERY' | 'SELLER_SHORTFALL' | 'BUYER_UNDERDRAW' = 'PARTIAL_DELIVERY';
+  if (deliveredEnergyWh === contractedWh) {
+    status = 'FULL_DELIVERY';
+  } else if (sellerShortfallWh > 0n && buyerUnderDrawWh === 0n) {
+    status = 'SELLER_SHORTFALL';
+  } else if (buyerUnderDrawWh > 0n && sellerShortfallWh === 0n) {
+    status = 'BUYER_UNDERDRAW';
+  }
+
+  // Cryptographic deterministic anchor
+  const reconciliationHash = keccak256(
+    encodePacked(
+      ['string', 'uint64', 'uint64', 'uint64', 'uint64', 'uint64', 'uint64'],
+      [
+        obligationId,
+        contractedWh,
+        deliveredEnergyWh,
+        sellerShortfallWh,
+        buyerUnderDrawWh,
+        netSellerReceivablePaise,
+        netBuyerPayablePaise,
+      ]
+    )
+  );
+
+  return {
+    obligationId,
+    contractedWh,
+    scheduledInjectionWh,
+    scheduledConsumptionWh,
+    actualSellerInjectionWh,
+    actualBuyerConsumptionWh,
+    matchedEnergyWh: contractedWh,
+    deliveredEnergyWh,
+    sellerShortfallWh,
+    buyerUnderDrawWh,
+    buyerOverConsumptionWh,
+    sellerSurplusWh,
+    energyPricePaiseKWh,
+    charges,
+    grossEnergyCostPaise,
+    totalPlatformFeesPaise,
+    totalWheelingChargesPaise,
+    totalTaxesPaise,
+    sellerShortfallPenaltyPaise,
+    buyerUnderDrawPenaltyPaise,
+    netSellerReceivablePaise,
+    netBuyerPayablePaise,
+    discomCreditWh,
+    discomDebitWh,
+    reconciliationHash,
+    status,
+  };
+}
+

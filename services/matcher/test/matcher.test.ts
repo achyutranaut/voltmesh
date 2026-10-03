@@ -69,4 +69,53 @@ describe('BatchMatcher Service', () => {
       'Gate closure has passed'
     );
   });
+
+  it('honors order cancellation and rejects cancelled orders or excludes them from clearing', () => {
+    const matcher = new BatchMatcher();
+    const buyOrder = createOrder('ord-b2', OrderSide.BUY, 2000n, 600n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    matcher.submitOrder(buyOrder, gateClosure, gateClosure - 500);
+
+    // Cancel before clearing
+    matcher.cancelOrder(buyOrder.participant, buyOrder.nonce);
+    expect(matcher.isOrderCancelled(buyOrder.participant, buyOrder.nonce)).toBe(true);
+
+    // Attempting to submit another order with the same cancelled nonce is rejected
+    expect(() =>
+      matcher.submitOrder(
+        { ...buyOrder, orderId: 'ord-b2-alt' },
+        gateClosure,
+        gateClosure - 400
+      )
+    ).toThrow('cancelled');
+
+    // Sell order arrives
+    const sellOrder = createOrder('ord-s2', OrderSide.SELL, 2000n, 400n, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+    matcher.submitOrder(sellOrder, gateClosure, gateClosure - 300);
+
+    // Clearing does NOT match cancelled buy order
+    const result = matcher.closeAndClear(1, 100, zoneConfig, 'epoch-seed-cancel', gateClosure);
+    expect(result.clearedVolumeWh).toBe(0n);
+    expect(result.obligations.length).toBe(0);
+  });
+
+  it('rejects duplicate order ID or duplicate participant nonce (replay protection)', () => {
+    const matcher = new BatchMatcher();
+    const order1 = createOrder('ord-rep-1', OrderSide.BUY, 1000n, 500n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    matcher.submitOrder(order1, gateClosure, gateClosure - 500);
+
+    // Duplicate order ID
+    expect(() =>
+      matcher.submitOrder({ ...order1, nonce: 2n }, gateClosure, gateClosure - 400)
+    ).toThrow('Duplicate order submission');
+
+    // Duplicate nonce from same participant
+    expect(() =>
+      matcher.submitOrder(
+        { ...order1, orderId: 'ord-rep-2', nonce: 1n },
+        gateClosure,
+        gateClosure - 400
+      )
+    ).toThrow('Replay detected');
+  });
 });
+

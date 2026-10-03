@@ -8,11 +8,15 @@ export interface ValidationResult {
   isEquivocation?: boolean;
 }
 
+export interface ValidationOptions {
+  getRegisteredKey?: (deviceId: string) => Uint8Array | undefined;
+}
+
 export class AttestationValidator {
   /**
    * Verifies an attestation envelope cryptographically and structurally.
    */
-  public static validate(envelope: AttestationEnvelope): ValidationResult {
+  public static validate(envelope: AttestationEnvelope, options?: ValidationOptions): ValidationResult {
     if (envelope.version !== 1) {
       return { valid: false, error: `Unsupported envelope version: ${envelope.version}` };
     }
@@ -44,6 +48,21 @@ export class AttestationValidator {
 
     if (!payload.deviceId || typeof payload.deviceId !== 'string') {
       return { valid: false, error: 'Invalid or missing deviceId' };
+    }
+
+    if (options?.getRegisteredKey) {
+      const registeredKey = options.getRegisteredKey(payload.deviceId);
+      if (registeredKey) {
+        const matches =
+          registeredKey.length === envelope.publicKey.length &&
+          registeredKey.every((byte, idx) => byte === envelope.publicKey[idx]);
+        if (!matches) {
+          return {
+            valid: false,
+            error: `Signer public key does not match registered key for device: ${payload.deviceId}`,
+          };
+        }
+      }
     }
 
     if (payload.energyWh < 0n) {

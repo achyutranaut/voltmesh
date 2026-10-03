@@ -6,11 +6,13 @@ import { IReadingStorage, MemoryReadingStorage } from './storage.js';
 
 export interface AppOptions {
   storage?: IReadingStorage;
+  trustedKeys?: Map<string, Uint8Array>;
 }
 
 export function buildApp(options: AppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
   const storage = options.storage ?? new MemoryReadingStorage();
+  const deviceKeyRegistry = new Map<string, Uint8Array>(options.trustedKeys ?? []);
 
   app.get('/health', async () => {
     return { status: 'healthy', timestamp: new Date().toISOString() };
@@ -46,13 +48,20 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
         publicKey: new Uint8Array(publicKey),
       };
 
-      // 1. Cryptographic and structural validation
-      const validation = AttestationValidator.validate(envelope);
+      // 1. Cryptographic and structural validation (including registered device key check)
+      const validation = AttestationValidator.validate(envelope, {
+        getRegisteredKey: (deviceId) => deviceKeyRegistry.get(deviceId),
+      });
       if (!validation.valid || !validation.payload) {
         return reply.status(400).send({ error: validation.error });
       }
 
       const payload = validation.payload;
+
+      // Register key if this device has not been seen yet
+      if (!deviceKeyRegistry.has(payload.deviceId)) {
+        deviceKeyRegistry.set(payload.deviceId, envelope.publicKey);
+      }
 
       // 2. Check for duplicate or equivocation
       const existing = await storage.getReadingByInterval(payload.deviceId, payload.intervalIdx);

@@ -27,20 +27,20 @@ export function verifyEd25519(signature: Uint8Array, message: Uint8Array, public
 
 // EIP-712 Typed Data Constants
 export const ORDER_EIP712_DOMAIN = {
-  name: 'Decentralized Energy Exchange',
+  name: 'VoltMesh Energy Exchange',
   version: '1',
 } as const;
 
 export const ORDER_EIP712_TYPES = {
-  Order: [
-    { name: 'participant', type: 'address' },
-    { name: 'zoneId', type: 'uint32' },
-    { name: 'intervalIdx', type: 'uint32' },
+  EnergyOrder: [
+    { name: 'maker', type: 'address' },
+    { name: 'zone', type: 'uint32' },
+    { name: 'interval', type: 'uint32' },
     { name: 'side', type: 'uint8' },
     { name: 'quantityWh', type: 'uint64' },
     { name: 'pricePaisePerKWh', type: 'uint64' },
     { name: 'nonce', type: 'uint256' },
-    { name: 'expiry', type: 'uint64' },
+    { name: 'expiry', type: 'uint256' },
   ],
 } as const;
 
@@ -52,11 +52,11 @@ export function hashEIP712Order(order: Order, chainId: number, verifyingContract
       verifyingContract,
     },
     types: ORDER_EIP712_TYPES,
-    primaryType: 'Order',
+    primaryType: 'EnergyOrder',
     message: {
-      participant: order.participant as Address,
-      zoneId: order.zoneId,
-      intervalIdx: order.intervalIdx,
+      maker: order.participant as Address,
+      zone: order.zoneId,
+      interval: order.intervalIdx,
       side: order.side,
       quantityWh: order.quantityWh,
       pricePaisePerKWh: order.pricePaisePerKWh,
@@ -65,3 +65,48 @@ export function hashEIP712Order(order: Order, chainId: number, verifyingContract
     },
   });
 }
+
+import { recoverTypedDataAddress, Hex } from 'viem';
+
+export async function recoverEnergyOrderSigner(
+  order: Order,
+  signature: Hex,
+  chainId: number,
+  verifyingContract: Address
+): Promise<Address> {
+  return recoverTypedDataAddress({
+    domain: {
+      ...ORDER_EIP712_DOMAIN,
+      chainId: BigInt(chainId),
+      verifyingContract,
+    },
+    types: ORDER_EIP712_TYPES,
+    primaryType: 'EnergyOrder',
+    message: {
+      maker: order.participant as Address,
+      zone: order.zoneId,
+      interval: order.intervalIdx,
+      side: order.side,
+      quantityWh: order.quantityWh,
+      pricePaisePerKWh: order.pricePaisePerKWh,
+      nonce: order.nonce,
+      expiry: BigInt(order.expiry),
+    },
+    signature,
+  });
+}
+
+export async function verifyEnergyOrderSignature(
+  order: Order,
+  signature: Hex,
+  chainId: number,
+  verifyingContract: Address
+): Promise<boolean> {
+  try {
+    const recovered = await recoverEnergyOrderSigner(order, signature, chainId, verifyingContract);
+    return recovered.toLowerCase() === order.participant.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+

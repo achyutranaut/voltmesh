@@ -164,4 +164,46 @@ describe('Ingest Gateway Service', () => {
     const body = JSON.parse(res.payload);
     expect(body.error).toBe('STALE_OR_REPLAYED_COUNTER');
   });
+
+  it('rejects spoofed device public key (VULN-API-03) with 400', async () => {
+    // 1. Initial valid reading establishes registered key for sim.deviceId
+    const env1 = sim.emitReading(48) as AttestationEnvelope;
+    const res1 = await app.inject({
+      method: 'POST',
+      url: '/api/v1/metering/attestation',
+      payload: {
+        version: env1.version,
+        signerType: env1.signerType,
+        rawPayloadBytes: Buffer.from(env1.rawPayloadBytes).toString('hex'),
+        signature: Buffer.from(env1.signature).toString('hex'),
+        publicKey: Buffer.from(env1.publicKey).toString('hex'),
+      },
+    });
+    expect(res1.statusCode).toBe(202);
+
+    // 2. An attacker creates another simulator with a different keypair, but claiming the same deviceId
+    const rogueSim = new MeterSimulator({
+      deviceId: sim.deviceId, // Impersonating victim meter
+      zoneId: 1,
+      sourceType: SourceType.SOLAR_PV,
+      ratedCapacityW: 5000n,
+    });
+
+    const rogueEnv = rogueSim.emitReading(49) as AttestationEnvelope;
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/api/v1/metering/attestation',
+      payload: {
+        version: rogueEnv.version,
+        signerType: rogueEnv.signerType,
+        rawPayloadBytes: Buffer.from(rogueEnv.rawPayloadBytes).toString('hex'),
+        signature: Buffer.from(rogueEnv.signature).toString('hex'),
+        publicKey: Buffer.from(rogueEnv.publicKey).toString('hex'),
+      },
+    });
+
+    expect(res2.statusCode).toBe(400);
+    const body2 = JSON.parse(res2.payload);
+    expect(body2.error).toContain('Signer public key does not match registered key for device');
+  });
 });

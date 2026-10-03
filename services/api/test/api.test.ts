@@ -138,6 +138,7 @@ describe('Modular Monolith API Server', () => {
     const clearRes = await app.inject({
       method: 'POST',
       url: '/api/v1/markets/zones/1/clear/100',
+      headers: { authorization: `Bearer ${authToken}` },
     });
     expect(clearRes.statusCode).toBe(200);
     const clearBody = JSON.parse(clearRes.payload);
@@ -152,4 +153,139 @@ describe('Modular Monolith API Server', () => {
     });
     expect(getClearRes.statusCode).toBe(200);
   });
+
+  describe('API Security Audit & Correctness (VULN-API-01, 02, 04)', () => {
+    it('VULN-API-01: Prevents SIWE nonce replay attacks', async () => {
+      // 1. Fetch valid nonce
+      const nonceRes = await app.inject({ method: 'GET', url: '/api/v1/auth/nonce' });
+      const { nonce } = JSON.parse(nonceRes.payload);
+
+      // Construct a mock SIWE message with this nonce
+      const message = `VoltMesh login\nNonce: ${nonce}\nIssued At: ${new Date().toISOString()}`;
+      // In tests, we can verify nonce rejection by simulating verify payload
+      // Missing nonce
+      const badRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify',
+        payload: { message: 'Invalid message without nonce', signature: '0x1234' },
+      });
+      expect(badRes.statusCode).toBe(400);
+
+      // Non-existent or already consumed nonce
+      const forgedRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify',
+        payload: { message: `Fake message\nNonce: nonexistent123`, signature: '0x1234' },
+      });
+      expect(forgedRes.statusCode).toBe(401);
+    });
+
+    it('VULN-API-02: Prevents unauthenticated clearing execution', async () => {
+      // Attempting to clear market without auth token must fail with 401
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/markets/zones/1/clear/200',
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('VULN-API-04: Enforces order bounds and allows order cancellation', async () => {
+      // 1. Zero quantity order rejected
+      const zeroQtyRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/orders',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 100,
+          side: OrderSide.BUY,
+          quantityWh: '0',
+          pricePaisePerKWh: '500',
+          expiry: Math.floor(Date.now() / 1000) + 7200,
+        },
+      });
+      expect(zeroQtyRes.statusCode).toBe(400);
+
+      // 2. Price outside circuit limits (e.g. 50 paise when floor is 200) rejected
+      const cheapPriceRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/orders',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 100,
+          side: OrderSide.BUY,
+          quantityWh: '1000',
+          pricePaisePerKWh: '50',
+          expiry: Math.floor(Date.now() / 1000) + 7200,
+        },
+      });
+      expect(cheapPriceRes.statusCode).toBe(400);
+
+      // 3. Valid order created
+      const validOrderRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/orders',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 100,
+          side: OrderSide.SELL,
+          quantityWh: '1000',
+          pricePaisePerKWh: '450',
+          expiry: Math.floor(Date.now() / 1000) + 7200,
+        },
+      });
+      expect(validOrderRes.statusCode).toBe(201);
+      const { orderId } = JSON.parse(validOrderRes.payload);
+
+      // 4. Unauthorized participant cannot cancel it
+      const attackerToken = app.jwt.sign({ address: '0x6666666666666666666666666666666666666666' });
+      const unauthCancelRes = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/orders/${orderId}`,
+        headers: { authorization: `Bearer ${attackerToken}` },
+      });
+      expect(unauthCancelRes.statusCode).toBe(403);
+
+      // 5. Order owner cancels order successfully
+      const cancelRes = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/orders/${orderId}`,
+        headers: { authorization: `Bearer ${authToken}` },
+      });
+      expect(cancelRes.statusCode).toBe(200);
+      const cancelBody = JSON.parse(cancelRes.payload);
+      expect(cancelBody.status).toBe('CANCELLED');
+    });
+
+    it('returns full traceable provenance graph for issued certificates', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/certificates/1001/provenance',
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.payload);
+      expect(body.tokenId).toBe('1001');
+      expect(body.certificateType).toContain('Granular Attestation Certificate');
+      expect(body.provenanceChain.meterReading.hardwareAttestation).toContain('Ed25519');
+      expect(body.provenanceChain.epochAnchor.merkleTreeStandard).toContain('RFC 6962');
+      expect(body.provenanceChain.oracleConsensus.mechanism).toContain('Threshold ECDSA');
+      expect(body.provenanceChain.clearingAndSettlement.escrowNetting).toContain('Atomic');
+    });
+
+    it('exposes research and experimental subsystem status', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/research/status',
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.payload);
+      expect(body.mode).toBe('ADVANCED_RESEARCH_PROTOTYPE');
+      expect(body.researchSubsystems.thresholdOracle.status).toBe('ACTIVE_EXPERIMENTAL');
+      expect(body.researchSubsystems.deterministicAuction.status).toBe('IMPLEMENTED');
+      expect(body.researchSubsystems.deliveryReconciliation.status).toBe('IMPLEMENTED');
+    });
+  });
 });
+
