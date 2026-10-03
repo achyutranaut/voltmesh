@@ -102,25 +102,63 @@ contract DeviceRegistry {
         emit DeviceRevoked(deviceId, reason);
     }
 
+    struct ReadingRecord {
+        uint32 zoneId;
+        uint32 intervalIdx;
+        uint64 energyWh;
+        uint8 direction;
+        uint64 counter;
+    }
+
+    error MismatchedInterval(uint32 intervalA, uint32 intervalB);
+
     /**
      * @notice Allows anyone to submit cryptographic proof of meter equivocation.
-     *         If the same device key signed two conflicting readings for the same interval,
+     *         If the same device key signed two conflicting readings for the SAME interval,
      *         the device is automatically revoked immediately.
      */
     function submitEquivocationProof(
         bytes32 deviceId,
-        bytes32 payloadHashA,
+        ReadingRecord calldata readingA,
         bytes calldata sigA,
-        bytes32 payloadHashB,
+        ReadingRecord calldata readingB,
         bytes calldata sigB
     ) external {
         Device storage d = devices[deviceId];
         if (d.registeredAt == 0) revert DeviceNotFound(deviceId);
         if (d.isRevoked) revert DeviceIsRevoked(deviceId);
-        if (payloadHashA == payloadHashB) revert NotEquivocation();
+        if (readingA.intervalIdx != readingB.intervalIdx) {
+            revert MismatchedInterval(readingA.intervalIdx, readingB.intervalIdx);
+        }
 
-        address recoveredA = payloadHashA.recover(sigA);
-        address recoveredB = payloadHashB.recover(sigB);
+        bytes32 hashA = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                readingA.zoneId,
+                readingA.intervalIdx,
+                readingA.energyWh,
+                readingA.direction,
+                readingA.counter
+            )
+        );
+
+        bytes32 hashB = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                readingB.zoneId,
+                readingB.intervalIdx,
+                readingB.energyWh,
+                readingB.direction,
+                readingB.counter
+            )
+        );
+
+        if (hashA == hashB) revert NotEquivocation();
+
+        address recoveredA = hashA.recover(sigA);
+        address recoveredB = hashB.recover(sigB);
 
         if (recoveredA != d.signerAddress || recoveredB != d.signerAddress) {
             revert EquivocationMismatchedKey();
@@ -133,6 +171,10 @@ contract DeviceRegistry {
     function isDeviceValid(bytes32 deviceId) external view returns (bool) {
         Device storage d = devices[deviceId];
         return d.registeredAt != 0 && !d.isRevoked;
+    }
+
+    function getDevice(bytes32 deviceId) external view returns (Device memory) {
+        return devices[deviceId];
     }
 
     function checkCapacity(bytes32 deviceId, uint64 readingWh) external view returns (bool) {

@@ -2,6 +2,8 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AccessRegistry.sol";
 import "./ParticipantRegistry.sol";
 import "./EpochOracle.sol";
@@ -12,12 +14,19 @@ import "./Escrow.sol";
  * @notice Commits off-chain interval clearing commitments and processes T+1 daily settlement claims.
  */
 contract BatchSettlement {
+    using SafeERC20 for IERC20;
+
     bytes1 public constant STATEMENT_PREFIX = 0x02;
 
     AccessRegistry public immutable accessRegistry;
     ParticipantRegistry public immutable participantRegistry;
     EpochOracle public immutable epochOracle;
     Escrow public immutable escrow;
+
+    bytes32 public constant ENERGY_ORDER_TYPEHASH = keccak256(
+        "EnergyOrder(address maker,uint32 zone,uint32 interval,uint8 side,uint64 quantityWh,uint64 pricePaisePerKWh,uint256 nonce,uint256 expiry)"
+    );
+    bytes32 public immutable DOMAIN_SEPARATOR;
 
     struct ClearingCommitment {
         uint32 zoneId;
@@ -47,6 +56,9 @@ contract BatchSettlement {
     // leafNullifier => isClaimed
     mapping(bytes32 => bool) public claimedLeaves;
 
+    // participant => nonce => isCancelled
+    mapping(address => mapping(uint256 => bool)) public cancelledNonces;
+
     event ClearingCommitted(
         uint32 indexed zoneId,
         uint32 indexed intervalIdx,
@@ -68,6 +80,8 @@ contract BatchSettlement {
         int256 netAmountPaise,
         uint32 leafIndex
     );
+    event OrderCancelled(address indexed participant, uint256 indexed nonce);
+    event SettlementPoolFunded(address indexed funder, uint256 amount);
 
     error CallerNotOperator();
     error CommitmentAlreadyExists(uint32 zoneId, uint32 intervalIdx);
@@ -100,6 +114,16 @@ contract BatchSettlement {
         participantRegistry = ParticipantRegistry(_participantRegistry);
         epochOracle = EpochOracle(_epochOracle);
         escrow = Escrow(_escrow);
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("VoltMesh Energy Exchange")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
     function commitClearing(
@@ -197,5 +221,93 @@ contract BatchSettlement {
         }
 
         emit SettlementClaimed(msg.sender, dateEpoch, zoneId, netAmountPaise, leafIndex);
+    }
+
+    /**
+     * @notice Cancels an order on-chain using its nonce to prevent matching or settlement inclusion.
+     */
+    function cancelOrder(uint256 nonce) external whenNotPaused {
+        if (!participantRegistry.isRegisteredAndActive(msg.sender)) {
+            revert ParticipantNotActive(msg.sender);
+        }
+        cancelledNonces[msg.sender][nonce] = true;
+        emit OrderCancelled(msg.sender, nonce);
+    }
+
+    function isOrderCancelled(address participant, uint256 nonce) external view returns (bool) {
+        return cancelledNonces[participant][nonce];
+    }
+
+    /**
+     * @notice Computes EIP-712 typed order hash for off-chain order verification and cancellation.
+     */
+    function hashEnergyOrder(
+        address maker,
+        uint32 zone,
+        uint32 interval,
+        uint8 side,
+        uint64 quantityWh,
+        uint64 pricePaisePerKWh,
+        uint256 nonce,
+        uint256 expiry
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ENERGY_ORDER_TYPEHASH,
+                maker,
+                zone,
+                interval,
+                side,
+                quantityWh,
+                pricePaisePerKWh,
+                nonce,
+                expiry
+            )
+        );
+        return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+    }
+
+    /**
+     * @notice Locks collateral in Escrow for a cleared bilateral delivery obligation.
+     */
+    function lockObligation(
+        bytes32 obligationId,
+        address buyer,
+        address seller,
+        uint256 amount,
+        uint32 zoneId,
+        uint32 intervalIdx
+    ) external onlyOperator whenNotPaused {
+        escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx);
+    }
+
+    /**
+     * @notice Settles a verified obligation by releasing buyer collateral directly to seller.
+     */
+    function settleObligation(
+        bytes32 obligationId,
+        uint256 settleAmount
+    ) external onlyOperator whenNotPaused {
+        escrow.settleObligation(obligationId, settleAmount);
+    }
+
+    /**
+     * @notice Refunds a failed or unfulfilled obligation back to the buyer's free escrow balance.
+     */
+    function refundObligation(
+        bytes32 obligationId
+    ) external onlyOperator whenNotPaused {
+        escrow.refundObligation(obligationId);
+    }
+
+    /**
+     * @notice Deposits funds directly into Escrow under the settlement contract's balance.
+     */
+    function fundSettlementPool(uint256 amount) external whenNotPaused {
+        IERC20 token = escrow.paymentToken();
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        token.forceApprove(address(escrow), amount);
+        escrow.deposit(amount);
+        emit SettlementPoolFunded(msg.sender, amount);
     }
 }

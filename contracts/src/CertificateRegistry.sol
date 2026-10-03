@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "./AccessRegistry.sol";
 import "./EpochOracle.sol";
 import "./DeviceRegistry.sol";
+import "./ParticipantRegistry.sol";
 
 /**
  * @title CertificateRegistry
@@ -17,6 +18,7 @@ contract CertificateRegistry is ERC1155 {
     AccessRegistry public immutable accessRegistry;
     EpochOracle public immutable epochOracle;
     DeviceRegistry public immutable deviceRegistry;
+    ParticipantRegistry public immutable participantRegistry;
     address public retirementRegistry;
 
     // nullifier => isClaimed (prevents double claiming of the same meter leaf)
@@ -32,6 +34,8 @@ contract CertificateRegistry is ERC1155 {
 
     error CallerNotRetirement();
     error CallerNotAdmin();
+    error UnauthorizedClaimant();
+    error DeviceOwnerNotFound(bytes32 deviceId);
     error LeafAlreadyMinted(bytes32 nullifier);
     error InvalidOracleProof();
     error DeviceNotRegisteredOrRevoked(bytes32 deviceId);
@@ -52,11 +56,13 @@ contract CertificateRegistry is ERC1155 {
         address _accessRegistry,
         address _epochOracle,
         address _deviceRegistry,
+        address _participantRegistry,
         string memory uri_
     ) ERC1155(uri_) {
         accessRegistry = AccessRegistry(_accessRegistry);
         epochOracle = EpochOracle(_epochOracle);
         deviceRegistry = DeviceRegistry(_deviceRegistry);
+        participantRegistry = ParticipantRegistry(_participantRegistry);
     }
 
     function setRetirementRegistry(address _retirementRegistry) external {
@@ -86,6 +92,17 @@ contract CertificateRegistry is ERC1155 {
             revert ExceedsRatedCapacity(deviceId, energyWh);
         }
 
+        DeviceRegistry.Device memory dev = deviceRegistry.getDevice(deviceId);
+        address deviceOwner = participantRegistry.participantIdToWallet(dev.participantId);
+        if (deviceOwner == address(0)) {
+            revert DeviceOwnerNotFound(deviceId);
+        }
+
+        // Only the device owner or an approved operator can trigger claiming
+        if (msg.sender != deviceOwner && !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender)) {
+            revert UnauthorizedClaimant();
+        }
+
         bytes32 nullifier = keccak256(abi.encodePacked(deviceId, intervalIdx, counter));
         if (claimedLeaves[nullifier]) revert LeafAlreadyMinted(nullifier);
 
@@ -108,9 +125,10 @@ contract CertificateRegistry is ERC1155 {
         claimedLeaves[nullifier] = true;
 
         tokenId = uint256(keccak256(abi.encodePacked(zoneId, sourceType, intervalIdx)));
-        _mint(msg.sender, tokenId, energyWh, "");
+        // Mint strictly to deviceOwner, defeating front-running theft
+        _mint(deviceOwner, tokenId, energyWh, "");
 
-        emit CertificateMinted(msg.sender, tokenId, energyWh, nullifier);
+        emit CertificateMinted(deviceOwner, tokenId, energyWh, nullifier);
         return tokenId;
     }
 

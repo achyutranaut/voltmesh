@@ -97,20 +97,57 @@ contract RegistriesTest is Test {
         assertTrue(devices.checkCapacity(deviceId, 5000));
         assertFalse(devices.checkCapacity(deviceId, 6000)); // > 115% tolerance
 
-        // Simulate equivocation attack: two differing payloads signed by the meter for interval 100
-        bytes32 payloadHashA = keccak256("interval-100-reading-A");
-        bytes32 payloadHashB = keccak256("interval-100-reading-B");
+        // Simulate equivocation attack: two differing readings signed by the meter for SAME interval 100
+        DeviceRegistry.ReadingRecord memory readingA = DeviceRegistry.ReadingRecord({
+            zoneId: 1,
+            intervalIdx: 100,
+            energyWh: 2000,
+            direction: 0,
+            counter: 1
+        });
 
-        (uint8 vA, bytes32 rA, bytes32 sA) = vm.sign(meterPrivateKey, payloadHashA);
+        DeviceRegistry.ReadingRecord memory readingB = DeviceRegistry.ReadingRecord({
+            zoneId: 1,
+            intervalIdx: 100,
+            energyWh: 2500,
+            direction: 0,
+            counter: 2
+        });
+
+        bytes32 hashA = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                readingA.zoneId,
+                readingA.intervalIdx,
+                readingA.energyWh,
+                readingA.direction,
+                readingA.counter
+            )
+        );
+
+        bytes32 hashB = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                readingB.zoneId,
+                readingB.intervalIdx,
+                readingB.energyWh,
+                readingB.direction,
+                readingB.counter
+            )
+        );
+
+        (uint8 vA, bytes32 rA, bytes32 sA) = vm.sign(meterPrivateKey, hashA);
         bytes memory sigA = abi.encodePacked(rA, sA, vA);
 
-        (uint8 vB, bytes32 rB, bytes32 sB) = vm.sign(meterPrivateKey, payloadHashB);
+        (uint8 vB, bytes32 rB, bytes32 sB) = vm.sign(meterPrivateKey, hashB);
         bytes memory sigB = abi.encodePacked(rB, sB, vB);
 
         // Anyone submits equivocation proof
         address reporter = address(0x777);
         vm.prank(reporter);
-        devices.submitEquivocationProof(deviceId, payloadHashA, sigA, payloadHashB, sigB);
+        devices.submitEquivocationProof(deviceId, readingA, sigA, readingB, sigB);
 
         // Device must now be revoked
         assertFalse(devices.isDeviceValid(deviceId));

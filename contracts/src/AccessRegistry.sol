@@ -65,6 +65,29 @@ contract AccessRegistry is AccessControl, Pausable {
         emit RoleProposalExecuted(proposalId, proposal.role, proposal.account);
     }
 
+    bool public directGrantsDisabled;
+
+    event DirectGrantsDisabled();
+    error DirectGrantDisabled();
+
+    /**
+     * @notice Locks direct role grants permanently, requiring all future grants to go through timelock.
+     */
+    function disableDirectGrants() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        directGrantsDisabled = true;
+        emit DirectGrantsDisabled();
+    }
+
+    /**
+     * @notice Overrides OpenZeppelin grantRole to enforce timelock once direct grants are disabled.
+     */
+    function grantRole(bytes32 role, address account) public override {
+        if (directGrantsDisabled) {
+            revert DirectGrantDisabled();
+        }
+        super.grantRole(role, account);
+    }
+
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }

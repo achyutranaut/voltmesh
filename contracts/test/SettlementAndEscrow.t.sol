@@ -154,4 +154,112 @@ contract SettlementAndEscrowTest is Test {
             emptyProof
         );
     }
+
+    function test_Escrow_ObligationState_LockSettleAndRefund() public {
+        address buyer = address(0xB0B);
+        address seller = prosumer;
+        bytes32 obligationId = keccak256("obl-001");
+        uint256 tradeAmount = 10_000;
+
+        // Fund buyer and deposit into escrow
+        vm.startPrank(admin);
+        token.transfer(buyer, 20_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 20_000);
+        escrow.deposit(20_000);
+        vm.stopPrank();
+
+        assertEq(escrow.getFreeBalance(buyer), 20_000);
+
+        // Operator locks obligation through settlement contract
+        vm.prank(operator);
+        settlement.lockObligation(obligationId, buyer, seller, tradeAmount, 1, 48);
+
+        assertEq(escrow.lockedBalances(buyer), tradeAmount);
+        assertEq(escrow.getFreeBalance(buyer), 10_000);
+
+        (
+            bytes32 oblId,
+            address lBuyer,
+            address lSeller,
+            uint256 lAmt,
+            uint32 lZone,
+            uint32 lInt,
+            Escrow.EscrowState state,
+            ,
+        ) = escrow.obligationLocks(obligationId);
+
+        assertEq(oblId, obligationId);
+        assertEq(lBuyer, buyer);
+        assertEq(lSeller, seller);
+        assertEq(lAmt, tradeAmount);
+        assertEq(uint8(state), uint8(Escrow.EscrowState.LOCKED));
+
+        // Settle obligation: full delivered amount
+        uint256 sellerBefore = escrow.balances(seller);
+        vm.prank(operator);
+        settlement.settleObligation(obligationId, tradeAmount);
+
+        assertEq(escrow.balances(seller), sellerBefore + tradeAmount);
+        assertEq(escrow.balances(buyer), 10_000);
+        assertEq(escrow.lockedBalances(buyer), 0);
+
+        (, , , , , , Escrow.EscrowState settledState, , ) = escrow.obligationLocks(obligationId);
+        assertEq(uint8(settledState), uint8(Escrow.EscrowState.SETTLED));
+
+        // Re-settling or refunding a settled obligation must revert
+        vm.prank(operator);
+        vm.expectRevert();
+        settlement.settleObligation(obligationId, tradeAmount);
+
+        // Test refund on second obligation
+        bytes32 obligationId2 = keccak256("obl-002");
+        vm.prank(operator);
+        settlement.lockObligation(obligationId2, buyer, seller, 5000, 1, 49);
+
+        assertEq(escrow.lockedBalances(buyer), 5000);
+        assertEq(escrow.getFreeBalance(buyer), 5000);
+
+        vm.prank(operator);
+        settlement.refundObligation(obligationId2);
+
+        assertEq(escrow.lockedBalances(buyer), 0);
+        assertEq(escrow.getFreeBalance(buyer), 10_000);
+
+        (, , , , , , Escrow.EscrowState refundedState, , ) = escrow.obligationLocks(obligationId2);
+        assertEq(uint8(refundedState), uint8(Escrow.EscrowState.REFUNDED));
+    }
+
+    function test_BatchSettlement_EIP712OrderHashAndCancellation() public {
+        address maker = prosumer;
+        uint32 zone = 1;
+        uint32 interval = 48;
+        uint8 side = 1; // SELL
+        uint64 quantityWh = 2500;
+        uint64 pricePaisePerKWh = 450;
+        uint256 nonce = 101;
+        uint256 expiry = block.timestamp + 3600;
+
+        bytes32 orderHash = settlement.hashEnergyOrder(
+            maker,
+            zone,
+            interval,
+            side,
+            quantityWh,
+            pricePaisePerKWh,
+            nonce,
+            expiry
+        );
+
+        assertTrue(orderHash != bytes32(0));
+        assertFalse(settlement.isOrderCancelled(maker, nonce));
+
+        // Cancel order from prosumer wallet
+        vm.prank(maker);
+        settlement.cancelOrder(nonce);
+
+        assertTrue(settlement.isOrderCancelled(maker, nonce));
+    }
 }

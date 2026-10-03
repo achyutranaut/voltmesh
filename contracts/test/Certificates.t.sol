@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "../src/AccessRegistry.sol";
 import "../src/DeviceRegistry.sol";
+import "../src/ParticipantRegistry.sol";
 import "../src/EpochOracle.sol";
 import "../src/CertificateRegistry.sol";
 import "../src/RetirementRegistry.sol";
@@ -13,6 +14,7 @@ contract CertificatesTest is Test {
     using MessageHashUtils for bytes32;
 
     AccessRegistry public access;
+    ParticipantRegistry public participants;
     DeviceRegistry public devices;
     EpochOracle public oracle;
     CertificateRegistry public certificates;
@@ -38,13 +40,24 @@ contract CertificatesTest is Test {
         access.grantRole(access.REGISTRAR_ROLE(), admin);
         access.grantRole(access.ORACLE_ROLE(), oracleAddr);
 
+        participants = new ParticipantRegistry(address(access));
         devices = new DeviceRegistry(address(access));
         oracle = new EpochOracle(address(access), 1);
+
+        // Register prosumer in ParticipantRegistry
+        participants.registerParticipant(
+            prosumer,
+            keccak256("part-cafe"),
+            TEST_ZONE_ID,
+            ParticipantRegistry.RoleType.PROSUMER,
+            keccak256("discom-cafe")
+        );
 
         certificates = new CertificateRegistry(
             address(access),
             address(oracle),
             address(devices),
+            address(participants),
             "https://dex.energy/api/cert/{id}.json"
         );
 

@@ -23,6 +23,7 @@ contract ParticipantRegistry {
 
     mapping(address => Participant) public participants;
     mapping(bytes32 => address) public bindingHashToWallet;
+    mapping(bytes32 => address) public participantIdToWallet;
 
     event ParticipantRegistered(
         address indexed wallet,
@@ -82,6 +83,7 @@ contract ParticipantRegistry {
         });
 
         bindingHashToWallet[bindingHash] = wallet;
+        participantIdToWallet[participantId] = wallet;
 
         emit ParticipantRegistered(wallet, participantId, zoneId, bindingHash, roleType);
     }
@@ -111,5 +113,9 @@ contract ParticipantRegistry {
     function isRegisteredAndActive(address wallet) external view returns (bool) {
         Participant storage p = participants[wallet];
         return p.registeredAt != 0 && !p.isSuspended;
+    }
+
+    function getParticipantByWallet(address wallet) external view returns (Participant memory) {
+        return participants[wallet];
     }
 }
