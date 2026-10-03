@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowRight, Terminal, Activity, Radio, Cpu, ShieldCheck, Zap } from 'lucide-react';
+import { VoltMeshLogo } from '../brand/VoltMeshLogo';
 
 interface HeroSectionProps {
   onEnterTerminal: () => void;
@@ -27,12 +28,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onEnterTerminal }) => 
         </div>
       </div>
 
-      {/* Main Editorial Headline */}
+      {/* Main Editorial Headline with VoltMesh Hierarchy */}
       <div className="max-w-4xl space-y-4">
+        <div className="flex items-center space-x-3 mb-2">
+          <VoltMeshLogo size="lg" withGlow />
+        </div>
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white uppercase font-sans leading-[1.05]">
-          Decentralized <br />
+          VoltMesh <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">
-            Energy Exchange
+            Decentralized Energy Exchange
           </span>
         </h1>
         <p className="text-lg sm:text-2xl text-zinc-300 font-normal leading-relaxed max-w-3xl">

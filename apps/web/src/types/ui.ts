@@ -2,9 +2,12 @@ export type NavigationTab =
   | 'market' 
   | 'energy' 
   | 'oracle' 
+  | 'merkle'
   | 'settlement' 
   | 'certificates' 
-  | 'operations';
+  | 'operations'
+  | 'contracts'
+  | 'activity';
 
 export type PipelineStage =
   | 'METER'

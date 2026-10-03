@@ -56,7 +56,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       id: 'nav-oracle',
       category: 'NAVIGATION',
       label: 'Navigate: Oracle Quorum & Epoch Trees',
-      sublabel: '3-of-3 threshold consensus and Merkle proofs',
+      sublabel: 'Quorum consensus and Merkle state proofs',
       icon: Shield,
       action: () => { onNavigate('oracle'); onClose(); },
     },
@@ -77,10 +77,34 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       action: () => { onNavigate('certificates'); onClose(); },
     },
     {
+      id: 'nav-merkle',
+      category: 'NAVIGATION',
+      label: 'Navigate: Canonical Merkle Tree Explorer',
+      sublabel: '96-leaf RFC 6962 binary proof tree and sibling paths',
+      icon: Shield,
+      action: () => { onNavigate('merkle'); onClose(); },
+    },
+    {
+      id: 'nav-contracts',
+      category: 'NAVIGATION',
+      label: 'Navigate: Smart Contracts Registry',
+      sublabel: 'View all 8 deployed on-chain contracts and ABIs',
+      icon: Terminal,
+      action: () => { onNavigate('contracts'); onClose(); },
+    },
+    {
+      id: 'nav-activity',
+      category: 'NAVIGATION',
+      label: 'Navigate: Activity Stream',
+      sublabel: 'Real-time on-chain and off-chain execution events',
+      icon: Terminal,
+      action: () => { onNavigate('activity'); onClose(); },
+    },
+    {
       id: 'nav-ops',
       category: 'NAVIGATION',
-      label: 'Navigate: System Operations & Contracts',
-      sublabel: 'On-chain addresses, node telemetry and audit trail',
+      label: 'Navigate: Operations Observability',
+      sublabel: 'Node latency, microservices health and queue metrics',
       icon: Terminal,
       action: () => { onNavigate('operations'); onClose(); },
     },
@@ -271,7 +295,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             <span>↵ Select</span>
             <span>Esc Close</span>
           </div>
-          <span>DEX CONSOLE ⌘K</span>
+          <span>VOLTMESH CONSOLE ⌘K</span>
         </div>
       </div>
     </div>

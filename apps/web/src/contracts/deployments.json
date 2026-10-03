@@ -1,0 +1,3908 @@
+{
+  "chainId": 31337,
+  "networkName": "VoltMesh Testnet (Local Devnet)",
+  "rpcUrl": "http://127.0.0.1:8545",
+  "contracts": {
+    "AccessRegistry": {
+      "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "admin",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "AUDITOR_ROLE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "DEFAULT_ADMIN_ROLE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "OPERATOR_ROLE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "ORACLE_ROLE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "PAUSER_ROLE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "REGISTRAR_ROLE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "TIMELOCK_DELAY",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "executeRoleGrant",
+          "inputs": [
+            {
+              "name": "proposalId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "getRoleAdmin",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "grantRole",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "hasRole",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "pause",
+          "inputs": [],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "paused",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "proposals",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "executeAfter",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "executed",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "proposeRoleGrant",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "renounceRole",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "callerConfirmation",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "revokeRole",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "supportsInterface",
+          "inputs": [
+            {
+              "name": "interfaceId",
+              "type": "bytes4",
+              "internalType": "bytes4"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "unpause",
+          "inputs": [],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "Paused",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": false,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RoleAdminChanged",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "previousAdminRole",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "newAdminRole",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RoleGranted",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "sender",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RoleProposalCancelled",
+          "inputs": [
+            {
+              "name": "proposalId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RoleProposalExecuted",
+          "inputs": [
+            {
+              "name": "proposalId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "role",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RoleProposed",
+          "inputs": [
+            {
+              "name": "proposalId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "role",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "executeAfter",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RoleRevoked",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "sender",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "Unpaused",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": false,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "AccessControlBadConfirmation",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "AccessControlUnauthorizedAccount",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "neededRole",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "EnforcedPause",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ExpectedPause",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ProposalAlreadyExecuted",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ProposalDoesNotExist",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ProposalNotReady",
+          "inputs": [
+            {
+              "name": "currentTime",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "executeAfter",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    "ParticipantRegistry": {
+      "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "bindingHashToWallet",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isRegisteredAndActive",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "participants",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "participantId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "roleType",
+              "type": "uint8",
+              "internalType": "enum ParticipantRegistry.RoleType"
+            },
+            {
+              "name": "bindingHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "isSuspended",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "registeredAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "reactivateParticipant",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "registerParticipant",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "participantId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "roleType",
+              "type": "uint8",
+              "internalType": "enum ParticipantRegistry.RoleType"
+            },
+            {
+              "name": "bindingHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "suspendParticipant",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "updateZone",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "newZoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "ParticipantReactivated",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ParticipantRegistered",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "participantId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "bindingHash",
+              "type": "bytes32",
+              "indexed": false,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "roleType",
+              "type": "uint8",
+              "indexed": false,
+              "internalType": "enum ParticipantRegistry.RoleType"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ParticipantSuspended",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ParticipantZoneUpdated",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "oldZone",
+              "type": "uint32",
+              "indexed": false,
+              "internalType": "uint32"
+            },
+            {
+              "name": "newZone",
+              "type": "uint32",
+              "indexed": false,
+              "internalType": "uint32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "BindingHashAlreadyBound",
+          "inputs": [
+            {
+              "name": "bindingHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "existingWallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "CallerNotRegistrar",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ParticipantAlreadyRegistered",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ParticipantIsSuspended",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ParticipantNotFound",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    },
+    "DeviceRegistry": {
+      "address": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "checkCapacity",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "readingWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "devices",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "signerAddress",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "signerType",
+              "type": "uint8",
+              "internalType": "enum DeviceRegistry.SignerType"
+            },
+            {
+              "name": "sourceType",
+              "type": "uint8",
+              "internalType": "enum DeviceRegistry.SourceType"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "capacityWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "trustWeight",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "isRevoked",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "participantId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "registeredAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isDeviceValid",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "registerDevice",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "signerAddress",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "signerType",
+              "type": "uint8",
+              "internalType": "enum DeviceRegistry.SignerType"
+            },
+            {
+              "name": "sourceType",
+              "type": "uint8",
+              "internalType": "enum DeviceRegistry.SourceType"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "capacityWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "trustWeight",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "participantId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "revokeDevice",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "submitEquivocationProof",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "payloadHashA",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "sigA",
+              "type": "bytes",
+              "internalType": "bytes"
+            },
+            {
+              "name": "payloadHashB",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "sigB",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "DeviceRegistered",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "signerAddress",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "signerType",
+              "type": "uint8",
+              "indexed": false,
+              "internalType": "enum DeviceRegistry.SignerType"
+            },
+            {
+              "name": "capacityWh",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "DeviceRevoked",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "indexed": false,
+              "internalType": "string"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "DeviceRevokedForEquivocation",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "reporter",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "CallerNotRegistrar",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "DeviceAlreadyRegistered",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "DeviceIsRevoked",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "DeviceNotFound",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignature",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignatureLength",
+          "inputs": [
+            {
+              "name": "length",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignatureS",
+          "inputs": [
+            {
+              "name": "s",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "EquivocationMismatchedKey",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidEquivocationSignatures",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "NotEquivocation",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    },
+    "EpochOracle": {
+      "address": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_quorumThreshold",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "challengeEpoch",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "epochs",
+          "inputs": [
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "merkleRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "leafCount",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "totalWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "finalizedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "disputed",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "getEpoch",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "tuple",
+              "internalType": "struct EpochOracle.EpochRecord",
+              "components": [
+                {
+                  "name": "merkleRoot",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "leafCount",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "totalWh",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "finalizedAt",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "disputed",
+                  "type": "bool",
+                  "internalType": "bool"
+                }
+              ]
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "quorumThreshold",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "setQuorumThreshold",
+          "inputs": [
+            {
+              "name": "_newQuorum",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "submitEpoch",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "merkleRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "leafCount",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "totalWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "signatures",
+              "type": "bytes[]",
+              "internalType": "bytes[]"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "verifyLeafInclusion",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "leafHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "merkleProof",
+              "type": "bytes32[]",
+              "internalType": "bytes32[]"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "EpochChallenged",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "challenger",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "indexed": false,
+              "internalType": "string"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "EpochFinalized",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "merkleRoot",
+              "type": "bytes32",
+              "indexed": false,
+              "internalType": "bytes32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "EpochSubmitted",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "merkleRoot",
+              "type": "bytes32",
+              "indexed": false,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "totalWh",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "QuorumThresholdUpdated",
+          "inputs": [
+            {
+              "name": "oldQuorum",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "newQuorum",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "CallerNotAdmin",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "DuplicateOrUnsortedSigner",
+          "inputs": [
+            {
+              "name": "signer",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignature",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignatureLength",
+          "inputs": [
+            {
+              "name": "length",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignatureS",
+          "inputs": [
+            {
+              "name": "s",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "EpochAlreadyFinalized",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "EpochNotFound",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InsufficientSignatures",
+          "inputs": [
+            {
+              "name": "count",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "required",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SignerNotAuthorizedOracle",
+          "inputs": [
+            {
+              "name": "signer",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    },
+    "MockERC20": {
+      "address": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "name",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "symbol",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "allowance",
+          "inputs": [
+            {
+              "name": "owner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "spender",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "approve",
+          "inputs": [
+            {
+              "name": "spender",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "balanceOf",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "decimals",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint8",
+              "internalType": "uint8"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "mint",
+          "inputs": [
+            {
+              "name": "to",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "name",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "symbol",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "totalSupply",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "transfer",
+          "inputs": [
+            {
+              "name": "to",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "transferFrom",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "Approval",
+          "inputs": [
+            {
+              "name": "owner",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "spender",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "Transfer",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "ERC20InsufficientAllowance",
+          "inputs": [
+            {
+              "name": "spender",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "allowance",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "needed",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC20InsufficientBalance",
+          "inputs": [
+            {
+              "name": "sender",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "balance",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "needed",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC20InvalidApprover",
+          "inputs": [
+            {
+              "name": "approver",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC20InvalidReceiver",
+          "inputs": [
+            {
+              "name": "receiver",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC20InvalidSender",
+          "inputs": [
+            {
+              "name": "sender",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC20InvalidSpender",
+          "inputs": [
+            {
+              "name": "spender",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        }
+      ]
+    },
+    "Escrow": {
+      "address": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_paymentToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "balances",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "deposit",
+          "inputs": [
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "executeSettlementTransfer",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "getFreeBalance",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "lockCollateral",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "lockedBalances",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "paymentToken",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract IERC20"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "releaseCollateral",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "setSettlementContract",
+          "inputs": [
+            {
+              "name": "_settlement",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "settlementContract",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "totalDeposited",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "withdraw",
+          "inputs": [
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "CollateralLocked",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "CollateralReleased",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "Deposited",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "SettlementContractUpdated",
+          "inputs": [
+            {
+              "name": "newSettlementContract",
+              "type": "address",
+              "indexed": false,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "SettlementTransferred",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "Withdrawn",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "CallerNotAdmin",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "CallerNotSettlement",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InsufficientFreeBalance",
+          "inputs": [
+            {
+              "name": "requested",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "free",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InsufficientLockedBalance",
+          "inputs": [
+            {
+              "name": "requested",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "locked",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ReentrancyGuardReentrantCall",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "SafeERC20FailedOperation",
+          "inputs": [
+            {
+              "name": "token",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    },
+    "BatchSettlement": {
+      "address": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_participantRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_epochOracle",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_escrow",
+              "type": "address",
+              "internalType": "address payable"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "STATEMENT_PREFIX",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes1",
+              "internalType": "bytes1"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "claimSettlement",
+          "inputs": [
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "netAmountPaise",
+              "type": "int256",
+              "internalType": "int256"
+            },
+            {
+              "name": "deliveredWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "shortfallWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "shortfallPenaltyPaise",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "leafIndex",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "merkleProof",
+              "type": "bytes32[]",
+              "internalType": "bytes32[]"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "claimedLeaves",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "commitClearing",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "clearingPricePaiseKWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "totalVolumeWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "ordersMerkleRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "obligationsMerkleRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "commitments",
+          "inputs": [
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "clearingPricePaiseKWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "totalVolumeWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "ordersMerkleRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "obligationsMerkleRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "committedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "dailyStatements",
+          "inputs": [
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "statementRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "totalCreditsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "totalDebitsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "postedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "epochOracle",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract EpochOracle"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "escrow",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract Escrow"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "participantRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract ParticipantRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "postDailyStatement",
+          "inputs": [
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "statementRoot",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "totalCreditsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "totalDebitsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "ClearingCommitted",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "pricePaiseKWh",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "volumeWh",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "obligationsRoot",
+              "type": "bytes32",
+              "indexed": false,
+              "internalType": "bytes32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "DailyStatementPosted",
+          "inputs": [
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "statementRoot",
+              "type": "bytes32",
+              "indexed": false,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "totalCredits",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "totalDebits",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "SettlementClaimed",
+          "inputs": [
+            {
+              "name": "participant",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "netAmountPaise",
+              "type": "int256",
+              "indexed": false,
+              "internalType": "int256"
+            },
+            {
+              "name": "leafIndex",
+              "type": "uint32",
+              "indexed": false,
+              "internalType": "uint32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "CallerNotOperator",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "CommitmentAlreadyExists",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidMerkleProof",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "LeafAlreadyClaimed",
+          "inputs": [
+            {
+              "name": "nullifier",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ParticipantNotActive",
+          "inputs": [
+            {
+              "name": "participant",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "StatementAlreadyPosted",
+          "inputs": [
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "StatementNotFound",
+          "inputs": [
+            {
+              "name": "dateEpoch",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    },
+    "CertificateRegistry": {
+      "address": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_epochOracle",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_deviceRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "uri_",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "LEAF_PREFIX",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes1",
+              "internalType": "bytes1"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "balanceOf",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "balanceOfBatch",
+          "inputs": [
+            {
+              "name": "accounts",
+              "type": "address[]",
+              "internalType": "address[]"
+            },
+            {
+              "name": "ids",
+              "type": "uint256[]",
+              "internalType": "uint256[]"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256[]",
+              "internalType": "uint256[]"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "burnForRetirement",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "amountWh",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "claimCertificate",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "energyWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "sourceType",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "counter",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "oracleMerkleProof",
+              "type": "bytes32[]",
+              "internalType": "bytes32[]"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "claimedLeaves",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "deviceRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract DeviceRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "epochOracle",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract EpochOracle"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isApprovedForAll",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "operator",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "retirementRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "safeBatchTransferFrom",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "ids",
+              "type": "uint256[]",
+              "internalType": "uint256[]"
+            },
+            {
+              "name": "values",
+              "type": "uint256[]",
+              "internalType": "uint256[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "safeTransferFrom",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "data",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "setApprovalForAll",
+          "inputs": [
+            {
+              "name": "operator",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "approved",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "setRetirementRegistry",
+          "inputs": [
+            {
+              "name": "_retirementRegistry",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "supportsInterface",
+          "inputs": [
+            {
+              "name": "interfaceId",
+              "type": "bytes4",
+              "internalType": "bytes4"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "uri",
+          "inputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "ApprovalForAll",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "operator",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "approved",
+              "type": "bool",
+              "indexed": false,
+              "internalType": "bool"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "CertificateMinted",
+          "inputs": [
+            {
+              "name": "claimant",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "indexed": true,
+              "internalType": "uint256"
+            },
+            {
+              "name": "amountWh",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "leafNullifier",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RetirementRegistryUpdated",
+          "inputs": [
+            {
+              "name": "newRetirementRegistry",
+              "type": "address",
+              "indexed": false,
+              "internalType": "address"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "TransferBatch",
+          "inputs": [
+            {
+              "name": "operator",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "from",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "ids",
+              "type": "uint256[]",
+              "indexed": false,
+              "internalType": "uint256[]"
+            },
+            {
+              "name": "values",
+              "type": "uint256[]",
+              "indexed": false,
+              "internalType": "uint256[]"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "TransferSingle",
+          "inputs": [
+            {
+              "name": "operator",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "from",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "value",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "URI",
+          "inputs": [
+            {
+              "name": "value",
+              "type": "string",
+              "indexed": false,
+              "internalType": "string"
+            },
+            {
+              "name": "id",
+              "type": "uint256",
+              "indexed": true,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "CallerNotAdmin",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "CallerNotRetirement",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "DeviceNotRegisteredOrRevoked",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155InsufficientBalance",
+          "inputs": [
+            {
+              "name": "sender",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "balance",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "needed",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155InvalidApprover",
+          "inputs": [
+            {
+              "name": "approver",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155InvalidArrayLength",
+          "inputs": [
+            {
+              "name": "idsLength",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "valuesLength",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155InvalidOperator",
+          "inputs": [
+            {
+              "name": "operator",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155InvalidReceiver",
+          "inputs": [
+            {
+              "name": "receiver",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155InvalidSender",
+          "inputs": [
+            {
+              "name": "sender",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ERC1155MissingApprovalForAll",
+          "inputs": [
+            {
+              "name": "operator",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "owner",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ExceedsRatedCapacity",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "energyWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidOracleProof",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "LeafAlreadyMinted",
+          "inputs": [
+            {
+              "name": "nullifier",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    },
+    "RetirementRegistry": {
+      "address": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "_accessRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_certificateRegistry",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "accessRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "certificateRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract CertificateRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "retire",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "amountWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "beneficiary",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "purpose",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "nullifier",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "retiredNullifiers",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "CertificateRetired",
+          "inputs": [
+            {
+              "name": "account",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "indexed": true,
+              "internalType": "uint256"
+            },
+            {
+              "name": "amountWh",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "nullifier",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "beneficiary",
+              "type": "string",
+              "indexed": false,
+              "internalType": "string"
+            },
+            {
+              "name": "purpose",
+              "type": "string",
+              "indexed": false,
+              "internalType": "string"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "InvalidRetirementAmount",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "NullifierAlreadySpent",
+          "inputs": [
+            {
+              "name": "nullifier",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SystemPaused",
+          "inputs": []
+        }
+      ]
+    }
+  }
+}

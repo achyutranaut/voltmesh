@@ -2,13 +2,99 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --background: 220 17% 2%; /* #050607 */
+    --foreground: 240 5% 96%; /* #f4f4f5 */
+    --card: 210 15% 5%;       /* #0B0D0F */
+    --card-foreground: 240 5% 96%;
+    --popover: 210 15% 5%;
+    --popover-foreground: 240 5% 96%;
+    --primary: 160 84% 39%;   /* #10b981 emerald green */
+    --primary-foreground: 220 17% 2%;
+    --secondary: 216 12% 10%; /* #121418 */
+    --secondary-foreground: 240 5% 90%;
+    --muted: 216 12% 12%;
+    --muted-foreground: 240 5% 50%;
+    --accent: 189 94% 43%;    /* #06b6d4 cyan */
+    --accent-foreground: 220 17% 2%;
+    --destructive: 347 87% 60%;
+    --destructive-foreground: 240 5% 96%;
+    --border: 216 12% 14%;    /* #1e2227 subtle graphite */
+    --input: 216 12% 14%;
+    --ring: 160 84% 39%;
+    --radius: 0.25rem;
+
+    /* Sidebar Variables */
+    --sidebar-background: 214 18% 4%; /* #07090b */
+    --sidebar-foreground: 240 5% 85%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 220 17% 2%;
+    --sidebar-accent: 216 14% 9%;
+    --sidebar-accent-foreground: 240 5% 96%;
+    --sidebar-border: 216 12% 12%;
+    --sidebar-ring: 160 84% 39%;
+  }
+
+  .dark {
+    --background: 220 17% 2%;
+    --foreground: 240 5% 96%;
+    --card: 210 15% 5%;
+    --card-foreground: 240 5% 96%;
+    --popover: 210 15% 5%;
+    --popover-foreground: 240 5% 96%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 220 17% 2%;
+    --secondary: 216 12% 10%;
+    --secondary-foreground: 240 5% 90%;
+    --muted: 216 12% 12%;
+    --muted-foreground: 240 5% 50%;
+    --accent: 189 94% 43%;
+    --accent-foreground: 220 17% 2%;
+    --destructive: 347 87% 60%;
+    --destructive-foreground: 240 5% 96%;
+    --border: 216 12% 14%;
+    --input: 216 12% 14%;
+    --ring: 160 84% 39%;
+
+    --sidebar-background: 214 18% 4%;
+    --sidebar-foreground: 240 5% 85%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 220 17% 2%;
+    --sidebar-accent: 216 14% 9%;
+    --sidebar-accent-foreground: 240 5% 96%;
+    --sidebar-border: 216 12% 12%;
+    --sidebar-ring: 160 84% 39%;
+  }
+}
+
 body {
   margin: 0;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background-color: #030712;
+  background-color: #050607;
   color: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
 }
 
 code, pre {
   font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbar for Terminal */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080a0c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2228;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3038;
 }

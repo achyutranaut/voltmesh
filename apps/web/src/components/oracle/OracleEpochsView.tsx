@@ -1,6 +1,21 @@
 import React from 'react';
-import { Shield, Binary, CheckCircle2, RefreshCw, Key, Server, Lock } from 'lucide-react';
-import { DetailDrawerData } from '../../types/ui';
+import {
+  Shield,
+  Binary,
+  CheckCircle2,
+  RefreshCw,
+  Key,
+  Server,
+  Lock,
+  ArrowRight,
+  GitBranch,
+} from 'lucide-react';
+import { DetailDrawerData, NavigationTab } from '@/types/ui';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
+import { StageLockGate } from '@/components/terminal/StageLockGate';
 
 interface OracleNodeInfo {
   nodeId: string;
@@ -17,6 +32,7 @@ interface OracleEpochsViewProps {
   epochData: any;
   onSelectDetail: (detail: DetailDrawerData) => void;
   onOpenCanonicalTree?: () => void;
+  onNavigateTab?: (tab: NavigationTab) => void;
 }
 
 export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
@@ -25,7 +41,36 @@ export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
   epochData,
   onSelectDetail,
   onOpenCanonicalTree,
+  onNavigateTab,
 }) => {
+  const {
+    stages,
+    canEnterStage,
+    getStageBlocker,
+    oracleQuorum,
+    oracleQuorumCount,
+    advanceOracleQuorum,
+    signAllOracles,
+    selectStage,
+  } = usePipeline();
+
+  // Route lock gate check
+  const blockerInfo = getStageBlocker('ORACLE');
+  if (!canEnterStage('ORACLE') && blockerInfo) {
+    return (
+      <StageLockGate
+        stageId="ORACLE"
+        blocker={blockerInfo.blocker}
+        reason={blockerInfo.reason}
+        onNavigateToStage={(stId) => {
+          selectStage(stId);
+          if (onNavigateTab) {
+            onNavigateTab(STAGE_CONFIG[stId].tab);
+          }
+        }}
+      />
+    );
+  }
   const quorumNodes: OracleNodeInfo[] = [
     {
       nodeId: 'oracle-node-01',
@@ -72,202 +117,313 @@ export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
         { label: 'Merkle Root', value: epochData.root || '0x...', mono: true },
         { label: 'Zone ID', value: `Zone ${epochData.zoneId}` },
         { label: 'Trading Interval', value: `Slot ${epochData.intervalIdx}` },
-        { label: 'Quorum Threshold', value: '3-of-3 Unanimous' },
+        { label: 'Quorum Threshold', value: '1-of-N Consensus (Devnet)' },
         { label: 'Hash Algorithm', value: 'Keccak-256 (RFC 6962 Binary Tree)' },
       ],
-      merkleProof: epochData.proof ? {
-        root: epochData.root,
-        leaf: epochData.proof.leafHash,
-        siblings: epochData.proof.siblings,
-        index: epochData.proof.index,
-        depth: epochData.proof.siblings.length,
-      } : undefined,
+      merkleProof: epochData.proof
+        ? {
+            root: epochData.root,
+            leaf: epochData.proof.leafHash,
+            siblings: epochData.proof.siblings,
+            index: epochData.proof.index,
+            depth: epochData.proof.siblings.length,
+          }
+        : undefined,
       rawPayload: epochData,
     });
   };
 
   return (
-    <div className="p-4 space-y-4 bg-[#09090b] text-zinc-200">
-      {/* 1. Operational Overview Header */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 border border-zinc-800 bg-[#121215] p-3 text-xs font-mono">
-        <div>
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wider">THRESHOLD SCHEME</div>
-          <div className="text-white font-semibold text-sm mt-0.5">3-OF-3 CONSENSUS</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Required: 2 · Connected: 3</div>
+    <div className="space-y-6 sm:space-y-8 font-mono">
+      {/* 1. PAGE HEADER */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-4 border-b border-zinc-800/80">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-3">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-100">
+              Oracle & Epochs
+            </h1>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {epochData ? 'Epoch Committed' : 'Awaiting Interval'}
+            </span>
+          </div>
+
+          <div className="text-xs text-zinc-400">
+            Trading Slot {currentInterval} · Zone 1 (DL-TPDDL-Z1) · RFC 6962 Binary Tree · EpochOracle.sol
+          </div>
+
+          <p className="text-xs text-zinc-500 max-w-2xl pt-0.5">
+            Multi-operator decentralized oracle quorum verifying AMI telemetry attestations and anchoring canonical Merkle roots on-chain.
+          </p>
         </div>
-        <div>
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wider">TREE SPECIFICATION</div>
-          <div className="text-white font-semibold text-sm mt-0.5">RFC 6962 BINARY MERKLE</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Leaf: 0x00 · Node: 0x01</div>
-        </div>
-        <div>
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wider">EPOCH CONTRACT</div>
-          <div className="text-white font-semibold text-sm mt-0.5">EpochOracle.sol</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Contract @ 0x7099...79c8</div>
-        </div>
-        <div>
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wider">ATTESTATION DISPUTE</div>
-          <div className="text-emerald-400 font-semibold text-sm mt-0.5">T+384 SLOTS (4 DAYS)</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Slashing Bond: 10,000 WETH</div>
+
+        <div className="flex items-center space-x-2 shrink-0 pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBuildEpoch}
+            className="text-xs font-medium border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+            Build Epoch Tree
+          </Button>
+
+          {onOpenCanonicalTree && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenCanonicalTree}
+              className="text-xs font-medium border-purple-800/80 bg-purple-950/30 hover:bg-purple-900/50 text-purple-300 cursor-pointer"
+            >
+              <GitBranch className="w-3.5 h-3.5 mr-1 text-purple-400" />
+              Open Merkle Explorer
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* 2. Quorum Nodes Fleet */}
-      <div className="border border-zinc-800 bg-[#121215]">
-        <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/40 flex items-center justify-between font-mono text-xs">
-          <div className="flex items-center space-x-2">
-            <Server className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="font-semibold text-zinc-200">DECENTRALIZED ORACLE QUORUM NODES</span>
+      {/* 2. SUMMARY STRIP */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 border border-zinc-800/80 bg-[#0B0D0F] rounded-sm divide-y lg:divide-y-0 lg:divide-x divide-zinc-800/80">
+        <div className="p-4 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">THRESHOLD SCHEME</div>
+          <div className="text-lg font-semibold text-zinc-100">
+            1-of-N Consensus
           </div>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-sm bg-emerald-950/70 border border-emerald-800 text-emerald-400">
-            ALL 3 NODES SYNCED
-          </span>
+          <div className="text-[11px] text-zinc-500">
+            Required: 1 · Devnet Quorum
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left font-mono text-xs border-collapse">
+        <div className="p-4 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">TREE SPECIFICATION</div>
+          <div className="text-lg font-semibold text-purple-400">
+            RFC 6962 Binary
+          </div>
+          <div className="text-[11px] text-zinc-500">
+            0x00 Leaf · 0x01 Node Prefixes
+          </div>
+        </div>
+
+        <div className="p-4 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">EPOCH CONTRACT</div>
+          <div className="text-lg font-semibold text-cyan-400">
+            EpochOracle.sol
+          </div>
+          <div className="text-[11px] text-zinc-500">
+            EVM Chain ID 31337
+          </div>
+        </div>
+
+        <div className="p-4 space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">DISPUTE WINDOW</div>
+          <div className="text-lg font-semibold text-emerald-400">
+            T+384 Slots <span className="text-xs font-normal text-zinc-400">(4d)</span>
+          </div>
+          <div className="text-[11px] text-zinc-500">
+            Slashing Bond: 10,000 vUSD
+          </div>
+        </div>
+      </div>
+
+      {/* 3. QUORUM NODES FLEET TABLE */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
+          <div className="flex items-center space-x-2">
+            <Server className="w-4 h-4 text-cyan-400" />
+            <span className="font-bold text-sm text-white uppercase">
+              DECENTRALIZED ORACLE QUORUM NODES
+            </span>
+            <Badge
+              variant={oracleQuorumCount >= 3 ? 'success' : 'secondary'}
+              className="text-[10px]"
+            >
+              {oracleQuorumCount}/3 NODES SIGNED
+            </Badge>
+          </div>
+
+          {oracleQuorumCount < 3 && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={signAllOracles}
+              className="text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-zinc-950 cursor-pointer"
+            >
+              <Key className="w-3 h-3 mr-1" />
+              SIGN ALL 3 ORACLES (QUORUM CONSENSUS)
+            </Button>
+          )}
+        </div>
+
+        <Card className="bg-[#0B0D0F] border-zinc-800 overflow-x-auto">
+          <table className="w-full text-left text-xs font-mono">
             <thead>
-              <tr className="border-b border-zinc-800 text-[10px] text-zinc-500 uppercase bg-zinc-950/60">
-                <th className="py-2 px-3">Node ID</th>
-                <th className="py-2 px-3">Entity / Operator</th>
-                <th className="py-2 px-3">Institutional Role</th>
-                <th className="py-2 px-3">Secp256k1 Public Key</th>
-                <th className="py-2 px-3 text-right">Latency</th>
-                <th className="py-2 px-3 text-center">Consensus Status</th>
+              <tr className="border-b border-zinc-800/80 bg-zinc-950/60 text-[10px] text-zinc-500 uppercase">
+                <th className="py-2.5 px-3 font-semibold">NODE ID</th>
+                <th className="py-2.5 px-3 font-semibold">ENTITY / OPERATOR</th>
+                <th className="py-2.5 px-3 font-semibold">INSTITUTIONAL ROLE</th>
+                <th className="py-2.5 px-3 font-semibold">SECP256K1 PUBLIC KEY</th>
+                <th className="py-2.5 px-3 font-semibold text-right">CONSENSUS STATUS</th>
+                <th className="py-2.5 px-3 font-semibold text-right">ACTION</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/40">
-              {quorumNodes.map((node) => (
-                <tr key={node.nodeId} className="hover:bg-zinc-800/40 transition-colors">
-                  <td className="py-2 px-3 font-semibold text-white">{node.nodeId}</td>
-                  <td className="py-2 px-3 text-zinc-300 font-medium">{node.operator}</td>
-                  <td className="py-2 px-3 text-zinc-400">{node.role}</td>
-                  <td className="py-2 px-3 text-zinc-400 text-[11px] truncate max-w-[140px]">
-                    {node.publicKey}
+            <tbody className="divide-y divide-zinc-850/60">
+              {oracleQuorum.map((node, idx) => (
+                <tr key={node.nodeId} className="hover:bg-zinc-850/50 transition-colors">
+                  <td className="py-2.5 px-3 font-bold text-white">{node.nodeId}</td>
+                  <td className="py-2.5 px-3 text-zinc-300 font-medium">{node.operator || node.name}</td>
+                  <td className="py-2.5 px-3 text-zinc-400">{node.role}</td>
+                  <td className="py-2.5 px-3 text-zinc-400 text-[11px] truncate max-w-[140px]">
+                    {node.publicKey || '0x...'}
                   </td>
-                  <td className="py-2 px-3 text-right text-emerald-400 font-bold">{node.latencyMs} ms</td>
-                  <td className="py-2 px-3 text-center">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-sm border bg-emerald-950/50 border-emerald-800 text-emerald-400">
-                      {node.status}
-                    </span>
+                  <td className="py-2.5 px-3 text-right">
+                    {node.signed ? (
+                      <span className="inline-flex items-center text-emerald-400 font-bold text-[11px]">
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                        SIGNED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center text-amber-400 text-[11px]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-1" />
+                        AWAITING
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-3 text-right">
+                    {!node.signed ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => advanceOracleQuorum(idx)}
+                        className="text-[10px] font-bold py-0.5 px-2 h-7 border-cyan-800 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 cursor-pointer"
+                      >
+                        SIGN NODE
+                      </Button>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500">VERIFIED</span>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       </div>
 
-      {/* 3. Merkle Epoch Tree Generation & Proof Inspection */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Builder Column */}
-        <div className="border border-zinc-800 bg-[#121215] p-3 space-y-3 font-mono text-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-              <span className="font-semibold text-zinc-200">MERKLE EPOCH COMMITMENT BUILDER</span>
-              <span className="text-[10px] text-zinc-500">ZONE 1 · INTERVAL {currentInterval}</span>
+      {/* 4. EPOCH TREE BUILDER & STATUS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="bg-[#0B0D0F] border-zinc-800 p-4 space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+            <span className="font-bold text-sm text-white uppercase">
+              MERKLE EPOCH COMMITMENT BUILDER
+            </span>
+            <span className="text-[10px] text-zinc-500">ZONE 1 · INTERVAL {currentInterval}</span>
+          </div>
+
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Aggregates verified AMI meter attestations across all grid endpoints in Zone 1. Computes the canonical Keccak-256 RFC 6962 Binary Merkle Tree for on-chain contract attestation.
+          </p>
+
+          <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-sm space-y-2 text-xs">
+            <div className="flex justify-between text-zinc-400">
+              <span>INCLUDED AMI READINGS:</span>
+              <span className="text-white font-bold">
+                {epochData ? epochData.readingsCount || 2 : 2} ATTESTATIONS
+              </span>
             </div>
-
-            <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
-              Aggregates verified AMI meter attestations across all grid endpoints in Zone 1. Computes the canonical Keccak-256 RFC 6962 Binary Merkle Tree for on-chain contract attestation.
-            </p>
-
-            <div className="mt-4 p-3 bg-zinc-950 border border-zinc-800 rounded-sm space-y-1.5">
-              <div className="flex justify-between text-zinc-400">
-                <span>INCLUDED AMI READINGS:</span>
-                <span className="text-white font-semibold">2 ATTESTATIONS</span>
-              </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>CANONICAL LEAF SORTING:</span>
-                <span className="text-white font-semibold">DEVICE_ID LEXICOGRAPHICAL</span>
-              </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>PRE-IMAGE PROTECTION:</span>
-                <span className="text-emerald-400 font-semibold">ACTIVE (0x00 LEAF / 0x01 NODE)</span>
-              </div>
+            <div className="flex justify-between text-zinc-400">
+              <span>ORACLE QUORUM STATUS:</span>
+              <span className={`font-bold ${oracleQuorumCount >= 3 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {oracleQuorumCount}/3 SIGNED {oracleQuorumCount >= 3 ? '(THRESHOLD REACHED)' : '(PENDING)'}
+              </span>
+            </div>
+            <div className="flex justify-between text-zinc-400">
+              <span>PRE-IMAGE PROTECTION:</span>
+              <span className="text-emerald-400 font-bold">ACTIVE (0x00 LEAF / 0x01 NODE)</span>
             </div>
           </div>
 
-          <button
+          <Button
+            variant="default"
+            size="default"
+            disabled={oracleQuorumCount < 3}
             onClick={onBuildEpoch}
-            className="w-full mt-3 bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold py-2 px-3 rounded flex items-center justify-center space-x-2 transition-colors"
+            className={`w-full justify-center font-bold cursor-pointer ${
+              oracleQuorumCount >= 3
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+            }`}
           >
-            <RefreshCw className="w-4 h-4" />
-            <span>BUILD CANONICAL EPOCH MERKLE TREE</span>
-          </button>
+            <RefreshCw className="w-4 h-4 mr-1.5" />
+            {oracleQuorumCount < 3
+              ? `AWAITING ORACLE QUORUM (${oracleQuorumCount}/3 SIGNED)`
+              : 'BUILD CANONICAL EPOCH MERKLE TREE'}
+          </Button>
+        </Card>
 
-          {onOpenCanonicalTree && (
-            <button
-              onClick={onOpenCanonicalTree}
-              className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-emerald-800/60 font-semibold py-2 px-3 rounded flex items-center justify-center space-x-2 transition-colors"
-            >
-              <Binary className="w-4 h-4 text-emerald-400" />
-              <span>OPEN INTERACTIVE MERKLE TREE (96 LEAVES)</span>
-            </button>
-          )}
-        </div>
-
-        {/* Proof Explorer Column */}
-        <div className="border border-zinc-800 bg-[#121215] p-3 font-mono text-xs flex flex-col justify-between">
+        <Card className="bg-[#0B0D0F] border-zinc-800 p-4 space-y-4 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-              <span className="font-semibold text-zinc-200">ON-CHAIN EPOCH MERKLE PROOF</span>
-              {epochData ? (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-sm border bg-emerald-950/70 border-emerald-800 text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  TREE BUILT
-                </span>
-              ) : (
-                <span className="text-[10px] text-zinc-500">AWAITING BUILD</span>
-              )}
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+              <span className="font-bold text-sm text-white uppercase">
+                CANONICAL MERKLE ROOT STATUS
+              </span>
+              <Badge variant={epochData ? 'success' : 'secondary'} className="text-[10px]">
+                {epochData ? 'COMMITTED' : 'PENDING'}
+              </Badge>
             </div>
 
             {epochData ? (
-              <div className="space-y-2 mt-3 text-[11px]">
-                <div className="bg-zinc-950 border border-zinc-800 p-2 rounded-sm">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">COMMITTED MERKLE ROOT</div>
-                  <div className="text-emerald-400 break-all font-semibold">
-                    {epochData.root}
+              <div className="mt-3 space-y-3 text-xs">
+                <div>
+                  <span className="text-[10px] text-zinc-500 uppercase block">CANONICAL ROOT:</span>
+                  <div className="p-2 bg-zinc-950 border border-zinc-800 rounded font-mono text-[11px] text-emerald-400 break-all">
+                    {epochData.root || '--'}
                   </div>
                 </div>
 
-                {epochData.proof && (
-                  <div className="bg-zinc-950 border border-zinc-800 p-2 rounded-sm space-y-1">
-                    <div className="flex justify-between text-[10px] text-zinc-500">
-                      <span>VERIFIED TARGET LEAF (METER-DELHI-SOLAR-001)</span>
-                      <span>INDEX #{epochData.proof.index}</span>
-                    </div>
-                    <div className="text-zinc-300 break-all text-[10px]">
-                      {epochData.proof.leafHash}
-                    </div>
-
-                    <div className="text-[10px] text-zinc-500 mt-2">SIBLING HASHES ({epochData.proof.siblings.length})</div>
-                    <div className="text-zinc-400 break-all text-[10px]">
-                      {epochData.proof.siblings[0] || 'No siblings (single root leaf)'}
-                    </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 bg-zinc-950 border border-zinc-850 rounded">
+                    <span className="text-[10px] text-zinc-500 block">ZONE / SLOT</span>
+                    <span className="font-bold text-white">Zone 1 · Slot {currentInterval}</span>
                   </div>
-                )}
-
-                <button
-                  onClick={handleInspectEpoch}
-                  className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-1.5 px-3 rounded border border-zinc-700 flex items-center justify-center space-x-1.5 transition-colors"
-                >
-                  <Binary className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>INSPECT FULL PROOF IN DETAIL DRAWER</span>
-                </button>
+                  <div className="p-2 bg-zinc-950 border border-zinc-850 rounded">
+                    <span className="text-[10px] text-zinc-500 block">TOTAL ENERGY</span>
+                    <span className="font-bold text-emerald-400">
+                      {epochData.totalWh != null ? `${epochData.totalWh.toLocaleString()} Wh` : '-- Wh'}
+                    </span>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="p-8 text-center text-zinc-500 text-xs font-mono">
-                Click "Build Canonical Epoch Merkle Tree" to compute root hash and generate sibling proofs.
+              <div className="p-6 text-center text-zinc-500 text-xs italic">
+                Epoch Merkle Tree uncomputed for interval {currentInterval}. Click "BUILD CANONICAL EPOCH MERKLE TREE" to compute leaf hashes and root.
               </div>
             )}
           </div>
 
-          <div className="pt-2 border-t border-zinc-800/60 text-[10px] text-zinc-500 flex justify-between">
-            <span>EPOCH ORACLE CONTRACT</span>
-            <span>VERIFIED ON-CHAIN ROOT</span>
+          <div className="pt-2 flex flex-col sm:flex-row gap-2">
+            {epochData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleInspectEpoch}
+                className="flex-1 text-xs cursor-pointer"
+              >
+                INSPECT PROOF
+              </Button>
+            )}
+            {onOpenCanonicalTree && (
+              <Button
+                variant="cyan"
+                size="sm"
+                onClick={onOpenCanonicalTree}
+                className="flex-1 text-xs font-bold cursor-pointer"
+              >
+                EXPLORE 96-LEAF TREE
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            )}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
