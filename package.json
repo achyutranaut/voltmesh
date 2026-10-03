@@ -12,6 +12,7 @@
     "test:contracts:invariant": "cd contracts && forge test --match-test invariant",
     "contracts:build": "cd contracts && forge build",
     "lint": "pnpm --filter \"./packages/*\" run lint",
+    "integrity-check": "tsx scripts/data-integrity-check.ts",
     "clean": "pnpm -r run clean"
   },
   "devDependencies": {
