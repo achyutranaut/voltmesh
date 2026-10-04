@@ -9,7 +9,6 @@ import {
   Cpu,
   FileCode2,
   History,
-  ArrowLeft,
 } from 'lucide-react';
 import { usePipeline } from '@/context/PipelineContext';
 import {
@@ -66,18 +65,8 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
       {/* 1. Header with Authentic Brand Identity */}
       <SidebarHeader className="border-b border-white/[0.07] p-3.5 bg-panel">
         <div className="flex items-center justify-between">
-          <VoltMeshBrand subtitle="Trading terminal" size="sm" />
+          <VoltMeshBrand subtitle="Trading terminal" size="sm" onClick={onReturnToStory} />
         </div>
-
-        {onReturnToStory && (
-          <button
-            onClick={onReturnToStory}
-            className="mt-2.5 flex items-center space-x-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors py-1 px-2 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Return to overview</span>
-          </button>
-        )}
       </SidebarHeader>
 
       {/* 2. Main Navigation Sections (Sentence-case headings, no decorative padlocks) */}
