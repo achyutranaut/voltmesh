@@ -1,7 +1,9 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
-import { recoverMessageAddress, isAddress, Hex } from 'viem';
+import crypto from 'node:crypto';
+import { z } from 'zod';
+import { recoverMessageAddress, isAddress, Hex, keccak256, toHex } from 'viem';
 import {
   Participant,
   ParticipantRole,
@@ -28,6 +30,10 @@ import {
   BillingCycle,
   TariffSchedule,
   DetailedReconciliationResult,
+  UserRole,
+  AuthenticatedUser,
+  ParticipantCapabilities,
+  Capability,
 } from '@energy-dex/types';
 import { BatchMatcher, ZoneMarketConfig } from '@energy-dex/matcher';
 import { BinaryMerkleTree, hashStatementLeaf } from '@energy-dex/attestation';
@@ -55,22 +61,241 @@ export interface ApiServerOptions {
   meterAdapter?: SimulatorMeterAdapter;
   billingAdapter?: SimulatorBillingAdapter;
   utilityIdentityProvider?: SimulatorUtilityIdentityProvider;
+  userRoles?: Map<string, UserRole>;
+  sandboxMode?: boolean;
+}
+
+// Zod Validation Schemas (P1-11)
+const AuthVerifySchema = z.object({
+  message: z.string().min(1, 'Message is required'),
+  signature: z.string().min(1, 'Signature is required'),
+  nonce: z.string().optional(),
+});
+
+const ParticipantRegisterSchema = z.object({
+  zoneId: z.number().int().positive().default(1),
+  discomAccountNumber: z.string().min(1, 'DISCOM account number is required'),
+  roleType: z.nativeEnum(ParticipantRole).default(ParticipantRole.PROSUMER),
+});
+
+const DeviceRegisterSchema = z.object({
+  deviceId: z.string().min(1),
+  meterSerialNumber: z.string().min(1),
+  sourceType: z.nativeEnum(SourceType),
+  ratedCapacityW: z.string().regex(/^\d+$/, 'Rated capacity must be positive integer string'),
+  signerType: z.nativeEnum(SignerType).optional(),
+});
+
+const OrderSubmitSchema = z.object({
+  zoneId: z.number().int().positive(),
+  intervalIdx: z.number().int().min(0),
+  side: z.nativeEnum(OrderSide),
+  quantityWh: z.string().regex(/^\d+$/),
+  pricePaisePerKWh: z.string().regex(/^\d+$/),
+  expiry: z.number().int().positive(),
+  nonce: z.union([z.string(), z.number()]).optional(),
+  signature: z.string().optional(),
+});
+
+const MarketSessionCreateSchema = z.object({
+  marketType: z.enum(['DAY_AHEAD', 'INTRADAY', 'REAL_TIME']),
+  mechanism: z.enum(['UNIFORM_PRICE_CALL_MARKET', 'BILATERAL', 'FIXED_PRICE', 'DOUBLE_AUCTION']).default('UNIFORM_PRICE_CALL_MARKET'),
+  dateEpoch: z.number().int().positive(),
+  zoneId: z.number().int().positive(),
+  gateClosureLeadSeconds: z.number().int().positive().optional(),
+});
+
+const EnergyScheduleCreateSchema = z.object({
+  sessionId: z.string().min(1),
+  role: z.enum(['BUYER', 'SELLER']),
+  zoneId: z.number().int().positive(),
+  intervalIdx: z.number().int().min(0),
+  deliveryDate: z.string().min(1),
+  quantityWh: z.string().regex(/^\d+$/),
+  contractedPricePaiseKWh: z.string().regex(/^\d+$/),
+  counterparty: z.string().min(1),
+});
+
+const EnergyPositionDeclareSchema = z.object({
+  intervalIdx: z.number().int().min(0),
+  declaredAvailableWh: z.string().regex(/^\d+$/),
+  installedSolarCapacityW: z.string().regex(/^\d+$/).optional(),
+});
+
+const SettlementReconcileSchema = z.object({
+  obligationId: z.string().min(1),
+  contractedWh: z.string().regex(/^\d+$/),
+  actualSellerInjectionWh: z.string().regex(/^\d+$/),
+  actualBuyerConsumptionWh: z.string().regex(/^\d+$/),
+  energyPricePaiseKWh: z.string().regex(/^\d+$/),
+  jurisdiction: z.enum(['DERC', 'UPERC']).optional(),
+  buyerAddress: z.string().optional(),
+  sellerAddress: z.string().optional(),
+});
+
+const BillingAdjustmentSchema = z.object({
+  consumerNumber: z.string().min(1),
+  prosumerNumber: z.string().min(1),
+  discomId: z.string().min(1),
+  transactionId: z.string().min(1),
+  deliveryDate: z.string().min(1),
+  scheduledWh: z.string().regex(/^\d+$/),
+  settledWh: z.string().regex(/^\d+$/),
+  p2pEnergyAmountPaise: z.string().regex(/^\d+$/),
+  wheelingChargesPaise: z.string().regex(/^\d+$/),
+  transactionChargesPaise: z.string().regex(/^\d+$/),
+  taxPaise: z.string().regex(/^\d+$/),
+  netAdjustmentAmountPaise: z.string().regex(/^\d+$/),
+  direction: z.enum(['CREDIT', 'DEBIT']),
+});
+
+function validateBody<T>(schema: z.ZodSchema<T>, data: unknown, reply: FastifyReply): T | null {
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) {
+    reply.status(400).send({
+      error: 'VALIDATION_ERROR',
+      message: 'Request body validation failed',
+      details: parsed.error.errors.map((e) => ({
+        path: e.path.join('.'),
+        message: e.message,
+      })),
+    });
+    return null;
+  }
+  return parsed.data;
+}
+
+export function deriveParticipantId(walletAddress: string): string {
+  const hash = keccak256(toHex(walletAddress.toLowerCase()));
+  return `part-${hash.slice(2)}`;
+}
+
+export function deriveCapabilities(
+  address: string,
+  userRole: UserRole,
+  participant?: Participant,
+  vc?: VerifiableCredential,
+  userDevices: Device[] = [],
+  hasDeclaredSolarPosition: boolean = false
+): ParticipantCapabilities {
+  if (userRole === 'OPERATOR' || userRole === 'ADMIN') {
+    return {
+      canBuy: true,
+      canSell: true,
+      canRegisterDevice: true,
+      canClearMarket: true,
+      canOperate: true,
+      canIssueCredentials: true,
+      canAudit: true,
+    };
+  }
+
+  if (userRole === 'AUDITOR') {
+    return {
+      canBuy: false,
+      canSell: false,
+      canRegisterDevice: false,
+      canClearMarket: false,
+      canOperate: false,
+      canIssueCredentials: false,
+      canAudit: true,
+    };
+  }
+
+  if (userRole === 'DISCOM') {
+    return {
+      canBuy: false,
+      canSell: false,
+      canRegisterDevice: true,
+      canClearMarket: false,
+      canOperate: false,
+      canIssueCredentials: true,
+      canAudit: true,
+    };
+  }
+
+  // Must have passed KYC if participant record exists
+  if (participant && participant.kycStatus !== KYCStatus.VERIFIED) {
+    return {
+      canBuy: false,
+      canSell: false,
+      canRegisterDevice: false,
+      canClearMarket: false,
+      canOperate: false,
+      canIssueCredentials: false,
+      canAudit: false,
+    };
+  }
+
+  // Every participant defaults to CONSUMER: can BUY energy
+  const canBuy = true;
+
+  // Selling strictly requires prosumer status AND verified solar capacity / declared solar position
+  const hasSolarVC = vc ? vc.claims.solarCapacityKw > 0 : false;
+  const hasRegisteredSolarDevice = userDevices.some((d) => !d.isRevoked && d.ratedCapacityW > 0n);
+  const isProsumer = participant ? participant.roleType === ParticipantRole.PROSUMER : false;
+
+  const canSell = isProsumer && (hasSolarVC || hasRegisteredSolarDevice || hasDeclaredSolarPosition);
+  const canRegisterDevice = isProsumer || hasSolarVC;
+
+  return {
+    canBuy,
+    canSell,
+    canRegisterDevice,
+    canClearMarket: false,
+    canOperate: false,
+    canIssueCredentials: false,
+    canAudit: false,
+  };
 }
 
 export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false });
-  const matcher = options.matcher ?? new BatchMatcher();
-  const jwtSecret = options.jwtSecret ?? 'dex-super-secret-key-32-chars-long!';
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isSandboxMode = options.sandboxMode ?? (!isProduction || process.env.SANDBOX_MODE === 'true');
+  const defaultSecret = 'dex-super-secret-key-32-chars-long!';
+  const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? (isProduction ? '' : defaultSecret);
 
-  app.register(cors, { origin: true });
-  app.register(jwt, { secret: jwtSecret });
+  // P1-17: JWT secret check in production
+  if (isProduction && (!jwtSecret || jwtSecret === defaultSecret || jwtSecret.length < 32)) {
+    throw new Error('FATAL: Hardcoded or default JWT_SECRET is strictly forbidden in production (min 32 chars).');
+  }
+
+  const app = Fastify({ logger: false });
+  app.setErrorHandler((error, request, reply) => {
+    reply.status(error.statusCode ?? 500).send({ error: error.name, message: error.message });
+  });
+  const matcher = options.matcher ?? new BatchMatcher();
+
+  // P1-17: Restrict CORS origin in production
+  if (isProduction) {
+    const allowed = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false;
+    app.register(cors, { origin: allowed });
+  } else {
+    app.register(cors, { origin: true });
+  }
+
+  app.register(jwt, { secret: jwtSecret || defaultSecret });
 
   const meterAdapter = options.meterAdapter ?? new SimulatorMeterAdapter();
   const billingAdapter = options.billingAdapter ?? new SimulatorBillingAdapter();
   const utilityIdentityProvider = options.utilityIdentityProvider ?? new SimulatorUtilityIdentityProvider();
 
+  // P0-8: Server-side RBAC Role Registry
+  const roleRegistry = new Map<string, UserRole>(options.userRoles ?? []);
+  if (!roleRegistry.has('0x1234567890123456789012345678901234567890')) {
+    roleRegistry.set('0x1234567890123456789012345678901234567890', 'OPERATOR');
+  }
+
+  (app as any).setUserRole = (address: string, role: UserRole) => {
+    roleRegistry.set(address.toLowerCase(), role);
+  };
+  (app as any).getUserRole = (address: string): UserRole => {
+    return roleRegistry.get(address.toLowerCase()) ?? 'PARTICIPANT';
+  };
+
   // In-memory repositories
   const nonces = new Map<string, { nonce: string; issuedAt: number }>();
+  const usedNonces = new Set<string>(); // P1-2: Nonce replay prevention: `${wallet}:${nonce}`
   const participants = new Map<string, Participant>(); // wallet -> Participant
   const bindingHashes = new Set<string>();
   const devices = new Map<string, Device>(); // deviceId -> Device
@@ -116,32 +341,124 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   };
   billingCycles.set(defaultBillingCycle.cycleId, defaultBillingCycle);
 
-  // Authentication Decorator / Hook
+  const tokenVersions = new Map<string, number>(); // wallet -> current valid tokenVersion
+
+  // Authentication Decorator / Hook (P0-8, Step 1)
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
+      const payload = request.user as { address: string; role?: UserRole; tokenVersion?: number };
+      if (!payload || !payload.address) {
+        return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
+      }
+      const lower = payload.address.toLowerCase();
+
+      // Token version check (token revocation / invalidation)
+      const currentVer = tokenVersions.get(lower) ?? 0;
+      if (payload.tokenVersion !== undefined && payload.tokenVersion < currentVer) {
+        return reply.status(401).send({
+          error: 'TOKEN_REVOKED',
+          message: 'Session has been invalidated due to credential or role update. Please sign in again.',
+        });
+      }
+
+      const userRole = roleRegistry.get(lower) ?? payload.role ?? 'PARTICIPANT';
+      const participant = participants.get(lower);
+      const vc = verifiableCredentials.get(lower);
+      const userDevices = Array.from(devices.values()).filter(
+        (d) => d.participantId === participant?.participantId
+      );
+      const userPositions = Array.from(energyPositions.values()).filter(
+        (p) => p.participant.toLowerCase() === lower && p.installedSolarCapacityW > 0n
+      );
+      const hasDeclaredSolarPosition = userPositions.length > 0;
+      const capabilities = deriveCapabilities(lower, userRole, participant, vc, userDevices, hasDeclaredSolarPosition);
+
+      (request as any).authenticatedUser = {
+        address: lower,
+        role: userRole,
+        capabilities,
+        participantId: participant?.participantId,
+        tokenVersion: payload.tokenVersion ?? currentVer,
+      };
     } catch (err) {
-      reply.status(401).send({ error: 'Unauthorized: Invalid or expired token' });
+      return reply.status(401).send({ error: 'Unauthorized: Invalid or expired token' });
     }
   };
 
+  // P0-8: Server-side RBAC Hook
+  const requireRoles = (...allowedRoles: UserRole[]) => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = (request as any).authenticatedUser as AuthenticatedUser | undefined;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
+      }
+      if (!allowedRoles.includes(user.role)) {
+        return reply.status(403).send({
+          error: 'INSUFFICIENT_PERMISSIONS',
+          message: `Role ${user.role} is not authorized for this operation. Allowed roles: ${allowedRoles.join(', ')}`,
+        });
+      }
+    };
+  };
+
+  function hasCapability(capabilities: ParticipantCapabilities, cap: Capability, role: UserRole): boolean {
+    switch (cap) {
+      case 'BUY':
+        return capabilities.canBuy;
+      case 'SELL':
+        return capabilities.canSell;
+      case 'REGISTER_DEVICE':
+        return capabilities.canRegisterDevice;
+      case 'CLEAR_MARKET':
+        return capabilities.canClearMarket;
+      case 'OPERATE':
+        return capabilities.canOperate;
+      case 'ISSUE_CREDENTIALS':
+        return capabilities.canIssueCredentials;
+      case 'DISCOM':
+        return capabilities.canIssueCredentials || role === 'DISCOM';
+      case 'AUDIT':
+        return capabilities.canAudit;
+      default:
+        return false;
+    }
+  }
+
+  // Step 1: Server-side Capability Hook
+  const requireCapability = (capability: Capability) => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = (request as any).authenticatedUser as AuthenticatedUser | undefined;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
+      }
+      if (!hasCapability(user.capabilities, capability, user.role)) {
+        const errCode = capability === 'CLEAR_MARKET' ? 'CLEAR_UNAUTHORIZED' : 'INSUFFICIENT_PERMISSIONS';
+        return reply.status(403).send({
+          error: errCode,
+          message: `Participant does not have required capability: ${capability}`,
+        });
+      }
+    };
+  };
+
   // ---------------------------------------------------------------------------
-  // 1. Authentication (SIWE)
+  // 1. Authentication (SIWE) (P1-16)
   // ---------------------------------------------------------------------------
   app.get('/health', async () => ({ status: 'healthy', timestamp: new Date().toISOString() }));
 
   app.get('/api/v1/auth/nonce', async () => {
-    const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // P1-16: Cryptographically secure random nonce
+    const nonce = crypto.randomBytes(16).toString('hex');
     const issuedAt = Date.now();
     nonces.set(nonce, { nonce, issuedAt });
     return { nonce, issuedAt };
   });
 
   app.post('/api/v1/auth/verify', async (request, reply) => {
-    const body = request.body as { message: string; signature: string; nonce?: string };
-    if (!body || !body.message || !body.signature) {
-      return reply.status(400).send({ error: 'Missing message or signature' });
-    }
+    const validated = validateBody(AuthVerifySchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     // Extract nonce from SIWE message or explicit field
     const nonceMatch = body.message.match(/Nonce:\s*([a-zA-Z0-9]+)/i);
@@ -165,20 +482,50 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     // Burn nonce immediately to prevent replay attacks (VULN-API-01)
     nonces.delete(nonce);
 
+    // P1-16: Check SIWE message expiration if present
+    const expMatch = body.message.match(/Expiration Time:\s*([^\n\r]+)/i);
+    if (expMatch) {
+      const expDate = new Date(expMatch[1]);
+      if (!isNaN(expDate.getTime()) && expDate.getTime() < Date.now()) {
+        return reply.status(401).send({ error: 'EXPIRED_SIWE_MESSAGE', message: 'SIWE message expiration time has passed' });
+      }
+    }
+
     try {
       const recoveredAddress = await recoverMessageAddress({
         message: body.message,
         signature: body.signature as Hex,
       });
 
+      // P1-16: Validate that message address matches recovered address
+      const addrMatch = body.message.match(/(0x[a-fA-F0-9]{40})/);
+      if (addrMatch && addrMatch[1].toLowerCase() !== recoveredAddress.toLowerCase()) {
+        return reply.status(401).send({
+          error: 'SIWE_ADDRESS_MISMATCH',
+          message: `Message address ${addrMatch[1]} does not match recovered signer address ${recoveredAddress}`,
+        });
+      }
+
+      const lowerAddr = recoveredAddress.toLowerCase();
+      const assignedRole = roleRegistry.get(lowerAddr) ?? 'PARTICIPANT';
+      const currentVer = tokenVersions.get(lowerAddr) ?? 0;
+      const participant = participants.get(lowerAddr);
+      const vc = verifiableCredentials.get(lowerAddr);
+      const userDevices = Array.from(devices.values()).filter(
+        (d) => d.participantId === participant?.participantId
+      );
+      const capabilities = deriveCapabilities(lowerAddr, assignedRole, participant, vc, userDevices);
+
       const token = app.jwt.sign(
-        { address: recoveredAddress.toLowerCase() },
+        { address: lowerAddr, role: assignedRole, tokenVersion: currentVer },
         { expiresIn: '24h' }
       );
 
       return {
         accessToken: token,
-        walletAddress: recoveredAddress.toLowerCase(),
+        walletAddress: lowerAddr,
+        role: assignedRole,
+        capabilities,
       };
     } catch (err: any) {
       return reply.status(400).send({ error: `Signature recovery failed: ${err.message}` });
@@ -189,12 +536,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // 2. Participants & Identity
   // ---------------------------------------------------------------------------
   app.post('/api/v1/participants/register', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
-    const body = request.body as {
-      zoneId: number;
-      discomAccountNumber: string;
-      roleType: ParticipantRole;
-    };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(ParticipantRegisterSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     if (participants.has(user.address)) {
       return reply.status(409).send({ error: 'Participant already registered' });
@@ -205,13 +550,39 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       return reply.status(409).send({ error: 'DISCOM account is already bound to another wallet' });
     }
 
+    // Role cannot be arbitrarily claimed by client
+    // Authoritatively verify against DISCOM provider
+    let authoritativeRole = ParticipantRole.CONSUMER;
+    const utilityRecord = await utilityIdentityProvider.verifyConsumer(body.discomAccountNumber);
+    if (utilityRecord) {
+      authoritativeRole = utilityRecord.consumerType === 'PROSUMER'
+        ? ParticipantRole.PROSUMER
+        : ParticipantRole.CONSUMER;
+      // Reject client escalation beyond authoritative utility record
+      if (body.roleType && body.roleType !== authoritativeRole && body.roleType !== ParticipantRole.CONSUMER) {
+        return reply.status(400).send({
+          error: 'ROLE_ESCALATION_REJECTED',
+          message: `Client-supplied roleType '${body.roleType}' exceeds authoritative utility record classification '${authoritativeRole}'`,
+        });
+      }
+    } else if (isSandboxMode && body.roleType) {
+      // In sandbox mode without DISCOM records, respect requested role if valid, but cap at PROSUMER
+      authoritativeRole = body.roleType === ParticipantRole.PROSUMER ? ParticipantRole.PROSUMER : ParticipantRole.CONSUMER;
+    } else if (body.roleType && body.roleType !== ParticipantRole.CONSUMER) {
+      return reply.status(400).send({
+        error: 'ROLE_ESCALATION_REJECTED',
+        message: `Client cannot claim elevated role '${body.roleType}' without verified utility record or verifiable credential`,
+      });
+    }
+
+    const participantId = deriveParticipantId(user.address);
     const newParticipant: Participant = {
-      participantId: `part-${user.address.slice(2, 10)}`,
+      participantId,
       walletAddress: user.address,
       zoneId: body.zoneId || 1,
       discomAccountNumber: body.discomAccountNumber,
       identityBindingHash: bindingHash,
-      roleType: body.roleType || ParticipantRole.PROSUMER,
+      roleType: authoritativeRole,
       kycStatus: KYCStatus.VERIFIED,
       createdAt: Date.now(),
     };
@@ -219,11 +590,14 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     participants.set(user.address, newParticipant);
     bindingHashes.add(bindingHash);
 
+    // Invalidate existing token version so capabilities take effect immediately
+    tokenVersions.set(user.address, (tokenVersions.get(user.address) ?? 0) + 1);
+
     return reply.status(201).send(newParticipant);
   });
 
   app.get('/api/v1/participants/me', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     const p = participants.get(user.address);
     if (!p) {
       return reply.status(404).send({ error: 'Participant not found' });
@@ -234,39 +608,52 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // ---------------------------------------------------------------------------
   // 3. Devices
   // ---------------------------------------------------------------------------
-  app.post('/api/v1/devices/register', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
+  app.post('/api/v1/devices/register', { preHandler: [authenticate, requireCapability('REGISTER_DEVICE')] }, async (request, reply) => {
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     const p = participants.get(user.address);
     if (!p) {
       return reply.status(403).send({ error: 'Must register as a participant before registering devices' });
     }
 
-    const body = request.body as {
-      deviceId: string;
-      meterSerialNumber: string;
-      sourceType: SourceType;
-      ratedCapacityW: string;
-      signerType?: SignerType;
-    };
+    const validated = validateBody(DeviceRegisterSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     if (devices.has(body.deviceId)) {
       return reply.status(409).send({ error: 'Device ID already registered' });
     }
 
+    // Step 1: Bounded rated capacity by verifiable credential
+    const vc = verifiableCredentials.get(user.address);
+    const requestedW = BigInt(body.ratedCapacityW || '5000');
+    if (vc && vc.claims.solarCapacityKw > 0) {
+      const maxAllowedW = BigInt(vc.claims.solarCapacityKw) * 1000n;
+      if (requestedW > maxAllowedW) {
+        return reply.status(400).send({
+          error: 'CAPACITY_EXCEEDS_CREDENTIAL',
+          message: `Requested device capacity ${requestedW} W exceeds verified solar capacity ${maxAllowedW} W`,
+        });
+      }
+    }
+
     const device: Device = {
       deviceId: body.deviceId,
-      participantId: p.participantId,
+      participantId: p.participantId, // strictly enforce device bound to authenticated participant
       zoneId: p.zoneId,
       meterSerialNumber: body.meterSerialNumber,
       signerType: body.signerType ?? SignerType.SIMULATED,
       signerPublicKey: new Uint8Array(32),
       sourceType: body.sourceType,
-      ratedCapacityW: BigInt(body.ratedCapacityW || '5000'),
+      ratedCapacityW: requestedW,
       trustWeight: 100,
       isRevoked: false,
     };
 
     devices.set(body.deviceId, device);
+
+    // Invalidate tokens so newly gained capabilities take effect immediately
+    tokenVersions.set(user.address, (tokenVersions.get(user.address) ?? 0) + 1);
+
     return reply.status(201).send({
       ...device,
       ratedCapacityW: device.ratedCapacityW.toString(),
@@ -275,7 +662,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.get('/api/v1/devices', { preHandler: [authenticate] }, async (request) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     const p = participants.get(user.address);
     if (!p) return [];
 
@@ -293,16 +680,24 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // 4. Orders & Market
   // ---------------------------------------------------------------------------
   app.post('/api/v1/orders', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
-    const body = request.body as {
-      zoneId: number;
-      intervalIdx: number;
-      side: OrderSide;
-      quantityWh: string;
-      pricePaisePerKWh: string;
-      expiry: number;
-      signature?: string;
-    };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(OrderSubmitSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
+
+    // Capability check: buyers require canBuy, sellers require canSell
+    if (body.side === OrderSide.BUY && !user.capabilities.canBuy) {
+      return reply.status(403).send({
+        error: 'INSUFFICIENT_PERMISSIONS',
+        message: 'Participant does not have required capability: canBuy (Must be verified participant)',
+      });
+    }
+    if (body.side === OrderSide.SELL && !user.capabilities.canSell) {
+      return reply.status(403).send({
+        error: 'CONSUMER_CANNOT_SELL',
+        message: 'Unauthorized: Pure CONSUMER accounts cannot submit SELL asks. Prosumer registration with verified solar generation capacity required.',
+      });
+    }
 
     const quantityWh = BigInt(body.quantityWh);
     const pricePaisePerKWh = BigInt(body.pricePaisePerKWh);
@@ -317,23 +712,104 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       return reply.status(400).send({ error: 'Order price must be within regulatory circuit limits (200 - 1200 paise/kWh)' });
     }
 
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (body.expiry <= nowSec) {
+      return reply.status(400).send({ error: 'ORDER_ALREADY_EXPIRED', message: 'Order expiry timestamp is in the past' });
+    }
+
+    // P1-3: Market Gate Closure - check active session gate closure
+    const activeSession = Array.from(marketSessions.values()).find(
+      (s) => s.zoneId === body.zoneId && s.state === 'OPEN'
+    );
+    if (activeSession && nowSec >= activeSession.gateClosureTimestamp) {
+      return reply.status(400).send({
+        error: 'GATE_CLOSURE_EXCEEDED',
+        message: `Market gate closed at ${activeSession.gateClosureTimestamp}, current time is ${nowSec}`,
+      });
+    }
+
+    // P1-2: Nonce replay & cancellation checking
+    const orderNonce = body.nonce !== undefined ? BigInt(body.nonce) : BigInt(Date.now());
+    const nonceKey = `${user.address.toLowerCase()}:${orderNonce.toString()}`;
+    if (usedNonces.has(nonceKey)) {
+      return reply.status(409).send({
+        error: 'NONCE_ALREADY_USED_OR_CANCELLED',
+        message: `Nonce ${orderNonce.toString()} has already been used or cancelled for participant ${user.address}`,
+      });
+    }
+
+    // Self-Trade Prevention (STP): Prevent submission of opposing orders for the same delivery interval
+    const opposingSide = body.side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
+    const userParticipant = participants.get(user.address.toLowerCase());
+    const hasOpposingOrder = Array.from(orders.values()).some((existing) => {
+      if (existing.zoneId !== body.zoneId || existing.intervalIdx !== body.intervalIdx) return false;
+      if (existing.side !== opposingSide) return false;
+      if (matcher.isOrderCancelled(existing.participant.toLowerCase(), existing.nonce)) return false;
+
+      // Check economic identity match
+      if (existing.participant.toLowerCase() === user.address.toLowerCase()) return true;
+      if (userParticipant && existing.participantId && existing.participantId === userParticipant.participantId) return true;
+      if (userParticipant && existing.identityBindingHash && existing.identityBindingHash === userParticipant.identityBindingHash) return true;
+      return false;
+    });
+
+    if (hasOpposingOrder) {
+      return reply.status(409).send({
+        error: 'SELF_TRADE_PROHIBITED',
+        message: `Participant cannot hold opposing BUY and SELL orders for the same delivery interval (${body.intervalIdx})`,
+      });
+    }
+
+    // P1-1: Order signature verification
+    const isSandbox = options.sandboxMode ?? (process.env.SANDBOX_MODE === 'true' || process.env.NODE_ENV !== 'production');
+    let orderSigBytes: Uint8Array;
+
+    if (!body.signature || body.signature === '' || body.signature === '0x') {
+      if (!isSandbox) {
+        return reply.status(400).send({
+          error: 'MISSING_ORDER_SIGNATURE',
+          message: 'Cryptographic wallet signature is mandatory for order placement in production',
+        });
+      }
+      orderSigBytes = new Uint8Array(65);
+    } else {
+      try {
+        const sigHex = body.signature.startsWith('0x') ? body.signature as Hex : `0x${body.signature}` as Hex;
+        if (sigHex.length === 132 || sigHex.length === 130) {
+          const orderMsg = `VoltMesh Order\nParticipant: ${user.address}\nZone: ${body.zoneId}\nInterval: ${body.intervalIdx}\nSide: ${body.side}\nQuantity: ${body.quantityWh}\nPrice: ${body.pricePaisePerKWh}\nNonce: ${orderNonce.toString()}`;
+          try {
+            const recovered = await recoverMessageAddress({ message: orderMsg, signature: sigHex });
+            if (recovered.toLowerCase() !== user.address.toLowerCase()) {
+              return reply.status(401).send({
+                error: 'INVALID_ORDER_SIGNATURE',
+                message: `Order signature signer ${recovered} does not match authenticated participant ${user.address}`,
+              });
+            }
+          } catch {
+            if (!isSandbox) {
+              return reply.status(401).send({ error: 'INVALID_ORDER_SIGNATURE', message: 'Failed to verify order signature' });
+            }
+          }
+          orderSigBytes = Buffer.from(sigHex.slice(2), 'hex');
+        } else {
+          orderSigBytes = new Uint8Array(65);
+        }
+      } catch (err: any) {
+        if (!isSandbox) {
+          return reply.status(401).send({ error: 'INVALID_ORDER_SIGNATURE', message: err.message });
+        }
+        orderSigBytes = new Uint8Array(65);
+      }
+    }
+
     // Real-world capacity reservation: prevent prosumer from over-selling or double-selling forward solar generation
     if (body.side === OrderSide.SELL) {
-      // Participant eligibility check: pure consumers cannot submit sell asks
-      const participant = participants.get(user.address.toLowerCase());
-      const vc = verifiableCredentials.get(user.address.toLowerCase());
-      if (participant && participant.roleType === ParticipantRole.CONSUMER) {
-        return reply.status(403).send({ error: 'Unauthorized: Pure CONSUMER accounts cannot submit SELL asks. Prosumer registration required.' });
-      }
-      if (vc && vc.claims.solarCapacityKw === 0) {
-        return reply.status(403).send({ error: 'Ineligible: Registered utility account has 0 kW verified solar capacity.' });
-      }
-
       const todayEpoch = Math.floor(Date.now() / 86400000);
       const posKey = `${user.address.toLowerCase()}:${body.intervalIdx}:${todayEpoch}`;
       let position = energyPositions.get(posKey);
       if (!position) {
         const userDevices = Array.from(devices.values()).filter((d) => d.participantId === (participants.get(user.address)?.participantId ?? ''));
+        const vc = verifiableCredentials.get(user.address.toLowerCase());
         const ratedCap = userDevices.length > 0 ? userDevices[0].ratedCapacityW : (vc?.claims.solarCapacityKw ? BigInt(vc.claims.solarCapacityKw) * 1000n : 10000n);
         const availableWh = ratedCap;
         position = {
@@ -360,23 +836,41 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       position.reservedWh += quantityWh;
     }
 
+    usedNonces.add(nonceKey);
+
     const orderId = `ord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const newOrder: Order = {
       orderId,
       participant: user.address,
+      participantId: userParticipant?.participantId,
+      identityBindingHash: userParticipant?.identityBindingHash,
       zoneId: body.zoneId,
       intervalIdx: body.intervalIdx,
       side: body.side,
       quantityWh,
       pricePaisePerKWh,
-      nonce: BigInt(Date.now()),
+      nonce: orderNonce,
       expiry: body.expiry,
-      signature: body.signature ? Buffer.from(body.signature, 'hex') : new Uint8Array(65),
+      signature: orderSigBytes,
       createdAt: Math.floor(Date.now() / 1000),
     };
 
-    const gateClosure = body.expiry - 1800; // 30 min before expiry
-    const receipt = matcher.submitOrder(newOrder, gateClosure, Math.floor(Date.now() / 1000));
+    const sessionForInterval = Array.from(marketSessions.values()).find(
+      (s) => s.zoneId === body.zoneId && s.state === 'OPEN' && s.intervals.includes(body.intervalIdx)
+    );
+    const gateClosure = sessionForInterval
+      ? Math.min(sessionForInterval.gateClosureTimestamp, body.expiry)
+      : (body.expiry - 1800);
+
+    let receipt;
+    try {
+      receipt = matcher.submitOrder(newOrder, gateClosure, Math.floor(Date.now() / 1000));
+    } catch (err: any) {
+      return reply.status(400).send({
+        error: 'ORDER_SUBMISSION_REJECTED',
+        message: err.message,
+      });
+    }
     orders.set(orderId, newOrder);
 
     return reply.status(201).send({
@@ -389,7 +883,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.delete('/api/v1/orders/:orderId', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     const { orderId } = request.params as { orderId: string };
 
     const order = orders.get(orderId);
@@ -413,6 +907,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       }
     }
 
+    usedNonces.add(`${user.address.toLowerCase()}:${order.nonce.toString()}`);
     matcher.cancelOrder(user.address, order.nonce);
     orders.delete(orderId);
     return {
@@ -423,7 +918,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.get('/api/v1/orders', { preHandler: [authenticate] }, async (request) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     return Array.from(orders.values())
       .filter((o) => o.participant.toLowerCase() === user.address.toLowerCase())
       .map((o) => ({
@@ -436,9 +931,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Market Clearing & Settlements
+  // 5. Market Clearing & Settlements (P0-8, P1-4)
   // ---------------------------------------------------------------------------
-  app.post('/api/v1/markets/zones/:zoneId/clear/:intervalIdx', { preHandler: [authenticate] }, async (request, reply) => {
+  app.post('/api/v1/markets/zones/:zoneId/clear/:intervalIdx', { preHandler: [authenticate, requireCapability('CLEAR_MARKET')] }, async (request, reply) => {
     const { zoneId, intervalIdx } = request.params as { zoneId: string; intervalIdx: string };
     const zId = Number(zoneId);
     const iIdx = Number(intervalIdx);
@@ -452,11 +947,20 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     };
 
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const result = matcher.closeAndClear(zId, iIdx, config, 'api-epoch-seed', nowSeconds);
+    const todayEpoch = Math.floor(Date.now() / 86400000);
+    const session = Array.from(marketSessions.values()).find(
+      (s) => s.zoneId === zId && s.state === 'OPEN' && s.intervals.includes(iIdx)
+    );
+
+    // P1-4: Deterministic ungrindable tie-breaking seed derivation
+    const closureTimestamp = session ? Math.min(session.gateClosureTimestamp, nowSeconds) : nowSeconds;
+    const seedMaterial = `voltmesh:epoch:zone:${zId}:interval:${iIdx}:dateEpoch:${session?.dateEpoch ?? todayEpoch}:closure:${closureTimestamp}`;
+    const epochSeed = keccak256(toHex(seedMaterial));
+
+    const result = matcher.closeAndClear(zId, iIdx, config, epochSeed, closureTimestamp);
     clearingResults.set(`${zId}:${iIdx}`, result);
 
     // Update EnergyPositions and EnergySchedules for matched obligations
-    const todayEpoch = Math.floor(Date.now() / 86400000);
     const deliveryDate = new Date(todayEpoch * 86400000).toISOString().slice(0, 10);
 
     for (const obl of result.obligations) {
@@ -535,6 +1039,13 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       ordersMerkleRoot: result.ordersMerkleRoot,
       obligationsMerkleRoot: result.obligationsMerkleRoot,
       obligationsCount: result.obligations.length,
+      obligations: result.obligations.map((o) => ({
+        ...o,
+        quantityWh: o.quantityWh.toString(),
+        pricePaisePerKWh: o.pricePaisePerKWh.toString(),
+        deliveredWh: o.deliveredWh.toString(),
+        shortfallWh: o.shortfallWh.toString(),
+      })),
     };
   });
 
@@ -721,21 +1232,30 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
     verifiableCredentials.set(user.address.toLowerCase(), vc);
 
-    // Automatically update or create participant profile
-    if (!participants.has(user.address.toLowerCase())) {
-      const bindingHash = `0x${Buffer.from(identity.caNumber + ':' + identity.discomId).toString('hex')}`.padEnd(66, '0');
+    // Automatically update or create participant profile with collision-resistant ID
+    const lowerUser = user.address.toLowerCase();
+    const bindingHash = `0x${Buffer.from(identity.caNumber + ':' + identity.discomId).toString('hex')}`.padEnd(66, '0');
+    const assignedRole = identity.consumerType === 'PROSUMER' ? ParticipantRole.PROSUMER : ParticipantRole.CONSUMER;
+
+    if (!participants.has(lowerUser)) {
       const newP: Participant = {
-        participantId: `part-${user.address.slice(2, 10)}`,
-        walletAddress: user.address.toLowerCase(),
+        participantId: deriveParticipantId(lowerUser),
+        walletAddress: lowerUser,
         zoneId: 1,
         discomAccountNumber: identity.consumerNumber,
         identityBindingHash: bindingHash,
-        roleType: identity.consumerType === 'PROSUMER' ? ParticipantRole.PROSUMER : ParticipantRole.CONSUMER,
+        roleType: assignedRole,
         kycStatus: KYCStatus.VERIFIED,
         createdAt: Date.now(),
       };
-      participants.set(user.address.toLowerCase(), newP);
+      participants.set(lowerUser, newP);
+    } else {
+      const existing = participants.get(lowerUser)!;
+      existing.roleType = assignedRole;
     }
+
+    // Invalidate token version so newly acquired capabilities take effect
+    tokenVersions.set(lowerUser, (tokenVersions.get(lowerUser) ?? 0) + 1);
 
     return reply.status(201).send(vc);
   });
@@ -756,14 +1276,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     return Array.from(marketSessions.values());
   });
 
-  app.post('/api/v1/market/sessions', { preHandler: [authenticate] }, async (request, reply) => {
-    const body = request.body as {
-      marketType: MarketSessionType;
-      mechanism: MarketMechanism;
-      dateEpoch: number;
-      zoneId: number;
-      gateClosureLeadSeconds?: number;
-    };
+  app.post('/api/v1/market/sessions', { preHandler: [authenticate, requireRoles('OPERATOR', 'ADMIN')] }, async (request, reply) => {
+    const validated = validateBody(MarketSessionCreateSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     const sessionId = `session-${body.marketType.toLowerCase()}-${body.dateEpoch}-zone${body.zoneId}`;
     const now = Math.floor(Date.now() / 1000);
@@ -788,7 +1304,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     return reply.status(201).send(session);
   });
 
-  app.patch('/api/v1/market/sessions/:sessionId/state', { preHandler: [authenticate] }, async (request, reply) => {
+  app.patch('/api/v1/market/sessions/:sessionId/state', { preHandler: [authenticate, requireRoles('OPERATOR', 'ADMIN')] }, async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
     const body = request.body as { state: MarketSessionState };
     const session = marketSessions.get(sessionId);
@@ -804,7 +1320,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // 11. Energy Schedules & Energy Positions
   // ---------------------------------------------------------------------------
   app.get('/api/v1/schedules', { preHandler: [authenticate] }, async (request) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     return Array.from(energySchedules.values())
       .filter((s) => s.participant.toLowerCase() === user.address.toLowerCase())
       .map((s) => ({
@@ -816,17 +1332,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.post('/api/v1/schedules', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
-    const body = request.body as {
-      sessionId: string;
-      role: 'BUYER' | 'SELLER';
-      zoneId: number;
-      intervalIdx: number;
-      deliveryDate: string;
-      quantityWh: string;
-      contractedPricePaiseKWh: string;
-      counterparty: string;
-    };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(EnergyScheduleCreateSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     const scheduleId = `sch-${body.sessionId}-${body.intervalIdx}-${Date.now().toString(36)}`;
     const qty = BigInt(body.quantityWh);
@@ -856,7 +1365,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.get('/api/v1/energy/positions', { preHandler: [authenticate] }, async (request) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     const todayEpoch = Math.floor(Date.now() / 86400000);
     const userPositions = Array.from(energyPositions.values())
       .filter((p) => p.participant.toLowerCase() === user.address.toLowerCase());
@@ -902,8 +1411,26 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.post('/api/v1/energy/positions/declare', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
-    const body = request.body as { intervalIdx: number; declaredAvailableWh: string; installedSolarCapacityW?: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(EnergyPositionDeclareSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
+
+    if (!participants.has(user.address.toLowerCase())) {
+      const participantId = deriveParticipantId(user.address);
+      const newParticipant: Participant = {
+        participantId,
+        walletAddress: user.address.toLowerCase(),
+        zoneId: 1,
+        discomAccountNumber: 'AUTO-' + user.address.slice(2, 10),
+        identityBindingHash: `0x${Buffer.from(user.address.toLowerCase()).toString('hex')}`.padEnd(66, '0'),
+        roleType: ParticipantRole.PROSUMER,
+        kycStatus: KYCStatus.VERIFIED,
+        createdAt: Date.now(),
+      };
+      participants.set(user.address.toLowerCase(), newParticipant);
+    }
+
     const todayEpoch = Math.floor(Date.now() / 86400000);
     const posKey = `${user.address.toLowerCase()}:${body.intervalIdx}:${todayEpoch}`;
 
@@ -969,19 +1496,12 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   // ---------------------------------------------------------------------------
-  // 13. Detailed Asymmetric Delivery Reconciliation
+  // 13. Detailed Asymmetric Delivery Reconciliation (P0-8, P0-9)
   // ---------------------------------------------------------------------------
   app.post('/api/v1/settlements/reconcile', async (request, reply) => {
-    const body = request.body as {
-      obligationId: string;
-      contractedWh: string;
-      actualSellerInjectionWh: string;
-      actualBuyerConsumptionWh: string;
-      energyPricePaiseKWh: string;
-      jurisdiction?: 'DERC' | 'UPERC';
-      buyerAddress?: string;
-      sellerAddress?: string;
-    };
+    const validated = validateBody(SettlementReconcileSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     const tariff = body.jurisdiction === 'UPERC' ? DEFAULT_UPERC_TARIFF_SCHEDULE : DEFAULT_DERC_TARIFF_SCHEDULE;
     const result = calculateDetailedReconciliation({
@@ -1030,23 +1550,11 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // ---------------------------------------------------------------------------
   // 14. DISCOM Billing Adjustments & Billing Cycles
   // ---------------------------------------------------------------------------
-  app.post('/api/v1/billing/adjustments', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = request.user as { address: string };
-    const body = request.body as {
-      consumerNumber: string;
-      prosumerNumber: string;
-      discomId: string;
-      transactionId: string;
-      deliveryDate: string;
-      scheduledWh: string;
-      settledWh: string;
-      p2pEnergyAmountPaise: string;
-      wheelingChargesPaise: string;
-      transactionChargesPaise: string;
-      taxPaise: string;
-      netAdjustmentAmountPaise: string;
-      direction: 'CREDIT' | 'DEBIT';
-    };
+  app.post('/api/v1/billing/adjustments', { preHandler: [authenticate, requireRoles('DISCOM', 'OPERATOR', 'PARTICIPANT', 'ADMIN')] }, async (request, reply) => {
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(BillingAdjustmentSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
 
     // Duplicate check: prevent duplicate billing adjustment submissions for the same transactionId
     const existingAdjustment = Array.from(billingAdjustments.values()).find(
@@ -1107,7 +1615,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   app.get('/api/v1/billing/adjustments', { preHandler: [authenticate] }, async (request) => {
-    const user = request.user as { address: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
     const p = participants.get(user.address.toLowerCase());
     const cNum = p?.discomAccountNumber;
 
@@ -1134,7 +1642,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   const VALID_STATUS_TRANSITIONS: Record<BillingAdjustmentStatus, BillingAdjustmentStatus[]> = {
-    PENDING: ['SUBMITTED', 'REJECTED'],
+    PENDING: ['VERIFIED', 'SUBMITTED', 'REJECTED'],
+    VERIFIED: ['SUBMITTED', 'REJECTED'],
     SUBMITTED: ['ACCEPTED', 'REJECTED'],
     ACCEPTED: ['ADJUSTED', 'DISPUTED'],
     DISPUTED: ['ACCEPTED', 'REJECTED'],

@@ -6,14 +6,18 @@ describe('Real-World DISCOM P2P Market API Integration', () => {
   let app: FastifyInstance;
   const sellerWallet = '0x1111111111111111111111111111111111111111';
   const buyerWallet = '0x2222222222222222222222222222222222222222';
+  const operatorWallet = '0x3333333333333333333333333333333333333333';
   let sellerToken: string;
   let buyerToken: string;
+  let operatorToken: string;
 
   beforeEach(async () => {
     app = buildApiServer();
     await app.ready();
+    (app as any).setUserRole(operatorWallet, 'OPERATOR');
     sellerToken = app.jwt.sign({ address: sellerWallet });
     buyerToken = app.jwt.sign({ address: buyerWallet });
+    operatorToken = app.jwt.sign({ address: operatorWallet, role: 'OPERATOR' });
   });
 
   it('1. Utility Identity Verification & Eligibility Evaluation', async () => {
@@ -323,7 +327,7 @@ describe('Real-World DISCOM P2P Market API Integration', () => {
     const clearRes = await app.inject({
       method: 'POST',
       url: '/api/v1/markets/zones/1/clear/50',
-      headers: { authorization: `Bearer ${sellerToken}` },
+      headers: { authorization: `Bearer ${operatorToken}` },
     });
     expect(clearRes.statusCode).toBe(200);
     const clearBody = JSON.parse(clearRes.payload);
