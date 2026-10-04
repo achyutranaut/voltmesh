@@ -66,6 +66,8 @@ export enum OrderStatus {
 export interface Order {
   orderId: string;            // UUIDv7
   participant: string;        // 0x Ethereum address
+  participantId?: string;     // Canonical 256-bit derived participant identifier
+  identityBindingHash?: string; // Identity binding hash
   zoneId: number;             // Grid zone ID
   intervalIdx: number;        // Target delivery interval
   side: OrderSide;            // Buy or Sell
@@ -75,6 +77,26 @@ export interface Order {
   expiry: number;             // Unix timestamp seconds
   signature: Uint8Array;      // EIP-712 secp256k1 signature
   createdAt: number;
+}
+
+/**
+ * Checks whether two participants or orders share the same economic identity
+ * to prevent wash trading and self-settlement.
+ */
+export function isSameEconomicIdentity(
+  a: { participant: string; participantId?: string; identityBindingHash?: string },
+  b: { participant: string; participantId?: string; identityBindingHash?: string }
+): boolean {
+  if (a.participant && b.participant && a.participant.toLowerCase() === b.participant.toLowerCase()) {
+    return true;
+  }
+  if (a.participantId && b.participantId && a.participantId === b.participantId) {
+    return true;
+  }
+  if (a.identityBindingHash && b.identityBindingHash && a.identityBindingHash === b.identityBindingHash) {
+    return true;
+  }
+  return false;
 }
 
 export interface MatcherReceipt {
@@ -551,3 +573,67 @@ export interface UtilityIdentityProvider {
   verifyMeter(meterSerialNumber: string): Promise<boolean>;
   verifyEligibility(identity: UtilityIdentity): Promise<ParticipantEligibility>;
 }
+
+// ---------------------------------------------------------------------------
+// 13. System User Roles, Capabilities & Authorization
+// ---------------------------------------------------------------------------
+
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'DISCOM' | 'AUDITOR' | 'PARTICIPANT';
+
+export interface ParticipantCapabilities {
+  canBuy: boolean;
+  canSell: boolean;
+  canRegisterDevice: boolean;
+  canClearMarket: boolean;
+  canOperate: boolean;
+  canIssueCredentials: boolean;
+  canAudit: boolean;
+}
+
+export type Capability =
+  | 'BUY'
+  | 'SELL'
+  | 'REGISTER_DEVICE'
+  | 'CLEAR_MARKET'
+  | 'OPERATE'
+  | 'ISSUE_CREDENTIALS'
+  | 'DISCOM'
+  | 'AUDIT';
+
+export interface AuthenticatedUser {
+  address: string;
+  role: UserRole;
+  participantId?: string;
+  capabilities: ParticipantCapabilities;
+  tokenVersion?: number;
+}
+
+// ---------------------------------------------------------------------------
+// 14. Canonical Market Timezone & Absolute Intervals (P1-5, P1-6)
+// ---------------------------------------------------------------------------
+
+export const MARKET_TIMEZONE = 'Asia/Kolkata';
+export const IST_OFFSET_MS = 5.5 * 3600 * 1000; // +05:30 in milliseconds (19,800,000 ms)
+
+/**
+ * Returns canonical Indian market date as epoch days (days since Unix epoch in IST).
+ */
+export function getIndianMarketDateEpoch(timestampMs: number = Date.now()): number {
+  return Math.floor((timestampMs + IST_OFFSET_MS) / 86400000);
+}
+
+/**
+ * Returns canonical 15-minute delivery interval index (0..95) in IST for a timestamp.
+ */
+export function getIndianIntervalIdx(timestampMs: number = Date.now()): number {
+  const msInDay = (timestampMs + IST_OFFSET_MS) % 86400000;
+  return Math.floor(msInDay / (15 * 60 * 1000));
+}
+
+/**
+ * Returns unambiguous absolute delivery interval ID across dates.
+ */
+export function getAbsoluteIntervalId(dateEpoch: number, intervalIdx: number): number {
+  return dateEpoch * 96 + intervalIdx;
+}
+

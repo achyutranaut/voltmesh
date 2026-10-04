@@ -1,4 +1,4 @@
-import { Order, MatcherReceipt, ClearingResult } from '@energy-dex/types';
+import { Order, MatcherReceipt, ClearingResult, OrderSide, isSameEconomicIdentity } from '@energy-dex/types';
 import { clearMarket } from '@energy-dex/clearing';
 import { keccak256, encodePacked, Hex } from 'viem';
 
@@ -80,6 +80,21 @@ export class BatchMatcher {
 
     const key = this.getBatchKey(order.zoneId, order.intervalIdx);
     const existing = this.ordersByBatch.get(key) ?? [];
+
+    // Self-Trade Prevention (STP): Reject opposing orders from the same economic identity
+    const opposingSide = order.side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
+    const hasOpposingOrder = existing.some(
+      (existingOrder) =>
+        existingOrder.side === opposingSide &&
+        !this.isOrderCancelled(existingOrder.participant.toLowerCase(), existingOrder.nonce) &&
+        (isSameEconomicIdentity(existingOrder, order) ||
+          existingOrder.participant.toLowerCase() === p)
+    );
+
+    if (hasOpposingOrder) {
+      throw new Error(`Self-trade prohibited: participant ${order.participant} already has active opposing order in interval ${order.intervalIdx}`);
+    }
+
     existing.push(order);
     this.ordersByBatch.set(key, existing);
 

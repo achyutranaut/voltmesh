@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_participants_zone ON participants(zone_id);
 
 -- 3. Device Registry Table
 CREATE TABLE IF NOT EXISTS devices (
-    device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id VARCHAR(64) PRIMARY KEY,
     participant_id UUID NOT NULL REFERENCES participants(participant_id),
     zone_id INT NOT NULL REFERENCES zones(zone_id),
     meter_serial_number VARCHAR(64) UNIQUE NOT NULL,
@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS orders_default PARTITION OF orders DEFAULT;
 CREATE TABLE IF NOT EXISTS clearing_epochs (
     epoch_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     zone_id INT NOT NULL REFERENCES zones(zone_id),
+    date_epoch INT NOT NULL, -- Days since Unix epoch (IST market day)
     interval_idx INT NOT NULL,
     clearing_price_paise_kwh BIGINT NOT NULL,
     total_volume_wh BIGINT NOT NULL,
@@ -83,7 +84,7 @@ CREATE TABLE IF NOT EXISTS clearing_epochs (
     obligations_merkle_root CHAR(66) NOT NULL,
     on_chain_tx_hash CHAR(66),
     cleared_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT unq_clearing_zone_interval UNIQUE (zone_id, interval_idx)
+    CONSTRAINT unq_clearing_zone_day_interval UNIQUE (zone_id, date_epoch, interval_idx)
 );
 
 -- 6. Delivery Obligations Table
@@ -138,7 +139,7 @@ CREATE TABLE IF NOT EXISTS system_audit_log (
 -- 9. TimescaleDB Meter Telemetry Hypertable
 CREATE TABLE IF NOT EXISTS meter_telemetry (
     reading_timestamp TIMESTAMPTZ NOT NULL,
-    device_id UUID NOT NULL,
+    device_id VARCHAR(64) NOT NULL,
     zone_id INT NOT NULL,
     interval_idx INT NOT NULL,
     energy_wh BIGINT NOT NULL,
@@ -148,7 +149,8 @@ CREATE TABLE IF NOT EXISTS meter_telemetry (
     anomaly_flag BOOLEAN NOT NULL DEFAULT FALSE,
     anomaly_score NUMERIC(5, 4) DEFAULT 0.0,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT pk_meter_telemetry PRIMARY KEY (reading_timestamp, device_id)
+    CONSTRAINT pk_meter_telemetry PRIMARY KEY (reading_timestamp, device_id),
+    CONSTRAINT unq_device_interval_counter UNIQUE (device_id, interval_idx, reading_counter)
 );
 
 -- Convert to Hypertable with 1-day chunk interval

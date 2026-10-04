@@ -1,4 +1,4 @@
-import { keccak256, encodePacked, stringToHex, pad } from 'viem';
+import { keccak256, encodePacked, stringToHex, pad, Hex } from 'viem';
 import {
   Order,
   OrderSide,
@@ -10,6 +10,7 @@ import {
   UnderDrawPolicy,
   ChargeItem,
   DetailedReconciliationResult,
+  isSameEconomicIdentity,
 } from '@energy-dex/types';
 import { BinaryMerkleTree, hashObligationLeaf } from '@energy-dex/attestation';
 
@@ -35,7 +36,9 @@ interface InternalOrderAllocation {
  * keccak256(orderId, epochSeed, intervalIdx) as uint256
  */
 export function computeTieBreakScore(orderId: string, epochSeed: string, intervalIdx: number): bigint {
-  const seedHex = pad(stringToHex(epochSeed), { size: 32 });
+  const seedHex = epochSeed.startsWith('0x') && epochSeed.length === 66
+    ? (epochSeed as Hex)
+    : pad(stringToHex(epochSeed.slice(0, 31)), { size: 32 });
   const hash = keccak256(
     encodePacked(
       ['string', 'bytes32', 'uint32'],
@@ -105,7 +108,7 @@ export function clearMarket(input: ClearingInput): ClearingResult {
     if (a.createdAt !== b.createdAt) {
       return a.createdAt - b.createdAt;
     }
-    return a.orderId.localeCompare(b.orderId);
+    return a.orderId < b.orderId ? -1 : a.orderId > b.orderId ? 1 : 0;
   });
 
   // Asks: ascending price, ascending creation time, ascending ID
@@ -116,7 +119,7 @@ export function clearMarket(input: ClearingInput): ClearingResult {
     if (a.createdAt !== b.createdAt) {
       return a.createdAt - b.createdAt;
     }
-    return a.orderId.localeCompare(b.orderId);
+    return a.orderId < b.orderId ? -1 : a.orderId > b.orderId ? 1 : 0;
   });
 
   // Check if highest bid can meet lowest ask
@@ -252,49 +255,67 @@ export function clearMarket(input: ClearingInput): ClearingResult {
   }
 
   // 7. Deterministically pair allocated bids and asks into Delivery Obligations
+  // Self-Trade Prevention (STP): Strictly prevent pairing orders sharing the same economic identity.
   const obligations: DeliveryObligation[] = [];
   const activeBids = bidAllocations.filter((a) => a.allocatedWh > 0n);
   const activeAsks = askAllocations.filter((a) => a.allocatedWh > 0n);
 
-  let bCursor = 0;
-  let aCursor = 0;
-  let bRem = activeBids.length > 0 ? activeBids[0].allocatedWh : 0n;
-  let aRem = activeAsks.length > 0 ? activeAsks[0].allocatedWh : 0n;
+  const bidRemaining = activeBids.map((b) => b.allocatedWh);
+  const askRemaining = activeAsks.map((a) => a.allocatedWh);
 
-  while (bCursor < activeBids.length && aCursor < activeAsks.length) {
-    const matchWh = bRem < aRem ? bRem : aRem;
-    const curB = activeBids[bCursor].order;
-    const curA = activeAsks[aCursor].order;
+  for (let bIdx = 0; bIdx < activeBids.length; bIdx++) {
+    const curB = activeBids[bIdx].order;
 
-    const obligationId = `obl-${zoneId}-${intervalIdx}-${curB.orderId.slice(0, 8)}-${curA.orderId.slice(0, 8)}-${obligations.length}`;
+    while (bidRemaining[bIdx] > 0n) {
+      // Find the first ask with remaining volume that is NOT the same economic identity
+      let foundAskIdx = -1;
+      for (let aIdx = 0; aIdx < activeAsks.length; aIdx++) {
+        if (askRemaining[aIdx] > 0n && !isSameEconomicIdentity(curB, activeAsks[aIdx].order)) {
+          foundAskIdx = aIdx;
+          break;
+        }
+      }
 
-    obligations.push({
-      obligationId,
-      epochId: `epoch-${zoneId}-${intervalIdx}`,
-      buyOrderId: curB.orderId,
-      sellOrderId: curA.orderId,
-      buyer: curB.participant,
-      seller: curA.participant,
-      zoneId,
-      intervalIdx,
-      quantityWh: matchWh,
-      pricePaisePerKWh: clearingPrice,
-      deliveredWh: 0n,
-      shortfallWh: 0n,
-    });
+      if (foundAskIdx === -1) {
+        // No independent counterparty available for this bid's remaining volume
+        break;
+      }
 
-    bRem -= matchWh;
-    aRem -= matchWh;
+      const curA = activeAsks[foundAskIdx].order;
+      const matchWh = bidRemaining[bIdx] < askRemaining[foundAskIdx]
+        ? bidRemaining[bIdx]
+        : askRemaining[foundAskIdx];
 
-    if (bRem === 0n) {
-      bCursor++;
-      if (bCursor < activeBids.length) bRem = activeBids[bCursor].allocatedWh;
-    }
-    if (aRem === 0n) {
-      aCursor++;
-      if (aCursor < activeAsks.length) aRem = activeAsks[aCursor].allocatedWh;
+      // Cryptographic and economic identity invariant check
+      if (isSameEconomicIdentity(curB, curA) || curB.participant.toLowerCase() === curA.participant.toLowerCase()) {
+        throw new Error('Self-trade invariant violation: matched orders share economic identity');
+      }
+
+      const obligationId = `obl-${zoneId}-${intervalIdx}-${curB.orderId.slice(0, 8)}-${curA.orderId.slice(0, 8)}-${obligations.length}`;
+
+      obligations.push({
+        obligationId,
+        epochId: `epoch-${zoneId}-${intervalIdx}`,
+        buyOrderId: curB.orderId,
+        sellOrderId: curA.orderId,
+        buyer: curB.participant,
+        seller: curA.participant,
+        zoneId,
+        intervalIdx,
+        quantityWh: matchWh,
+        pricePaisePerKWh: clearingPrice,
+        deliveredWh: 0n,
+        shortfallWh: 0n,
+      });
+
+      bidRemaining[bIdx] -= matchWh;
+      askRemaining[foundAskIdx] -= matchWh;
     }
   }
+
+  // Actual cleared volume is strictly the sum of valid, non-self-matched obligations
+  const actualClearedVolumeWh = obligations.reduce((sum, o) => sum + o.quantityWh, 0n);
+  const effectiveClearingPrice = obligations.length > 0 ? clearingPrice : 0n;
 
   // 8. Generate Obligations Merkle Root
   const obligationHashes = obligations.map((o) => hashObligationLeaf(o));
@@ -305,8 +326,8 @@ export function clearMarket(input: ClearingInput): ClearingResult {
   return {
     zoneId,
     intervalIdx,
-    clearingPricePaiseKWh: clearingPrice,
-    clearedVolumeWh: finalClearedVolume,
+    clearingPricePaiseKWh: effectiveClearingPrice,
+    clearedVolumeWh: actualClearedVolumeWh,
     obligations,
     ordersMerkleRoot,
     obligationsMerkleRoot,
@@ -717,4 +738,38 @@ export function calculateDetailedReconciliation(
     status,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Unit Conversion Primitives (P1-15)
+// ---------------------------------------------------------------------------
+// 1 INR (Rupee) = 100 Paise
+// 1 Settlement Token = 1 INR = 10^18 token wei (base units)
+// Therefore: 1 Paise = 10^16 token wei
+export const TOKEN_WEI_PER_PAISE = 10_000_000_000_000_000n; // 10^16
+export const WH_PER_KWH = 1000n;
+
+export function paiseToTokenWei(paise: bigint): bigint {
+  return paise * TOKEN_WEI_PER_PAISE;
+}
+
+export function tokenWeiToPaise(wei: bigint): bigint {
+  return wei / TOKEN_WEI_PER_PAISE;
+}
+
+export function rupeesToPaise(rupees: number): bigint {
+  return BigInt(Math.round(rupees * 100));
+}
+
+export function paiseToRupees(paise: bigint): number {
+  return Number(paise) / 100;
+}
+
+export function whToKWh(wh: bigint): number {
+  return Number(wh) / 1000;
+}
+
+export function kWhToWh(kwh: number): bigint {
+  return BigInt(Math.round(kwh * 1000));
+}
+
 

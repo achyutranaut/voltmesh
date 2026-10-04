@@ -117,5 +117,64 @@ describe('BatchMatcher Service', () => {
       )
     ).toThrow('Replay detected');
   });
+
+  describe('Self-Trade Prevention (STP)', () => {
+    it('STP-MATCH-1: rejects opposing BUY and SELL orders for the same interval from the same wallet', () => {
+      const matcher = new BatchMatcher();
+      const buyOrder = createOrder('ord-stp-b1', OrderSide.BUY, 1000n, 500n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      buyOrder.nonce = 1n;
+      matcher.submitOrder(buyOrder, gateClosure, gateClosure - 500);
+
+      const sellOrder = createOrder('ord-stp-s1', OrderSide.SELL, 1000n, 400n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      sellOrder.nonce = 2n;
+
+      expect(() =>
+        matcher.submitOrder(sellOrder, gateClosure, gateClosure - 400)
+      ).toThrow('Self-trade prohibited');
+    });
+
+    it('STP-MATCH-2: rejects opposing orders sharing the same participantId across different addresses', () => {
+      const matcher = new BatchMatcher();
+      const buyOrder = createOrder('ord-stp-b2', OrderSide.BUY, 1000n, 500n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      buyOrder.participantId = 'part-common-org';
+      buyOrder.nonce = 1n;
+      matcher.submitOrder(buyOrder, gateClosure, gateClosure - 500);
+
+      const sellOrder = createOrder('ord-stp-s2', OrderSide.SELL, 1000n, 400n, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+      sellOrder.participantId = 'part-common-org';
+      sellOrder.nonce = 1n;
+
+      expect(() =>
+        matcher.submitOrder(sellOrder, gateClosure, gateClosure - 400)
+      ).toThrow('Self-trade prohibited');
+    });
+
+    it('STP-MATCH-3: allows prosumer to submit BUY in interval 100 and SELL in interval 101', () => {
+      const matcher = new BatchMatcher();
+      const buyInterval100 = createOrder('ord-pros-b', OrderSide.BUY, 1000n, 500n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      buyInterval100.intervalIdx = 100;
+      buyInterval100.nonce = 1n;
+      const rcpt1 = matcher.submitOrder(buyInterval100, gateClosure, gateClosure - 500);
+      expect(rcpt1.sequenceNumber).toBe(1);
+
+      const sellInterval101 = createOrder('ord-pros-s', OrderSide.SELL, 1000n, 400n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      sellInterval101.intervalIdx = 101;
+      sellInterval101.nonce = 2n;
+      const rcpt2 = matcher.submitOrder(sellInterval101, gateClosure, gateClosure - 400);
+      expect(rcpt2.sequenceNumber).toBe(2);
+    });
+
+    it('STP-MATCH-4: allows multiple non-opposing orders on the same side in the same interval', () => {
+      const matcher = new BatchMatcher();
+      const buy1 = createOrder('ord-same-b1', OrderSide.BUY, 500n, 500n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      buy1.nonce = 1n;
+      matcher.submitOrder(buy1, gateClosure, gateClosure - 500);
+
+      const buy2 = createOrder('ord-same-b2', OrderSide.BUY, 500n, 520n, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      buy2.nonce = 2n;
+      const rcpt2 = matcher.submitOrder(buy2, gateClosure, gateClosure - 400);
+      expect(rcpt2.sequenceNumber).toBe(2);
+    });
+  });
 });
 

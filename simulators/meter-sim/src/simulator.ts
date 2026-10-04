@@ -27,6 +27,7 @@ export interface MeterSimulatorConfig {
   sourceType: SourceType;
   ratedCapacityW: bigint; // e.g. 5000n for 5kW solar
   signerType?: SignerType;
+  keyPair?: Ed25519KeyPair;
 }
 
 export class MeterSimulator {
@@ -44,11 +45,15 @@ export class MeterSimulator {
     this.sourceType = config.sourceType;
     this.ratedCapacityW = config.ratedCapacityW;
     this.signerType = config.signerType ?? SignerType.SIMULATED;
-    this.keyPair = generateEd25519KeyPair();
+    this.keyPair = config.keyPair ?? generateEd25519KeyPair();
   }
 
   public getPublicKey(): Uint8Array {
     return this.keyPair.publicKey;
+  }
+
+  public getKeyPair(): Ed25519KeyPair {
+    return this.keyPair;
   }
 
   /**
