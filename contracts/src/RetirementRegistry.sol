@@ -52,7 +52,6 @@ contract RetirementRegistry {
                 msg.sender,
                 tokenId,
                 amountWh,
-                block.timestamp,
                 beneficiary,
                 purpose
             )

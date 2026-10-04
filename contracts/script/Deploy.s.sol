@@ -25,15 +25,20 @@ contract DeployScript is Script {
         address retirementRegistry
     ) {
         uint256 deployerPrivateKey;
-        try vm.envUint("PRIVATE_KEY") returns (uint256 pk) {
-            deployerPrivateKey = pk;
-        } catch {
-            // Anvil account #0 default private key
-            deployerPrivateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+        if (block.chainid != 31337) {
+            // Revert immediately if PRIVATE_KEY is absent on non-local networks
+            deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        } else {
+            // Allow default Anvil account #0 strictly on local chain 31337
+            deployerPrivateKey = vm.envOr(
+                "PRIVATE_KEY",
+                uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
+            );
         }
 
         address deployer = vm.addr(deployerPrivateKey);
-        console.log("Deploying VoltMesh contracts with deployer:", deployer);
+        console.log("Deploying VoltMesh contracts on chainId:", block.chainid);
+        console.log("Deployer address:", deployer);
 
         vm.startBroadcast(deployerPrivateKey);
 

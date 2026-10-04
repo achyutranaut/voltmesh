@@ -18,12 +18,24 @@ contract EpochOracle {
     AccessRegistry public immutable accessRegistry;
     uint256 public quorumThreshold;
 
+    uint32 public constant INTERVAL_DURATION = 900; // 15 minutes (in seconds)
+    uint32 public constant MAX_EPOCH_LAG = 2880; // 30 days finality/dispute window (2880 15-min intervals)
+
+    enum EpochStatus {
+        NONE,
+        FINALIZED,
+        CHALLENGED,
+        RESOLVED_VALID,
+        RESOLVED_INVALID
+    }
+
     struct EpochRecord {
         bytes32 merkleRoot;
         uint32 leafCount;
         uint64 totalWh;
         uint64 finalizedAt;
-        bool disputed;
+        EpochStatus status;
+        address challenger;
     }
 
     // zoneId => intervalIdx => EpochRecord
@@ -32,6 +44,7 @@ contract EpochOracle {
     event EpochSubmitted(uint32 indexed zoneId, uint32 indexed intervalIdx, bytes32 merkleRoot, uint64 totalWh);
     event EpochFinalized(uint32 indexed zoneId, uint32 indexed intervalIdx, bytes32 merkleRoot);
     event EpochChallenged(uint32 indexed zoneId, uint32 indexed intervalIdx, address indexed challenger, string reason);
+    event EpochChallengeResolved(uint32 indexed zoneId, uint32 indexed intervalIdx, EpochStatus status, string resolutionDetails);
     event QuorumThresholdUpdated(uint256 oldQuorum, uint256 newQuorum);
 
     error EpochAlreadyFinalized(uint32 zoneId, uint32 intervalIdx);
@@ -39,8 +52,15 @@ contract EpochOracle {
     error DuplicateOrUnsortedSigner(address signer);
     error SignerNotAuthorizedOracle(address signer);
     error EpochNotFound(uint32 zoneId, uint32 intervalIdx);
+    error InvalidQuorumThreshold();
+    error QuorumExceedsOracleCount(uint256 quorum, uint256 count);
+    error FutureEpochNotAllowed(uint32 intervalIdx, uint32 currentInterval);
+    error StaleEpochNotAllowed(uint32 intervalIdx, uint32 currentInterval);
+    error InvalidEpochStatus();
+    error EpochNotChallenged();
     error SystemPaused();
     error CallerNotAdmin();
+    error CallerNotAuditor();
 
     modifier whenNotPaused() {
         if (accessRegistry.paused()) revert SystemPaused();
@@ -48,7 +68,12 @@ contract EpochOracle {
     }
 
     constructor(address _accessRegistry, uint256 _quorumThreshold) {
+        if (_quorumThreshold < 1) revert InvalidQuorumThreshold();
         accessRegistry = AccessRegistry(_accessRegistry);
+        uint256 oracleCount = accessRegistry.getRoleMemberCount(accessRegistry.ORACLE_ROLE());
+        if (oracleCount > 0 && _quorumThreshold > oracleCount) {
+            revert QuorumExceedsOracleCount(_quorumThreshold, oracleCount);
+        }
         quorumThreshold = _quorumThreshold;
     }
 
@@ -56,9 +81,28 @@ contract EpochOracle {
         if (!accessRegistry.hasRole(accessRegistry.DEFAULT_ADMIN_ROLE(), msg.sender)) {
             revert CallerNotAdmin();
         }
+        if (_newQuorum < 1) revert InvalidQuorumThreshold();
+        uint256 oracleCount = accessRegistry.getRoleMemberCount(accessRegistry.ORACLE_ROLE());
+        if (oracleCount > 0 && _newQuorum > oracleCount) {
+            revert QuorumExceedsOracleCount(_newQuorum, oracleCount);
+        }
         uint256 old = quorumThreshold;
         quorumThreshold = _newQuorum;
         emit QuorumThresholdUpdated(old, _newQuorum);
+    }
+
+    /**
+     * @notice Returns the current canonical 15-minute delivery interval index.
+     */
+    function currentInterval() public view returns (uint32) {
+        return uint32(block.timestamp / INTERVAL_DURATION);
+    }
+
+    /**
+     * @notice Returns whether an interval is in the future.
+     */
+    function isFutureInterval(uint32 intervalIdx) public view returns (bool) {
+        return intervalIdx > currentInterval();
     }
 
     /**
@@ -76,6 +120,15 @@ contract EpochOracle {
         if (epochs[zoneId][intervalIdx].finalizedAt != 0) {
             revert EpochAlreadyFinalized(zoneId, intervalIdx);
         }
+
+        uint32 current = currentInterval();
+        if (intervalIdx > current) {
+            revert FutureEpochNotAllowed(intervalIdx, current);
+        }
+        if (current > intervalIdx + MAX_EPOCH_LAG) {
+            revert StaleEpochNotAllowed(intervalIdx, current);
+        }
+
         if (signatures.length < quorumThreshold) {
             revert InsufficientSignatures(signatures.length, quorumThreshold);
         }
@@ -111,7 +164,8 @@ contract EpochOracle {
             leafCount: leafCount,
             totalWh: totalWh,
             finalizedAt: uint64(block.timestamp),
-            disputed: false
+            status: EpochStatus.FINALIZED,
+            challenger: address(0)
         });
 
         emit EpochSubmitted(zoneId, intervalIdx, merkleRoot, totalWh);
@@ -125,7 +179,13 @@ contract EpochOracle {
         bytes32[] calldata merkleProof
     ) external view returns (bool) {
         EpochRecord storage epoch = epochs[zoneId][intervalIdx];
-        if (epoch.finalizedAt == 0 || epoch.disputed) return false;
+        if (
+            epoch.finalizedAt == 0 ||
+            epoch.status == EpochStatus.CHALLENGED ||
+            epoch.status == EpochStatus.RESOLVED_INVALID
+        ) {
+            return false;
+        }
         return MerkleProof.verify(merkleProof, epoch.merkleRoot, leafHash);
     }
 
@@ -135,12 +195,37 @@ contract EpochOracle {
         string calldata reason
     ) external whenNotPaused {
         if (!accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
-            revert CallerNotAdmin();
+            revert CallerNotAuditor();
         }
         EpochRecord storage epoch = epochs[zoneId][intervalIdx];
         if (epoch.finalizedAt == 0) revert EpochNotFound(zoneId, intervalIdx);
-        epoch.disputed = true;
+        if (epoch.status != EpochStatus.FINALIZED) revert InvalidEpochStatus();
+
+        epoch.status = EpochStatus.CHALLENGED;
+        epoch.challenger = msg.sender;
+
         emit EpochChallenged(zoneId, intervalIdx, msg.sender, reason);
+    }
+
+    function resolveChallenge(
+        uint32 zoneId,
+        uint32 intervalIdx,
+        bool isValid,
+        string calldata resolutionDetails
+    ) external whenNotPaused {
+        if (!accessRegistry.hasRole(accessRegistry.DEFAULT_ADMIN_ROLE(), msg.sender)) {
+            revert CallerNotAdmin();
+        }
+        EpochRecord storage epoch = epochs[zoneId][intervalIdx];
+        if (epoch.status != EpochStatus.CHALLENGED) revert EpochNotChallenged();
+
+        if (isValid) {
+            epoch.status = EpochStatus.RESOLVED_VALID;
+        } else {
+            epoch.status = EpochStatus.RESOLVED_INVALID;
+        }
+
+        emit EpochChallengeResolved(zoneId, intervalIdx, epoch.status, resolutionDetails);
     }
 
     function getEpoch(uint32 zoneId, uint32 intervalIdx) external view returns (EpochRecord memory) {

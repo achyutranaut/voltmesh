@@ -40,6 +40,7 @@ contract CertificateRegistry is ERC1155 {
     error InvalidOracleProof();
     error DeviceNotRegisteredOrRevoked(bytes32 deviceId);
     error ExceedsRatedCapacity(bytes32 deviceId, uint64 energyWh);
+    error MismatchedSourceType(uint8 supplied, uint8 registered);
     error SystemPaused();
 
     modifier onlyRetirement() {
@@ -93,6 +94,9 @@ contract CertificateRegistry is ERC1155 {
         }
 
         DeviceRegistry.Device memory dev = deviceRegistry.getDevice(deviceId);
+        if (sourceType != uint8(dev.sourceType)) {
+            revert MismatchedSourceType(sourceType, uint8(dev.sourceType));
+        }
         address deviceOwner = participantRegistry.participantIdToWallet(dev.participantId);
         if (deviceOwner == address(0)) {
             revert DeviceOwnerNotFound(deviceId);

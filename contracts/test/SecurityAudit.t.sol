@@ -42,7 +42,7 @@ contract SecurityAuditTest is Test {
     uint32 public constant TEST_ZONE_ID = 1;
     uint32 public constant TEST_INTERVAL_IDX = 100;
     uint64 public constant TEST_ENERGY_WH = 3000;
-    uint8 public constant TEST_SOURCE_TYPE = 1; // SOLAR_PV
+    uint8 public constant TEST_SOURCE_TYPE = 0; // 0 = SOLAR_PV
 
     function setUp() public {
         oracleAddr = vm.addr(oracleKey);
@@ -102,6 +102,7 @@ contract SecurityAuditTest is Test {
 
         token.mint(admin, 1_000_000);
         token.mint(prosumer, 100_000);
+        vm.warp(TEST_INTERVAL_IDX * 900 + 10);
         vm.stopPrank();
     }
 
@@ -175,6 +176,7 @@ contract SecurityAuditTest is Test {
     function test_VULN_SC_01_OperatorRelayerMintsToOwner() public {
         uint64 counter = 2;
         uint32 intervalIdx = 101;
+        vm.warp(intervalIdx * 900 + 10);
         bytes32 leafHash = keccak256(
             abi.encodePacked(
                 bytes1(0x00),
@@ -408,8 +410,24 @@ contract SecurityAuditTest is Test {
             )
         );
 
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                block.chainid,
+                address(settlement),
+                dateEpoch,
+                zoneId,
+                leafHash,
+                uint256(5000),
+                uint256(5000)
+            )
+        ).toEthSignedMessageHash();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKey, messageHash);
+        bytes[] memory sigs = new bytes[](1);
+        sigs[0] = abi.encodePacked(r, s, v);
+
         vm.prank(operator);
-        settlement.postDailyStatement(dateEpoch, zoneId, leafHash, 5000, 0);
+        settlement.postDailyStatement(dateEpoch, zoneId, leafHash, 5000, 5000, sigs);
 
         bytes32[] memory emptyProof = new bytes32[](0);
 

@@ -43,6 +43,7 @@ contract Escrow is ReentrancyGuard {
         uint32 intervalIdx;
         EscrowState state;
         uint64 createdAt;
+        uint64 deadline;
         uint64 settledAt;
     }
 
@@ -54,7 +55,15 @@ contract Escrow is ReentrancyGuard {
     event CollateralReleased(address indexed account, uint256 amount);
     event SettlementTransferred(address indexed from, address indexed to, uint256 amount);
     event SettlementContractUpdated(address newSettlementContract);
-    event ObligationLocked(bytes32 indexed obligationId, address indexed buyer, address indexed seller, uint256 amount, uint32 zoneId, uint32 intervalIdx);
+    event ObligationLocked(
+        bytes32 indexed obligationId,
+        address indexed buyer,
+        address indexed seller,
+        uint256 amount,
+        uint32 zoneId,
+        uint32 intervalIdx,
+        uint64 deadline
+    );
     event ObligationStateChanged(bytes32 indexed obligationId, EscrowState oldState, EscrowState newState);
     event ObligationSettled(bytes32 indexed obligationId, address indexed buyer, address indexed seller, uint256 amount);
     event ObligationRefunded(bytes32 indexed obligationId, address indexed buyer, uint256 amount);
@@ -66,6 +75,12 @@ contract Escrow is ReentrancyGuard {
     error ObligationAlreadyExists(bytes32 obligationId);
     error ObligationNotFound(bytes32 obligationId);
     error InvalidObligationState(bytes32 obligationId, EscrowState current, EscrowState required);
+    error InvalidObligationStateTransition(bytes32 obligationId, EscrowState current, EscrowState target);
+    error InvalidDeadline(uint64 deadline, uint256 currentTime);
+    error ObligationExpired(bytes32 obligationId, uint256 currentTime, uint64 deadline);
+    error ObligationNotExpired(bytes32 obligationId, uint256 currentTime, uint64 deadline);
+    error ObligationAlreadyTerminated(bytes32 obligationId, EscrowState current);
+    error UnauthorizedClaimant();
     error InvalidParticipants();
     error InvalidAmount();
     error SystemPaused();
@@ -126,13 +141,17 @@ contract Escrow is ReentrancyGuard {
         emit CollateralReleased(account, amount);
     }
 
+    /**
+     * @notice Locks collateral for a cleared bilateral delivery obligation with an explicit deadline.
+     */
     function lockObligationCollateral(
         bytes32 obligationId,
         address buyer,
         address seller,
         uint256 amount,
         uint32 zoneId,
-        uint32 intervalIdx
+        uint32 intervalIdx,
+        uint64 deadline
     ) external onlySettlement whenNotPaused {
         if (obligationLocks[obligationId].state != EscrowState.NONE) {
             revert ObligationAlreadyExists(obligationId);
@@ -141,6 +160,9 @@ contract Escrow is ReentrancyGuard {
             revert InvalidParticipants();
         }
         if (amount == 0) revert InvalidAmount();
+        if (deadline <= block.timestamp) {
+            revert InvalidDeadline(deadline, block.timestamp);
+        }
 
         uint256 free = balances[buyer] - lockedBalances[buyer];
         if (amount > free) revert InsufficientFreeBalance(amount, free);
@@ -156,18 +178,47 @@ contract Escrow is ReentrancyGuard {
             intervalIdx: intervalIdx,
             state: EscrowState.LOCKED,
             createdAt: uint64(block.timestamp),
+            deadline: deadline,
             settledAt: 0
         });
 
         emit CollateralLocked(buyer, amount);
-        emit ObligationLocked(obligationId, buyer, seller, amount, zoneId, intervalIdx);
+        emit ObligationLocked(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
         emit ObligationStateChanged(obligationId, EscrowState.NONE, EscrowState.LOCKED);
+    }
+
+    /**
+     * @notice Validates whether a state transition adheres to the formal obligation lifecycle graph.
+     */
+    function isValidTransition(EscrowState from, EscrowState to) public pure returns (bool) {
+        if (from == EscrowState.LOCKED) {
+            return to == EscrowState.DELIVERY_VERIFIED ||
+                   to == EscrowState.SETTLEMENT_READY ||
+                   to == EscrowState.SETTLED ||
+                   to == EscrowState.REFUNDED;
+        }
+        if (from == EscrowState.DELIVERY_VERIFIED) {
+            return to == EscrowState.SETTLEMENT_READY ||
+                   to == EscrowState.SETTLED ||
+                   to == EscrowState.REFUNDED;
+        }
+        if (from == EscrowState.SETTLEMENT_READY) {
+            return to == EscrowState.SETTLED ||
+                   to == EscrowState.REFUNDED;
+        }
+        // NONE, SETTLED, and REFUNDED are strictly terminal states
+        return false;
     }
 
     function updateObligationState(bytes32 obligationId, EscrowState newState) external onlySettlement whenNotPaused {
         ObligationLock storage obl = obligationLocks[obligationId];
         if (obl.state == EscrowState.NONE) revert ObligationNotFound(obligationId);
+
         EscrowState oldState = obl.state;
+        if (!isValidTransition(oldState, newState)) {
+            revert InvalidObligationStateTransition(obligationId, oldState, newState);
+        }
+
         obl.state = newState;
         emit ObligationStateChanged(obligationId, oldState, newState);
     }
@@ -178,20 +229,24 @@ contract Escrow is ReentrancyGuard {
         if (obl.state == EscrowState.SETTLED || obl.state == EscrowState.REFUNDED) {
             revert InvalidObligationState(obligationId, obl.state, EscrowState.SETTLEMENT_READY);
         }
+        if (block.timestamp > obl.deadline) {
+            revert ObligationExpired(obligationId, block.timestamp, obl.deadline);
+        }
         if (settleAmount > obl.amount) revert InvalidAmount();
 
         address buyer = obl.buyer;
         address seller = obl.seller;
         uint256 totalLocked = obl.amount;
 
-        // Release the entire locked portion for this obligation from buyer's locked balance
-        if (lockedBalances[buyer] >= totalLocked) {
-            lockedBalances[buyer] -= totalLocked;
-        } else {
-            lockedBalances[buyer] = 0;
+        // Strict unreserved release: no silent clamping
+        if (totalLocked > lockedBalances[buyer]) {
+            revert InsufficientLockedBalance(totalLocked, lockedBalances[buyer]);
         }
+        lockedBalances[buyer] -= totalLocked;
 
-        if (settleAmount > balances[buyer]) revert InsufficientFreeBalance(settleAmount, balances[buyer]);
+        if (settleAmount > balances[buyer]) {
+            revert InsufficientFreeBalance(settleAmount, balances[buyer]);
+        }
 
         // Transfer delivered value to seller
         balances[buyer] -= settleAmount;
@@ -216,11 +271,43 @@ contract Escrow is ReentrancyGuard {
         address buyer = obl.buyer;
         uint256 amount = obl.amount;
 
-        if (lockedBalances[buyer] >= amount) {
-            lockedBalances[buyer] -= amount;
-        } else {
-            lockedBalances[buyer] = 0;
+        // Strict unreserved release: no silent clamping
+        if (amount > lockedBalances[buyer]) {
+            revert InsufficientLockedBalance(amount, lockedBalances[buyer]);
         }
+        lockedBalances[buyer] -= amount;
+
+        obl.state = EscrowState.REFUNDED;
+        obl.settledAt = uint64(block.timestamp);
+
+        emit CollateralReleased(buyer, amount);
+        emit ObligationRefunded(obligationId, buyer, amount);
+        emit ObligationStateChanged(obligationId, EscrowState.LOCKED, EscrowState.REFUNDED);
+    }
+
+    /**
+     * @notice Allows a buyer (or operator) to reclaim locked collateral after the obligation deadline expires.
+     */
+    function claimExpiredRefund(bytes32 obligationId) external nonReentrant whenNotPaused {
+        ObligationLock storage obl = obligationLocks[obligationId];
+        if (obl.state == EscrowState.NONE) revert ObligationNotFound(obligationId);
+        if (obl.state == EscrowState.SETTLED || obl.state == EscrowState.REFUNDED) {
+            revert ObligationAlreadyTerminated(obligationId, obl.state);
+        }
+        if (block.timestamp <= obl.deadline) {
+            revert ObligationNotExpired(obligationId, block.timestamp, obl.deadline);
+        }
+        if (msg.sender != obl.buyer && !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender)) {
+            revert UnauthorizedClaimant();
+        }
+
+        address buyer = obl.buyer;
+        uint256 amount = obl.amount;
+
+        if (amount > lockedBalances[buyer]) {
+            revert InsufficientLockedBalance(amount, lockedBalances[buyer]);
+        }
+        lockedBalances[buyer] -= amount;
 
         obl.state = EscrowState.REFUNDED;
         obl.settledAt = uint64(block.timestamp);
@@ -235,15 +322,19 @@ contract Escrow is ReentrancyGuard {
         address to,
         uint256 amount
     ) external onlySettlement nonReentrant {
+        if (from == address(0) || to == address(0) || from == to) {
+            revert InvalidParticipants();
+        }
         if (amount > balances[from]) {
             revert InsufficientFreeBalance(amount, balances[from]);
         }
 
-        // Release locked portion if locked
-        if (lockedBalances[from] >= amount) {
+        // If 'from' has locked balances, release strictly without silent clamping
+        if (lockedBalances[from] > 0) {
+            if (amount > lockedBalances[from]) {
+                revert InsufficientLockedBalance(amount, lockedBalances[from]);
+            }
             lockedBalances[from] -= amount;
-        } else {
-            lockedBalances[from] = 0;
         }
 
         balances[from] -= amount;

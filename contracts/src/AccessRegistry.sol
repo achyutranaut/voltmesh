@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
+import "@openzeppelin/contracts/access/IAccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title AccessRegistry
  * @notice Central access control and pause coordinator for the Decentralized Energy Exchange.
  */
-contract AccessRegistry is AccessControl, Pausable {
+contract AccessRegistry is AccessControlEnumerable, Pausable {
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     bytes32 public constant ORACLE_ROLE = keccak256("ORACLE_ROLE");
@@ -81,7 +82,7 @@ contract AccessRegistry is AccessControl, Pausable {
     /**
      * @notice Overrides OpenZeppelin grantRole to enforce timelock once direct grants are disabled.
      */
-    function grantRole(bytes32 role, address account) public override {
+    function grantRole(bytes32 role, address account) public override(AccessControl, IAccessControl) {
         if (directGrantsDisabled) {
             revert DirectGrantDisabled();
         }

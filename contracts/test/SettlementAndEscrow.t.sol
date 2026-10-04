@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "../src/AccessRegistry.sol";
 import "../src/ParticipantRegistry.sol";
 import "../src/DeviceRegistry.sol";
@@ -12,6 +12,8 @@ import "../src/BatchSettlement.sol";
 import "../src/mocks/MockERC20.sol";
 
 contract SettlementAndEscrowTest is Test {
+    using MessageHashUtils for bytes32;
+
     AccessRegistry public access;
     ParticipantRegistry public participants;
     DeviceRegistry public devices;
@@ -24,11 +26,17 @@ contract SettlementAndEscrowTest is Test {
     address public operator = address(0x09);
     address public prosumer = address(0xCAFE);
 
+    uint256 public oracleKey = 0x101;
+    address public oracleAddr;
+
     function setUp() public {
+        oracleAddr = vm.addr(oracleKey);
+
         vm.startPrank(admin);
         access = new AccessRegistry(admin);
         access.grantRole(access.OPERATOR_ROLE(), operator);
         access.grantRole(access.REGISTRAR_ROLE(), admin);
+        access.grantRole(access.ORACLE_ROLE(), oracleAddr);
 
         participants = new ParticipantRegistry(address(access));
         devices = new DeviceRegistry(address(access));
@@ -58,6 +66,31 @@ contract SettlementAndEscrowTest is Test {
         // Fund prosumer with tokens
         token.transfer(prosumer, 100_000);
         vm.stopPrank();
+    }
+
+    function _signStatement(
+        uint32 dateEpoch,
+        uint32 zoneId,
+        bytes32 statementRoot,
+        uint256 totalCredits,
+        uint256 totalDebits
+    ) internal view returns (bytes[] memory) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                block.chainid,
+                address(settlement),
+                dateEpoch,
+                zoneId,
+                statementRoot,
+                totalCredits,
+                totalDebits
+            )
+        ).toEthSignedMessageHash();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKey, messageHash);
+        bytes[] memory sigs = new bytes[](1);
+        sigs[0] = abi.encodePacked(r, s, v);
+        return sigs;
     }
 
     function test_Escrow_DepositAndWithdraw() public {
@@ -110,7 +143,7 @@ contract SettlementAndEscrowTest is Test {
             )
         );
 
-        bytes32 statementRoot = leafHash; // Single leaf tree -> root == leaf
+        bytes32 statementRoot = leafHash;
 
         // Deposit settlement funds to settlement contract in escrow
         vm.prank(admin);
@@ -120,9 +153,11 @@ contract SettlementAndEscrowTest is Test {
         escrow.deposit(10_000);
         vm.stopPrank();
 
-        // Operator posts daily statement
+        bytes[] memory sigs = _signStatement(dateEpoch, zoneId, statementRoot, 5000, 5000);
+
+        // Operator posts daily statement with oracle quorum signatures
         vm.prank(operator);
-        settlement.postDailyStatement(dateEpoch, zoneId, statementRoot, 5000, 0);
+        settlement.postDailyStatement(dateEpoch, zoneId, statementRoot, 5000, 5000, sigs);
 
         // Prosumer claims settlement
         bytes32[] memory emptyProof = new bytes32[](0);
@@ -160,6 +195,7 @@ contract SettlementAndEscrowTest is Test {
         address seller = prosumer;
         bytes32 obligationId = keccak256("obl-001");
         uint256 tradeAmount = 10_000;
+        uint64 deadline = uint64(block.timestamp + 86400);
 
         // Fund buyer and deposit into escrow
         vm.startPrank(admin);
@@ -175,7 +211,7 @@ contract SettlementAndEscrowTest is Test {
 
         // Operator locks obligation through settlement contract
         vm.prank(operator);
-        settlement.lockObligation(obligationId, buyer, seller, tradeAmount, 1, 48);
+        settlement.lockObligation(obligationId, buyer, seller, tradeAmount, 1, 48, deadline);
 
         assertEq(escrow.lockedBalances(buyer), tradeAmount);
         assertEq(escrow.getFreeBalance(buyer), 10_000);
@@ -188,13 +224,16 @@ contract SettlementAndEscrowTest is Test {
             uint32 lZone,
             uint32 lInt,
             Escrow.EscrowState state,
-            ,
+            uint64 createdAt,
+            uint64 lDeadline,
+            uint64 settledAt
         ) = escrow.obligationLocks(obligationId);
 
         assertEq(oblId, obligationId);
         assertEq(lBuyer, buyer);
         assertEq(lSeller, seller);
         assertEq(lAmt, tradeAmount);
+        assertEq(lDeadline, deadline);
         assertEq(uint8(state), uint8(Escrow.EscrowState.LOCKED));
 
         // Settle obligation: full delivered amount
@@ -206,7 +245,7 @@ contract SettlementAndEscrowTest is Test {
         assertEq(escrow.balances(buyer), 10_000);
         assertEq(escrow.lockedBalances(buyer), 0);
 
-        (, , , , , , Escrow.EscrowState settledState, , ) = escrow.obligationLocks(obligationId);
+        (, , , , , , Escrow.EscrowState settledState, , , ) = escrow.obligationLocks(obligationId);
         assertEq(uint8(settledState), uint8(Escrow.EscrowState.SETTLED));
 
         // Re-settling or refunding a settled obligation must revert
@@ -217,7 +256,7 @@ contract SettlementAndEscrowTest is Test {
         // Test refund on second obligation
         bytes32 obligationId2 = keccak256("obl-002");
         vm.prank(operator);
-        settlement.lockObligation(obligationId2, buyer, seller, 5000, 1, 49);
+        settlement.lockObligation(obligationId2, buyer, seller, 5000, 1, 49, deadline);
 
         assertEq(escrow.lockedBalances(buyer), 5000);
         assertEq(escrow.getFreeBalance(buyer), 5000);
@@ -228,8 +267,211 @@ contract SettlementAndEscrowTest is Test {
         assertEq(escrow.lockedBalances(buyer), 0);
         assertEq(escrow.getFreeBalance(buyer), 10_000);
 
-        (, , , , , , Escrow.EscrowState refundedState, , ) = escrow.obligationLocks(obligationId2);
+        (, , , , , , Escrow.EscrowState refundedState, , , ) = escrow.obligationLocks(obligationId2);
         assertEq(uint8(refundedState), uint8(Escrow.EscrowState.REFUNDED));
+    }
+
+    // P0-2: Explicit illegal state transitions must all revert
+    function test_Escrow_IllegalStateTransitionsRevert() public {
+        address buyer = address(0xB0B);
+        address seller = prosumer;
+        bytes32 obligationId = keccak256("obl-transitions-01");
+        uint64 deadline = uint64(block.timestamp + 86400);
+
+        vm.startPrank(admin);
+        token.transfer(buyer, 20_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 20_000);
+        escrow.deposit(20_000);
+        vm.stopPrank();
+
+        // 1. Unregistered obligation (NONE) cannot transition to SETTLED or REFUNDED
+        vm.startPrank(address(settlement));
+        vm.expectRevert(abi.encodeWithSelector(Escrow.ObligationNotFound.selector, obligationId));
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.SETTLED);
+        vm.stopPrank();
+
+        // Lock obligation
+        vm.prank(operator);
+        settlement.lockObligation(obligationId, buyer, seller, 5000, 1, 48, deadline);
+
+        // 2. LOCKED cannot transition to NONE
+        vm.startPrank(address(settlement));
+        vm.expectRevert();
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.NONE);
+
+        // 3. Transition to DELIVERY_VERIFIED
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
+
+        // 4. DELIVERY_VERIFIED cannot jump back to LOCKED
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.InvalidObligationStateTransition.selector,
+                obligationId,
+                Escrow.EscrowState.DELIVERY_VERIFIED,
+                Escrow.EscrowState.LOCKED
+            )
+        );
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.LOCKED);
+
+        // 5. Transition to SETTLED
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.SETTLED);
+
+        // 6. Terminal state SETTLED cannot transition anywhere
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.InvalidObligationStateTransition.selector,
+                obligationId,
+                Escrow.EscrowState.SETTLED,
+                Escrow.EscrowState.LOCKED
+            )
+        );
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.LOCKED);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.InvalidObligationStateTransition.selector,
+                obligationId,
+                Escrow.EscrowState.SETTLED,
+                Escrow.EscrowState.REFUNDED
+            )
+        );
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.REFUNDED);
+        vm.stopPrank();
+    }
+
+    // P0-3: Strict accounting check - no silent balance clamping
+    function test_Escrow_NoSilentClamping_RevertsOnExcessiveAmount() public {
+        address buyer = address(0xB0B);
+        address seller = prosumer;
+        bytes32 obligationId = keccak256("obl-clamping-01");
+        uint64 deadline = uint64(block.timestamp + 86400);
+
+        vm.startPrank(admin);
+        token.transfer(buyer, 20_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 20_000);
+        escrow.deposit(20_000);
+        vm.stopPrank();
+
+        vm.prank(operator);
+        settlement.lockObligation(obligationId, buyer, seller, 5000, 1, 48, deadline);
+
+        // Attempting to settle more than the obligation amount must revert InvalidAmount
+        vm.prank(operator);
+        vm.expectRevert(Escrow.InvalidAmount.selector);
+        settlement.settleObligation(obligationId, 6000);
+
+        // State remains strictly LOCKED and balances remain untouched
+        assertEq(escrow.lockedBalances(buyer), 5000);
+        assertEq(escrow.balances(buyer), 20_000);
+    }
+
+    // P0-4: Escrow liveness - expired obligation recovery by buyer
+    function test_Escrow_Liveness_BuyerExpiredRecovery() public {
+        address buyer = address(0xB0B);
+        address seller = prosumer;
+        bytes32 obligationId = keccak256("obl-liveness-01");
+        uint64 deadline = uint64(block.timestamp + 3600); // 1 hour deadline
+
+        vm.startPrank(admin);
+        token.transfer(buyer, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 10_000);
+        escrow.deposit(10_000);
+        vm.stopPrank();
+
+        vm.prank(operator);
+        settlement.lockObligation(obligationId, buyer, seller, 10_000, 1, 48, deadline);
+
+        // Attempting recovery before deadline must revert
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.ObligationNotExpired.selector,
+                obligationId,
+                block.timestamp,
+                deadline
+            )
+        );
+        escrow.claimExpiredRefund(obligationId);
+
+        // Advance timestamp past deadline
+        vm.warp(deadline + 1);
+
+        // Settlement after expiry must revert
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.ObligationExpired.selector,
+                obligationId,
+                deadline + 1,
+                deadline
+            )
+        );
+        settlement.settleObligation(obligationId, 10_000);
+
+        // Buyer reclaims collateral
+        vm.prank(buyer);
+        escrow.claimExpiredRefund(obligationId);
+
+        assertEq(escrow.lockedBalances(buyer), 0);
+        assertEq(escrow.balances(buyer), 10_000);
+
+        // Second recovery must revert
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.ObligationAlreadyTerminated.selector,
+                obligationId,
+                Escrow.EscrowState.REFUNDED
+            )
+        );
+        escrow.claimExpiredRefund(obligationId);
+    }
+
+    // P0-5 & P0-6: Economic conservation violation must revert
+    function test_BatchSettlement_EconomicConservationEnforced() public {
+        uint32 zoneId = 1;
+        uint32 dateEpoch = 20000;
+        bytes32 statementRoot = keccak256("fake-root");
+
+        // Attempting to post statement where Credits (6000) > Debits (5000) must revert
+        bytes[] memory emptySigs = new bytes[](0);
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BatchSettlement.EconomicConservationViolation.selector,
+                5000, // Debits
+                6000  // Credits
+            )
+        );
+        settlement.postDailyStatement(dateEpoch, zoneId, statementRoot, 6000, 5000, emptySigs);
+    }
+
+    // P0-6: Malicious operator cannot post statement without oracle signatures
+    function test_BatchSettlement_MaliciousOperatorDrainingBlocked() public {
+        uint32 zoneId = 1;
+        uint32 dateEpoch = 20000;
+        bytes32 fakeRoot = keccak256("fake-draining-root");
+
+        // Unsigned statement must revert
+        bytes[] memory emptySigs = new bytes[](0);
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BatchSettlement.InsufficientOracleSignatures.selector,
+                0,
+                1
+            )
+        );
+        settlement.postDailyStatement(dateEpoch, zoneId, fakeRoot, 5000, 5000, emptySigs);
     }
 
     function test_BatchSettlement_EIP712OrderHashAndCancellation() public {
@@ -261,5 +503,37 @@ contract SettlementAndEscrowTest is Test {
         settlement.cancelOrder(nonce);
 
         assertTrue(settlement.isOrderCancelled(maker, nonce));
+    }
+
+    // Step 1 Hardening: Self-settlement (buyer == seller) must strictly revert on-chain
+    function test_Escrow_SelfSettlementBlocked_Reverts() public {
+        address user = prosumer;
+        bytes32 obligationId = keccak256("obl-self-match-01");
+        uint64 deadline = uint64(block.timestamp + 86400);
+
+        vm.startPrank(admin);
+        token.transfer(user, 20_000);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        token.approve(address(escrow), 20_000);
+        escrow.deposit(20_000);
+        vm.stopPrank();
+
+        // 1. Attempting to lock an obligation where buyer == seller must revert with InvalidParticipants
+        vm.prank(operator);
+        vm.expectRevert(Escrow.InvalidParticipants.selector);
+        settlement.lockObligation(obligationId, user, user, 5000, 1, 48, deadline);
+
+        // Verify no obligation was created
+        (, , , , , , Escrow.EscrowState state, , , ) = escrow.obligationLocks(obligationId);
+        assertEq(uint8(state), uint8(Escrow.EscrowState.NONE));
+        assertEq(escrow.lockedBalances(user), 0);
+        assertEq(escrow.getFreeBalance(user), 20_000);
+
+        // 2. Direct settlement transfer where from == to must revert with InvalidParticipants
+        vm.prank(address(settlement));
+        vm.expectRevert(Escrow.InvalidParticipants.selector);
+        escrow.executeSettlementTransfer(user, user, 1000);
     }
 }

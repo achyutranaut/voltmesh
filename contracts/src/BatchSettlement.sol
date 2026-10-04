@@ -2,6 +2,8 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AccessRegistry.sol";
@@ -15,6 +17,8 @@ import "./Escrow.sol";
  */
 contract BatchSettlement {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
 
     bytes1 public constant STATEMENT_PREFIX = 0x02;
 
@@ -44,6 +48,8 @@ contract BatchSettlement {
         bytes32 statementRoot;
         uint256 totalCreditsPaise;
         uint256 totalDebitsPaise;
+        uint256 totalCollectedDebitsPaise;
+        uint256 totalClaimedCreditsPaise;
         uint64 postedAt;
     }
 
@@ -90,6 +96,11 @@ contract BatchSettlement {
     error LeafAlreadyClaimed(bytes32 nullifier);
     error InvalidMerkleProof();
     error ParticipantNotActive(address participant);
+    error InsufficientOracleSignatures(uint256 count, uint256 required);
+    error DuplicateOrUnsortedSigner(address signer);
+    error SignerNotAuthorizedOracle(address signer);
+    error EconomicConservationViolation(uint256 totalDebits, uint256 totalCredits);
+    error SettlementPoolExhausted();
     error SystemPaused();
 
     modifier onlyOperator() {
@@ -151,15 +162,54 @@ contract BatchSettlement {
         emit ClearingCommitted(zoneId, intervalIdx, clearingPricePaiseKWh, totalVolumeWh, obligationsMerkleRoot);
     }
 
+    /**
+     * @notice Posts a daily statement with multi-oracle quorum attestation and economic conservation enforcement.
+     */
     function postDailyStatement(
         uint32 dateEpoch,
         uint32 zoneId,
         bytes32 statementRoot,
         uint256 totalCreditsPaise,
-        uint256 totalDebitsPaise
+        uint256 totalDebitsPaise,
+        bytes[] calldata oracleSignatures
     ) external onlyOperator whenNotPaused {
         if (dailyStatements[dateEpoch][zoneId].postedAt != 0) {
             revert StatementAlreadyPosted(dateEpoch, zoneId);
+        }
+        // Economic conservation: total debits must cover total credits
+        if (totalDebitsPaise < totalCreditsPaise) {
+            revert EconomicConservationViolation(totalDebitsPaise, totalCreditsPaise);
+        }
+
+        uint256 quorum = epochOracle.quorumThreshold();
+        if (oracleSignatures.length < quorum) {
+            revert InsufficientOracleSignatures(oracleSignatures.length, quorum);
+        }
+
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                block.chainid,
+                address(this),
+                dateEpoch,
+                zoneId,
+                statementRoot,
+                totalCreditsPaise,
+                totalDebitsPaise
+            )
+        ).toEthSignedMessageHash();
+
+        address lastSigner = address(0);
+        bytes32 oracleRole = accessRegistry.ORACLE_ROLE();
+
+        for (uint256 i = 0; i < oracleSignatures.length; i++) {
+            address signer = messageHash.recover(oracleSignatures[i]);
+            if (signer <= lastSigner) {
+                revert DuplicateOrUnsortedSigner(signer);
+            }
+            if (!accessRegistry.hasRole(oracleRole, signer)) {
+                revert SignerNotAuthorizedOracle(signer);
+            }
+            lastSigner = signer;
         }
 
         dailyStatements[dateEpoch][zoneId] = DailyStatement({
@@ -168,6 +218,8 @@ contract BatchSettlement {
             statementRoot: statementRoot,
             totalCreditsPaise: totalCreditsPaise,
             totalDebitsPaise: totalDebitsPaise,
+            totalCollectedDebitsPaise: 0,
+            totalClaimedCreditsPaise: 0,
             postedAt: uint64(block.timestamp)
         });
 
@@ -213,11 +265,19 @@ contract BatchSettlement {
 
         claimedLeaves[nullifier] = true;
 
-        // If netAmountPaise > 0, execute settlement release/transfer
-        // (paise to wei / test token 1:1 in sandbox)
         if (netAmountPaise > 0) {
+            uint256 creditAmount = uint256(netAmountPaise);
+            stmt.totalClaimedCreditsPaise += creditAmount;
+            if (stmt.totalClaimedCreditsPaise > stmt.totalDebitsPaise) {
+                revert SettlementPoolExhausted();
+            }
             // Funds released from escrow settlement pool to participant
-            escrow.executeSettlementTransfer(address(this), msg.sender, uint256(netAmountPaise));
+            escrow.executeSettlementTransfer(address(this), msg.sender, creditAmount);
+        } else if (netAmountPaise < 0) {
+            uint256 debitAmount = uint256(-netAmountPaise);
+            stmt.totalCollectedDebitsPaise += debitAmount;
+            // Collect net debit from participant into settlement contract pool
+            escrow.executeSettlementTransfer(msg.sender, address(this), debitAmount);
         }
 
         emit SettlementClaimed(msg.sender, dateEpoch, zoneId, netAmountPaise, leafIndex);
@@ -276,9 +336,10 @@ contract BatchSettlement {
         address seller,
         uint256 amount,
         uint32 zoneId,
-        uint32 intervalIdx
+        uint32 intervalIdx,
+        uint64 deadline
     ) external onlyOperator whenNotPaused {
-        escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx);
+        escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
     }
 
     /**

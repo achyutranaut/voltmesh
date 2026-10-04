@@ -30,7 +30,7 @@ contract CertificatesTest is Test {
     uint32 public constant TEST_ZONE_ID = 1;
     uint32 public constant TEST_INTERVAL_IDX = 100;
     uint64 public constant TEST_ENERGY_WH = 1250;
-    uint8 public constant TEST_SOURCE_TYPE = 1;
+    uint8 public constant TEST_SOURCE_TYPE = 0; // 0 = SOLAR_PV
 
     function setUp() public {
         oracleAddr = vm.addr(oracleKey);
@@ -64,7 +64,7 @@ contract CertificatesTest is Test {
         retirement = new RetirementRegistry(address(access), address(certificates));
         certificates.setRetirementRegistry(address(retirement));
 
-        // Register valid device
+        // Register valid device as SOLAR_PV (enum index 0)
         devices.registerDevice(
             deviceId,
             prosumer,
@@ -75,7 +75,36 @@ contract CertificatesTest is Test {
             100,
             keccak256("part-cafe")
         );
+
+        vm.warp(TEST_INTERVAL_IDX * 900 + 10);
         vm.stopPrank();
+    }
+
+    function _finalizeTestEpoch(bytes32 root) internal {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                block.chainid,
+                address(oracle),
+                TEST_ZONE_ID,
+                TEST_INTERVAL_IDX,
+                root,
+                uint32(1),
+                TEST_ENERGY_WH
+            )
+        ).toEthSignedMessageHash();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKey, messageHash);
+        bytes[] memory signatures = new bytes[](1);
+        signatures[0] = abi.encodePacked(r, s, v);
+
+        oracle.submitEpoch(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            root,
+            1,
+            TEST_ENERGY_WH,
+            signatures
+        );
     }
 
     function test_Certificates_ClaimAndRetire() public {
@@ -94,29 +123,11 @@ contract CertificatesTest is Test {
             )
         );
 
-        bytes32 root = leafHash; // Single leaf tree -> root == leaf
+        _finalizeTestEpoch(leafHash);
 
-        // Oracle signs and finalizes epoch
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                block.chainid,
-                address(oracle),
-                TEST_ZONE_ID,
-                TEST_INTERVAL_IDX,
-                root,
-                uint32(1),
-                TEST_ENERGY_WH
-            )
-        ).toEthSignedMessageHash();
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKey, messageHash);
-        bytes[] memory signatures = new bytes[](1);
-        signatures[0] = abi.encodePacked(r, s, v);
-
-        oracle.submitEpoch(TEST_ZONE_ID, TEST_INTERVAL_IDX, root, 1, TEST_ENERGY_WH, signatures);
-
-        // Prosumer claims ERC-1155 certificate
         bytes32[] memory emptyProof = new bytes32[](0);
+
+        // Prosumer claims certificate
         vm.prank(prosumer);
         uint256 tokenId = certificates.claimCertificate(
             TEST_ZONE_ID,
@@ -128,31 +139,80 @@ contract CertificatesTest is Test {
             emptyProof
         );
 
+        assertGt(tokenId, 0);
         assertEq(certificates.balanceOf(prosumer, tokenId), TEST_ENERGY_WH);
 
-        // Double claim must revert
+        // Retire certificate
         vm.prank(prosumer);
-        vm.expectRevert();
+        bytes32 nullifier = retirement.retire(
+            tokenId,
+            TEST_ENERGY_WH,
+            "Delhi Metro Rail Corp",
+            "Scope 2 Decarbonization"
+        );
+
+        assertGt(uint256(nullifier), 0);
+        assertEq(certificates.balanceOf(prosumer, tokenId), 0);
+        assertTrue(retirement.retiredNullifiers(nullifier));
+
+        // Re-retiring with the exact same details must revert (nullifier already spent)
+        vm.prank(prosumer);
+        vm.expectRevert(abi.encodeWithSelector(RetirementRegistry.NullifierAlreadySpent.selector, nullifier));
+        retirement.retire(
+            tokenId,
+            TEST_ENERGY_WH,
+            "Delhi Metro Rail Corp",
+            "Scope 2 Decarbonization"
+        );
+    }
+
+    // P1-12: Claimant claiming WIND for a SOLAR device must revert
+    function test_Certificates_MismatchedSourceTypeReverts() public {
+        uint64 counter = 1;
+        bytes32 leafHash = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                TEST_ZONE_ID,
+                TEST_INTERVAL_IDX,
+                TEST_ENERGY_WH,
+                uint8(0),
+                counter
+            )
+        );
+        _finalizeTestEpoch(leafHash);
+
+        bytes32[] memory emptyProof = new bytes32[](0);
+
+        // Prosumer attempts to claim with sourceType = 1 (WIND) when device is registered as 0 (SOLAR_PV)
+        vm.prank(prosumer);
+        vm.expectRevert(abi.encodeWithSelector(CertificateRegistry.MismatchedSourceType.selector, 1, 0));
         certificates.claimCertificate(
             TEST_ZONE_ID,
             TEST_INTERVAL_IDX,
             deviceId,
             TEST_ENERGY_WH,
-            TEST_SOURCE_TYPE,
+            1, // WIND
             counter,
             emptyProof
         );
+    }
 
-        // Prosumer retires certificate
+    // P1-12: Claiming for an unregistered device must revert
+    function test_Certificates_UnregisteredDeviceReverts() public {
+        bytes32 unknownDevice = keccak256("unknown-device");
+        bytes32[] memory emptyProof = new bytes32[](0);
+
         vm.prank(prosumer);
-        bytes32 nullifier = retirement.retire(
-            tokenId,
+        vm.expectRevert(abi.encodeWithSelector(CertificateRegistry.DeviceNotRegisteredOrRevoked.selector, unknownDevice));
+        certificates.claimCertificate(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            unknownDevice,
             TEST_ENERGY_WH,
-            "Delhi Metro Rail Corporation",
-            "Scope 2 Carbon Offset 2026"
+            TEST_SOURCE_TYPE,
+            1,
+            emptyProof
         );
-
-        assertTrue(retirement.retiredNullifiers(nullifier));
-        assertEq(certificates.balanceOf(prosumer, tokenId), 0);
     }
 }
