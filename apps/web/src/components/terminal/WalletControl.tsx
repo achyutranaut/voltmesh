@@ -1,8 +1,7 @@
-import React from 'react';
-import { Wallet, AlertTriangle, ChevronDown, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Wallet, AlertTriangle, ChevronDown, CheckCircle2, ShieldAlert, Copy, Check } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 interface WalletControlProps {
@@ -17,21 +16,29 @@ export const WalletControl: React.FC<WalletControlProps> = ({ onOpenModal, compa
     isCorrectNetwork,
     isConnecting,
     chainId,
+    ethBalance,
+    tokenBalance,
     connectMetaMask,
     switchNetwork,
   } = useWallet();
 
+  const [copied, setCopied] = useState(false);
+
+  const copyAddress = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (address) {
+      navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   if (isConnecting) {
     return (
-      <Button
-        variant="secondary"
-        size={compact ? "sm" : "default"}
-        disabled
-        className="w-full justify-center font-mono text-xs border-zinc-800 bg-zinc-900/80 text-zinc-400"
-      >
+      <div className="w-full flex items-center justify-center p-2 rounded bg-zinc-900/60 border border-zinc-800 text-xs text-zinc-400">
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping mr-2" />
-        CONNECTING...
-      </Button>
+        <span>Connecting wallet...</span>
+      </div>
     );
   }
 
@@ -39,61 +46,84 @@ export const WalletControl: React.FC<WalletControlProps> = ({ onOpenModal, compa
     return (
       <Button
         variant="default"
-        size={compact ? "sm" : "default"}
+        size={compact ? 'sm' : 'default'}
         onClick={connectMetaMask}
-        className="w-full justify-center font-mono text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow"
+        className="w-full justify-center text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/30 shadow-xs"
       >
         <Wallet className="w-3.5 h-3.5 mr-1.5" />
-        CONNECT WALLET
+        Connect wallet
       </Button>
     );
   }
 
   if (!isCorrectNetwork) {
     return (
-      <div className="flex flex-col gap-1.5 w-full">
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => switchNetwork(DEFAULT_CHAIN_ID)}
-          className="w-full justify-center font-mono text-[11px] font-bold"
-        >
-          <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
-          WRONG NETWORK
-        </Button>
-      </div>
+      <Button
+        variant="destructive"
+        size="sm"
+        onClick={() => switchNetwork(DEFAULT_CHAIN_ID)}
+        className="w-full justify-center text-xs font-medium"
+      >
+        <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
+        Switch to testnet
+      </Button>
     );
   }
 
   const shortAddress = `${address.slice(0, 6)}...${address.slice(-4)}`;
-  const networkLabel = chainId === 11155111 ? 'SEPOLIA' : 'TESTNET';
+  const networkName =
+    chainId === 11155111
+      ? 'Sepolia'
+      : chainId === 31337
+      ? 'Local Devnet'
+      : `Chain ${chainId ?? DEFAULT_CHAIN_ID}`;
 
   return (
-    <button
-      onClick={onOpenModal}
-      className="group w-full flex items-center justify-between p-2 rounded-sm bg-zinc-900/60 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 transition-colors text-left font-mono cursor-pointer"
-    >
-      <div className="flex items-start space-x-2.5 min-w-0">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 mt-1" />
-        <div className="truncate">
-          <div className="flex items-center space-x-1.5 leading-none">
-            <span className="text-[10px] font-semibold text-emerald-400 tracking-wider">
-              {networkLabel}
-            </span>
-            <span className="text-[10px] text-zinc-600">·</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              {chainId ?? DEFAULT_CHAIN_ID}
-            </span>
-          </div>
-          <div className="text-zinc-200 font-medium group-hover:text-white truncate font-mono text-xs mt-1">
-            {shortAddress}
-          </div>
-          <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
-            {chainId === 11155111 ? 'Ethereum Sepolia' : 'Local Devnet'}
+    <div className="w-full space-y-1.5">
+      <button
+        onClick={onOpenModal}
+        className="group w-full flex items-center justify-between p-2 rounded bg-zinc-900/70 hover:bg-zinc-850 border border-zinc-800/80 hover:border-zinc-700 transition-colors text-left cursor-pointer"
+        aria-label="Wallet details"
+      >
+        <div className="flex items-start space-x-2 min-w-0">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 mt-1.5" />
+          <div className="truncate">
+            <div className="flex items-center space-x-1.5 leading-none">
+              <span className="text-[11px] font-medium text-zinc-300 truncate">
+                {networkName}
+              </span>
+              <span className="text-zinc-600">·</span>
+              <span className="font-mono text-[11px] text-zinc-400 truncate">
+                {shortAddress}
+              </span>
+            </div>
+
+            {((ethBalance !== undefined && ethBalance > 0n) || (tokenBalance !== undefined && tokenBalance > 0n)) && (
+              <div className="text-[10px] text-zinc-500 mt-1 font-mono">
+                {tokenBalance && tokenBalance > 0n ? `${Number(tokenBalance / 10n ** 18n).toLocaleString()} VLT` : ''}
+                {tokenBalance && ethBalance && tokenBalance > 0n && ethBalance > 0n ? ' · ' : ''}
+                {ethBalance && ethBalance > 0n ? `${(Number(ethBalance / 10n ** 14n) / 10000).toFixed(3)} ETH` : ''}
+              </div>
+            )}
           </div>
         </div>
-      </div>
-      <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 shrink-0 ml-1 self-center" />
-    </button>
+
+        <div className="flex items-center space-x-1 shrink-0 ml-1">
+          <button
+            onClick={copyAddress}
+            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Copy address"
+          >
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          </button>
+          <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+        </div>
+      </button>
+
+      {/* Explicit note on role switching vs cryptographic authority */}
+      <p className="text-[10px] text-zinc-500 px-1 leading-tight">
+        Key authority is bound to your signing wallet. Roles do not grant on-chain rights.
+      </p>
+    </div>
   );
 };

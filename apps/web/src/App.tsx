@@ -28,20 +28,20 @@ import { FooterCtaSection } from './components/landing/FooterCtaSection';
 import { FluidEnergyCanvas } from './components/canvas/FluidEnergyCanvas';
 import { CommandPalette } from './components/shell/CommandPalette';
 
-// New Trading Terminal Shell & App1 Architecture
-import { TradingTerminalLayout } from './components/terminal/TradingTerminalLayout';
-import { ProofPipeline } from './components/terminal/ProofPipeline';
-
-// Terminal Specialized Views
-import { MarketTerminalView } from './components/market/MarketTerminalView';
-import { EnergyMetersView } from './components/energy/EnergyMetersView';
-import { OracleEpochsView } from './components/oracle/OracleEpochsView';
-import { CanonicalMerkleTree } from './components/oracle/CanonicalMerkleTree';
-import { SettlementView } from './components/settlement/SettlementView';
-import { CertificatesView } from './components/certificates/CertificatesView';
-import { OperationsView } from './components/operations/OperationsView';
-import { ContractsView } from './components/operations/ContractsView';
-import { ActivityView } from './components/activity/ActivityView';
+// New Trading Terminal Shell & Modular Terminal Views
+import {
+  TerminalShell,
+  ProofPipeline,
+  CallMarketView,
+  MetersView,
+  OracleView,
+  MerkleExplorer,
+  SettlementView,
+  CertificatesView,
+  OperationsView,
+  ContractRegistry,
+  ActivityStream,
+} from './components/terminal';
 
 export default function App() {
   // Global Mode: 'story' (12-chapter landing) vs 'terminal' (institutional trading console)
@@ -364,7 +364,7 @@ export default function App() {
         /* MODE 2: REFACTORED INSTITUTIONAL TRADING TERMINAL (SHADCN APP1 FOUNDATION) */
         /* ========================================================================= */
         <div className="relative z-10 flex flex-col min-h-screen">
-          <TradingTerminalLayout
+          <TerminalShell
             activeTab={activeTab}
             onTabChange={(tab) => {
               setActiveTab(tab);
@@ -383,7 +383,7 @@ export default function App() {
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
             onReturnToStory={() => setViewMode('story')}
           >
-            {/* Reusable Collapsible Proof Pipeline Widget (Section 11) */}
+            {/* Reusable Collapsible Proof Pipeline Widget */}
             <ProofPipeline
               onNavigateTab={(tab) => {
                 setActiveTab(tab);
@@ -394,7 +394,7 @@ export default function App() {
 
             {/* Active Workspace View */}
             {activeTab === 'market' && (
-              <MarketTerminalView
+              <CallMarketView
                 currentInterval={currentInterval}
                 orders={orders}
                 onAddOrder={(newOrder) => setOrders([...orders, newOrder])}
@@ -405,7 +405,7 @@ export default function App() {
             )}
 
             {activeTab === 'energy' && (
-              <EnergyMetersView
+              <MetersView
                 currentInterval={currentInterval}
                 ratedCapacity={ratedCapacity}
                 setRatedCapacity={setRatedCapacity}
@@ -420,7 +420,7 @@ export default function App() {
             )}
 
             {activeTab === 'oracle' && (
-              <OracleEpochsView
+              <OracleView
                 currentInterval={currentInterval}
                 onBuildEpoch={handleBuildEpoch}
                 epochData={epochData}
@@ -434,17 +434,8 @@ export default function App() {
             )}
 
             {activeTab === 'merkle' && (
-              <CanonicalMerkleTree
+              <MerkleExplorer
                 initialInterval={currentInterval}
-                onReturnToMarket={() => {
-                  setActiveTab('market');
-                  setCurrentStage('AUCTION');
-                }}
-                onReturnToStory={() => setViewMode('story')}
-                onViewQuorum={() => {
-                  setActiveTab('oracle');
-                  setCurrentStage('ORACLE');
-                }}
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
                 onNavigateTab={(tab) => setActiveTab(tab)}
               />
@@ -480,17 +471,17 @@ export default function App() {
             )}
 
             {activeTab === 'contracts' && (
-              <ContractsView
+              <ContractRegistry
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
               />
             )}
 
             {activeTab === 'activity' && (
-              <ActivityView
+              <ActivityStream
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
               />
             )}
-          </TradingTerminalLayout>
+          </TerminalShell>
         </div>
       )}
 

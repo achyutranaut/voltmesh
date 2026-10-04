@@ -109,7 +109,7 @@ export interface UtilityIdentityClaim {
   solarCapacityKw: number;
   consumerType: 'PROSUMER' | 'CONSUMER';
   vcIssuer: string;
-  vcStatus: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+  vcStatus: 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'INACTIVE';
 }
 
 export interface WalletContextType {
@@ -218,20 +218,18 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [address, setAddress] = useState<Address | null>(null);
-  const [demoOverrideAddress, setDemoOverrideAddress] = useState<Address | null>(null);
+  const [demoRolePreference, setDemoRolePreference] = useState<'SELLER' | 'BUYER'>('BUYER');
   const [chainId, setChainId] = useState<number | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [walletInstalled, setWalletInstalled] = useState<boolean>(false);
 
-  const effectiveAddress = demoOverrideAddress ?? address;
+  // Cryptographic authority: address is strictly the connected user wallet
+  const effectiveAddress = address;
 
   const switchDemoRole = useCallback((role: 'SELLER' | 'BUYER') => {
-    if (role === 'SELLER') {
-      setDemoOverrideAddress('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
-    } else {
-      setDemoOverrideAddress('0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC');
-    }
+    // Only toggles UI perspective filter; never modifies cryptographic wallet authority
+    setDemoRolePreference(role);
   }, []);
 
   // Balances
@@ -250,8 +248,26 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const utilityIdentity: UtilityIdentityClaim = React.useMemo(() => {
     const addr = (effectiveAddress ?? '').toLowerCase();
-    const isSeller = addr === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8' || addr.endsWith('79c8') || roles.isParticipant;
-    if (isSeller) {
+    if (!addr) {
+      return {
+        consumerNumber: '',
+        caNumber: '',
+        sanctionedLoadKw: 0,
+        connectionPhase: 1,
+        tariffCategory: 'Unconnected',
+        discomId: 'TPDDL',
+        netMeterInstalled: false,
+        netMeterSerialNumber: '',
+        solarCapacityKw: 0,
+        consumerType: 'CONSUMER',
+        vcIssuer: '',
+        vcStatus: 'INACTIVE',
+      };
+    }
+
+    // Role perspective preference for UI display filter only
+    const isProsumerPerspective = demoRolePreference === 'SELLER';
+    if (isProsumerPerspective) {
       return {
         consumerNumber: '1002345678',
         caNumber: 'CA-DL-990123',
@@ -282,7 +298,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         vcStatus: 'ACTIVE',
       };
     }
-  }, [effectiveAddress, roles]);
+  }, [effectiveAddress, demoRolePreference]);
 
   // Transaction manager
   const [activeTx, setActiveTx] = useState<TransactionRecord | null>(null);
