@@ -115,9 +115,15 @@ export const ProofPipeline: React.FC<ProofPipelineProps> = ({
       {/* 1. Header telemetry summary bar */}
       <div className="px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs bg-[#0b0d13] border-b border-zinc-800/60">
         <div className="flex items-center space-x-2.5">
-          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-            {flow.flowId}
-          </span>
+          {flow.flowId ? (
+            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+              {flow.flowId}
+            </span>
+          ) : (
+            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-zinc-900/60 border border-zinc-800/80 text-zinc-500">
+              Idle · Pre-clearing
+            </span>
+          )}
           <span className="text-zinc-600">·</span>
           <span className="font-medium text-xs text-zinc-200">
             Proof pipeline

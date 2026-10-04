@@ -8,7 +8,7 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
 } from 'recharts';
-import { Order, OrderSide } from '@energy-dex/types';
+import { Order } from '@energy-dex/types';
 
 export interface DepthChartProps {
   bids: Order[];
@@ -53,59 +53,60 @@ export const DepthChart: React.FC<DepthChartProps> = ({
   }, [bids, asks]);
 
   return (
-    <div className="w-full space-y-2">
+    <div className="w-full space-y-2 font-sans">
       <div className="flex items-center justify-between text-xs text-zinc-400">
         <span className="font-medium text-zinc-300">Cumulative market depth</span>
-        <span className="text-[11px] text-zinc-500">Supply vs demand curves</span>
+        <span className="text-[11px] text-zinc-500 font-mono">Bids vs Asks (Wh)</span>
       </div>
 
       <div className="h-48 w-full bg-[#08090f] border border-zinc-800/60 rounded p-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={depthData} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+          <AreaChart data={depthData} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="demandGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="supplyGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
               dataKey="price"
-              stroke="#52525b"
+              stroke="#a1a1aa"
               fontSize={10}
               tickLine={false}
-              axisLine={false}
+              axisLine={{ stroke: '#27272a' }}
               tickFormatter={(v) => `₹${(v / 100).toFixed(1)}`}
             />
             <YAxis
-              stroke="#52525b"
+              stroke="#a1a1aa"
               fontSize={10}
               tickLine={false}
-              axisLine={false}
+              axisLine={{ stroke: '#27272a' }}
+              width={45}
               tickFormatter={(v) => `${v / 1000}k`}
             />
             <RechartsTooltip
               contentStyle={{
-                backgroundColor: '#0e1017',
+                backgroundColor: '#0c0d14',
                 borderColor: '#27272a',
                 borderRadius: '4px',
                 fontSize: '11px',
                 color: '#fff',
               }}
-              formatter={(val: any) => [`${val} Wh`, 'Volume']}
+              formatter={(val: any) => [`${Number(val).toLocaleString()} Wh`, 'Volume']}
               labelFormatter={(label) => `Price: ₹${(Number(label) / 100).toFixed(2)}/kWh`}
             />
             {clearingPrice && (
               <ReferenceLine
                 x={Number(clearingPrice) * 100}
-                stroke="#10b981"
+                stroke="#a1a1aa"
                 strokeDasharray="3 3"
                 label={{
                   value: `Clearing ₹${Number(clearingPrice).toFixed(2)}`,
-                  fill: '#10b981',
+                  fill: '#e4e4e7',
                   fontSize: 10,
                   position: 'top',
                 }}
@@ -123,7 +124,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({
               type="stepAfter"
               dataKey="supplyWh"
               name="Supply"
-              stroke="#10b981"
+              stroke="#f43f5e"
               strokeWidth={1.5}
               fill="url(#supplyGrad)"
             />
@@ -137,7 +138,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({
           <span>Demand (Bids)</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <div className="w-2 h-2 bg-emerald-500 rounded-xs" />
+          <div className="w-2 h-2 bg-rose-500 rounded-xs" />
           <span>Supply (Asks)</span>
         </div>
       </div>

@@ -182,15 +182,15 @@ const STORAGE_KEY_PREFIX = 'voltmesh_flow_pipeline_v1_';
 
 export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [flow, setFlow] = useState<PipelineFlowIdentity>(() => ({
-    flowId: 'MATCH #VM-0048',
+    flowId: '',
     zoneId: 1,
     intervalIdx: 48,
-    sellerAddress: '0x1111111111111111111111111111111111111111',
-    buyerAddress: '0x2222222222222222222222222222222222222222',
-    sellerOrderId: 's-01',
-    buyerOrderId: 'b-01',
-    matchedQuantityWh: 2000n,
-    clearingPricePaiseKWh: 450n,
+    sellerAddress: '',
+    buyerAddress: '',
+    sellerOrderId: '',
+    buyerOrderId: '',
+    matchedQuantityWh: 0n,
+    clearingPricePaiseKWh: 0n,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }));
@@ -704,6 +704,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
 
       setFlow((f) => ({
         ...f,
+        flowId: `MATCH #VM-${String(clearingResult.intervalIdx).padStart(4, '0')}`,
         matchedQuantityWh: clearingResult.clearedVolumeWh,
         clearingPricePaiseKWh: clearingResult.clearingPricePaiseKWh,
         clearingTxHash: txHash,
@@ -919,17 +920,17 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   const resetPipeline = useCallback((newFlowId?: string) => {
-    const id = newFlowId || `MATCH #VM-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const id = newFlowId || '';
     setFlow({
       flowId: id,
       zoneId: 1,
       intervalIdx: 48,
-      sellerAddress: '0x1111111111111111111111111111111111111111',
-      buyerAddress: '0x2222222222222222222222222222222222222222',
-      sellerOrderId: 's-01',
-      buyerOrderId: 'b-01',
-      matchedQuantityWh: 2000n,
-      clearingPricePaiseKWh: 450n,
+      sellerAddress: '',
+      buyerAddress: '',
+      sellerOrderId: '',
+      buyerOrderId: '',
+      matchedQuantityWh: 0n,
+      clearingPricePaiseKWh: 0n,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

@@ -41,7 +41,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
     requestNativeEthFaucet,
     txHistory,
     utilityIdentity,
-    switchDemoRole,
+    capabilities,
+    simulationMode,
+    setSimulationMode,
+    simulationRole,
+    setSimulationRole,
   } = useWallet();
 
   const [copied, setCopied] = useState(false);
@@ -156,35 +160,84 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
             </div>
           </div>
 
-          {/* 2b. TWO-WALLET DEMO SWITCHER */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-2">
+          {/* 2b. ON-CHAIN CAPABILITIES & [SIMULATION / DEMO MODE] */}
+          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-2.5">
             <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-              <span>TWO-WALLET DEMO ROLE</span>
-              <span className="text-emerald-400 font-mono">ANVIL / TESTNET</span>
+              <span className="flex items-center gap-1.5">
+                <Shield className="w-3 h-3 text-indigo-400" />
+                <span>PARTICIPANT CAPABILITIES</span>
+              </span>
+              {simulationMode ? (
+                <span className="text-amber-400 font-mono text-[9px] bg-amber-950/60 border border-amber-800/60 px-1 py-0.2 rounded">
+                  [Simulation / Demo Mode]
+                </span>
+              ) : (
+                <span className="text-emerald-400 font-mono text-[9px] bg-emerald-950/60 border border-emerald-800/60 px-1 py-0.2 rounded">
+                  ON-CHAIN AUTHORIZED
+                </span>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => switchDemoRole('SELLER')}
-                className={`py-1.5 px-2 rounded text-[11px] font-semibold border transition-colors cursor-pointer flex flex-col items-center justify-center ${
-                  utilityIdentity.consumerType === 'PROSUMER'
-                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                }`}
-              >
-                <span>SELLER PROSUMER</span>
-                <span className="text-[9px] text-zinc-500 font-mono">0x7099...79C8 (8kW PV)</span>
-              </button>
-              <button
-                onClick={() => switchDemoRole('BUYER')}
-                className={`py-1.5 px-2 rounded text-[11px] font-semibold border transition-colors cursor-pointer flex flex-col items-center justify-center ${
-                  utilityIdentity.consumerType === 'CONSUMER'
-                    ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                }`}
-              >
-                <span>BUYER CONSUMER</span>
-                <span className="text-[9px] text-zinc-500 font-mono">0x3C44...93BC (5kW Load)</span>
-              </button>
+
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+              <div className="p-1.5 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
+                <span className="text-zinc-500">canBuy</span>
+                <span className={capabilities.canBuy ? 'text-emerald-400 font-semibold' : 'text-zinc-600'}>
+                  {capabilities.canBuy ? 'YES ✓' : 'NO'}
+                </span>
+              </div>
+              <div className="p-1.5 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
+                <span className="text-zinc-500">canSell</span>
+                <span className={capabilities.canSell ? 'text-emerald-400 font-semibold' : 'text-zinc-600'}>
+                  {capabilities.canSell ? 'YES ✓' : 'NO'}
+                </span>
+              </div>
+            </div>
+
+            {/* Simulation mode dev toggle */}
+            <div className="pt-2 border-t border-zinc-900 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-zinc-500">DEV SIMULATION:</span>
+                <button
+                  onClick={() => setSimulationMode(!simulationMode)}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer font-sans font-medium ${
+                    simulationMode
+                      ? 'bg-amber-950/80 border-amber-600 text-amber-300'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {simulationMode ? 'Active (Click to Exit)' : 'Enable [Simulation / Demo Mode]'}
+                </button>
+              </div>
+
+              {simulationMode && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => setSimulationRole('PROSUMER')}
+                      className={`py-1 px-1.5 rounded text-[10px] font-semibold border transition-colors cursor-pointer text-center ${
+                        simulationRole === 'PROSUMER'
+                          ? 'bg-indigo-950 border-indigo-500 text-indigo-200'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Prosumer (Buy + Sell)
+                    </button>
+                    <button
+                      onClick={() => setSimulationRole('CONSUMER')}
+                      className={`py-1 px-1.5 rounded text-[10px] font-semibold border transition-colors cursor-pointer text-center ${
+                        simulationRole === 'CONSUMER'
+                          ? 'bg-indigo-950 border-indigo-500 text-indigo-200'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Consumer (Buy Only)
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-amber-400/80 leading-tight">
+                    Simulation mode previews UI behavior. Real orders require cryptographic keys.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

@@ -31,7 +31,6 @@ import { CommandPalette } from './components/shell/CommandPalette';
 // New Trading Terminal Shell & Modular Terminal Views
 import {
   TerminalShell,
-  ProofPipeline,
   CallMarketView,
   MetersView,
   OracleView,
@@ -383,15 +382,6 @@ export default function App() {
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
             onReturnToStory={() => setViewMode('story')}
           >
-            {/* Reusable Collapsible Proof Pipeline Widget */}
-            <ProofPipeline
-              onNavigateTab={(tab) => {
-                setActiveTab(tab);
-              }}
-              collapsible={true}
-              defaultExpanded={false}
-            />
-
             {/* Active Workspace View */}
             {activeTab === 'market' && (
               <CallMarketView

@@ -10,7 +10,6 @@ import {
   FileCode2,
   History,
   ArrowLeft,
-  Lock,
 } from 'lucide-react';
 import { usePipeline } from '@/context/PipelineContext';
 import {
@@ -59,13 +58,6 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
   onOpenWalletModal,
   onReturnToStory,
 }) => {
-  const { canEnterStage } = usePipeline();
-
-  const isOracleUnlocked = canEnterStage('ORACLE');
-  const isMerkleUnlocked = canEnterStage('MERKLE');
-  const isSettlementUnlocked = canEnterStage('SETTLEMENT');
-  const isCertUnlocked = canEnterStage('CERTIFICATE');
-
   return (
     <Sidebar
       collapsible="icon"
@@ -88,11 +80,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
         )}
       </SidebarHeader>
 
-      {/* 2. Main Navigation Sections */}
+      {/* 2. Main Navigation Sections (Sentence-case headings, no decorative padlocks) */}
       <SidebarContent className="px-2 py-3 space-y-4">
-        {/* TRADING */}
+        {/* Trading */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-normal uppercase">
+          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
             Trading
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -123,9 +115,9 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
 
         <SidebarSeparator className="bg-zinc-800/40" />
 
-        {/* INFRASTRUCTURE */}
+        {/* Infrastructure */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-normal uppercase">
+          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
             Infrastructure
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -159,9 +151,6 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                 >
                   <Shield className="w-4 h-4 text-cyan-400/90 shrink-0" />
                   <span className="text-xs">Oracle & Epochs</span>
-                  {!isOracleUnlocked && (
-                    <Lock className="w-3 h-3 text-zinc-600 ml-auto shrink-0" />
-                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -178,9 +167,6 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                 >
                   <GitBranch className="w-4 h-4 text-purple-400/90 shrink-0" />
                   <span className="text-xs">Merkle Explorer</span>
-                  {!isMerkleUnlocked && (
-                    <Lock className="w-3 h-3 text-zinc-600 ml-auto shrink-0" />
-                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -189,9 +175,9 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
 
         <SidebarSeparator className="bg-zinc-800/40" />
 
-        {/* SETTLEMENT */}
+        {/* Settlement */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-normal uppercase">
+          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
             Settlement
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -209,9 +195,6 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                 >
                   <Layers className="w-4 h-4 text-emerald-400/90 shrink-0" />
                   <span className="text-xs">T+1 Settlement</span>
-                  {!isSettlementUnlocked && (
-                    <Lock className="w-3 h-3 text-zinc-600 ml-auto shrink-0" />
-                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -228,9 +211,6 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                 >
                   <Award className="w-4 h-4 text-yellow-400/90 shrink-0" />
                   <span className="text-xs">Certificates</span>
-                  {!isCertUnlocked && (
-                    <Lock className="w-3 h-3 text-zinc-600 ml-auto shrink-0" />
-                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -239,9 +219,9 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
 
         <SidebarSeparator className="bg-zinc-800/40" />
 
-        {/* SYSTEM */}
+        {/* System */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-normal uppercase">
+          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
             System
           </SidebarGroupLabel>
           <SidebarGroupContent>

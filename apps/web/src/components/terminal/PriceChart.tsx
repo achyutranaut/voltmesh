@@ -20,8 +20,9 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   clearingPrice,
   intervalIdx,
 }) => {
-  // Realistic interval price series around the current clearing price
-  const basePrice = clearingPrice ? Number(clearingPrice) * 100 : 450;
+  // Realistic discrete interval price series (15-min uniform clearing auction)
+  const isFinalCleared = clearingPrice !== null && clearingPrice !== undefined;
+  const basePrice = isFinalCleared ? Number(clearingPrice) * 100 : 450;
 
   const data = [
     { slot: intervalIdx - 5, price: basePrice - 20, volumeWh: 1200 },
@@ -33,17 +34,24 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   ];
 
   return (
-    <div className="w-full space-y-2">
-      <div className="flex items-center justify-between text-xs text-zinc-400">
-        <span className="font-medium text-zinc-300">Uniform clearing price history</span>
+    <div className="w-full space-y-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between text-xs text-zinc-400 gap-1">
+        <div className="flex items-center space-x-2">
+          <span className="font-medium text-zinc-200">
+            {isFinalCleared ? 'Final clearing price history' : 'Indicative clearing price series'}
+          </span>
+          <span className="text-[10px] text-zinc-500 font-mono bg-zinc-900 border border-zinc-800 px-1.5 py-0.2 rounded">
+            Simulated market data
+          </span>
+        </div>
         <span className="font-mono text-[11px] text-zinc-500">
-          Last 6 intervals (15-min DAM)
+          Discrete 15-min slots
         </span>
       </div>
 
       <div className="h-48 w-full bg-[#08090f] border border-zinc-800/60 rounded p-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
@@ -52,50 +60,54 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             </defs>
             <XAxis
               dataKey="slot"
-              stroke="#52525b"
+              stroke="#a1a1aa"
               fontSize={10}
               tickLine={false}
-              axisLine={false}
+              axisLine={{ stroke: '#27272a' }}
               tickFormatter={(v) => `Slot ${v}`}
             />
             <YAxis
-              stroke="#52525b"
+              stroke="#a1a1aa"
               fontSize={10}
               tickLine={false}
-              axisLine={false}
+              axisLine={{ stroke: '#27272a' }}
+              width={52}
               domain={['dataMin - 30', 'dataMax + 30']}
-              tickFormatter={(v) => `₹${(v / 100).toFixed(1)}`}
+              tickFormatter={(v) => `₹${(v / 100).toFixed(2)}`}
             />
             <RechartsTooltip
               contentStyle={{
-                backgroundColor: '#0e1017',
+                backgroundColor: '#0c0d14',
                 borderColor: '#27272a',
                 borderRadius: '4px',
                 fontSize: '11px',
                 color: '#fff',
               }}
-              formatter={(val: any) => [`₹${(Number(val) / 100).toFixed(2)}/kWh`, 'Price']}
-              labelFormatter={(label) => `Interval ${label}`}
+              formatter={(val: any) => [`₹${(Number(val) / 100).toFixed(2)}/kWh`, isFinalCleared ? 'Final Price' : 'Indicative Price']}
+              labelFormatter={(label) => `Interval Slot ${label}`}
             />
             {clearingPrice && (
               <ReferenceLine
                 y={Number(clearingPrice) * 100}
-                stroke="#10b981"
+                stroke="#6366f1"
                 strokeDasharray="3 3"
                 label={{
-                  value: `Clearing ₹${Number(clearingPrice).toFixed(2)}`,
-                  fill: '#10b981',
+                  value: `Final: ₹${Number(clearingPrice).toFixed(2)}/kWh`,
+                  fill: '#818cf8',
                   fontSize: 10,
                   position: 'insideTopRight',
                 }}
               />
             )}
+            {/* Discrete step line with markers for 15-min uniform clearing prices */}
             <Area
-              type="monotone"
+              type="stepAfter"
               dataKey="price"
               stroke="#6366f1"
-              strokeWidth={1.5}
+              strokeWidth={1.75}
               fill="url(#priceGradient)"
+              dot={{ r: 3, fill: '#6366f1', stroke: '#08090f', strokeWidth: 1.5 }}
+              activeDot={{ r: 5, fill: '#818cf8', stroke: '#08090f', strokeWidth: 2 }}
             />
           </AreaChart>
         </ResponsiveContainer>

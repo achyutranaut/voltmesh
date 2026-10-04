@@ -26,6 +26,7 @@ import {
   getExplorerAddressUrl,
 } from '../config/contracts';
 import deploymentArtifacts from '../contracts/deployments.json';
+import { ParticipantCapabilities } from '@energy-dex/types';
 
 // EIP-712 Types & Domain for VoltMesh Energy Orders
 export const EIP712_DOMAIN = {
@@ -124,6 +125,11 @@ export interface WalletContextType {
 
   // Utility Identity & India Energy Stack Verifiable Credential
   utilityIdentity: UtilityIdentityClaim;
+  capabilities: ParticipantCapabilities;
+  simulationMode: boolean;
+  setSimulationMode: (enabled: boolean) => void;
+  simulationRole: 'PROSUMER' | 'CONSUMER';
+  setSimulationRole: (role: 'PROSUMER' | 'CONSUMER') => void;
   switchDemoRole: (role: 'SELLER' | 'BUYER') => void;
 
   // Balances & Roles
@@ -218,7 +224,9 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [address, setAddress] = useState<Address | null>(null);
-  const [demoRolePreference, setDemoRolePreference] = useState<'SELLER' | 'BUYER'>('BUYER');
+  const [participantRoleType, setParticipantRoleType] = useState<number | null>(null);
+  const [simulationMode, setSimulationMode] = useState<boolean>(false);
+  const [simulationRole, setSimulationRole] = useState<'PROSUMER' | 'CONSUMER'>('PROSUMER');
   const [chainId, setChainId] = useState<number | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -228,8 +236,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const effectiveAddress = address;
 
   const switchDemoRole = useCallback((role: 'SELLER' | 'BUYER') => {
-    // Only toggles UI perspective filter; never modifies cryptographic wallet authority
-    setDemoRolePreference(role);
+    setSimulationMode(true);
+    setSimulationRole(role === 'SELLER' ? 'PROSUMER' : 'CONSUMER');
   }, []);
 
   // Balances
@@ -245,6 +253,80 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     isRegistrar: false,
     isParticipant: false,
   });
+
+  const capabilities: ParticipantCapabilities = React.useMemo(() => {
+    if (simulationMode) {
+      return {
+        canBuy: true,
+        canSell: simulationRole === 'PROSUMER',
+        canRegisterDevice: simulationRole === 'PROSUMER',
+        canClearMarket: false,
+        canOperate: false,
+        canIssueCredentials: false,
+        canAudit: false,
+      };
+    }
+
+    if (roles.isAdmin || roles.isOperator) {
+      return {
+        canBuy: true,
+        canSell: true,
+        canRegisterDevice: true,
+        canClearMarket: true,
+        canOperate: true,
+        canIssueCredentials: true,
+        canAudit: true,
+      };
+    }
+
+    if (roles.isParticipant && participantRoleType !== null) {
+      if (participantRoleType === 1) {
+        // PROSUMER
+        return {
+          canBuy: true,
+          canSell: true,
+          canRegisterDevice: true,
+          canClearMarket: false,
+          canOperate: false,
+          canIssueCredentials: false,
+          canAudit: false,
+        };
+      } else if (participantRoleType === 0) {
+        // CONSUMER
+        return {
+          canBuy: true,
+          canSell: false,
+          canRegisterDevice: false,
+          canClearMarket: false,
+          canOperate: false,
+          canIssueCredentials: false,
+          canAudit: false,
+        };
+      } else if (participantRoleType === 2) {
+        // DISCOM OPERATOR
+        return {
+          canBuy: false,
+          canSell: false,
+          canRegisterDevice: true,
+          canClearMarket: false,
+          canOperate: false,
+          canIssueCredentials: true,
+          canAudit: true,
+        };
+      }
+    }
+
+    // Default when wallet is connected but not registered on-chain
+    return {
+      canBuy: false,
+      canSell: false,
+      canRegisterDevice: false,
+      canClearMarket: false,
+      canOperate: false,
+      canIssueCredentials: false,
+      canAudit: false,
+    };
+  }, [simulationMode, simulationRole, roles, participantRoleType]);
 
   const utilityIdentity: UtilityIdentityClaim = React.useMemo(() => {
     const addr = (effectiveAddress ?? '').toLowerCase();
@@ -265,40 +347,89 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       };
     }
 
-    // Role perspective preference for UI display filter only
-    const isProsumerPerspective = demoRolePreference === 'SELLER';
-    if (isProsumerPerspective) {
-      return {
-        consumerNumber: '1002345678',
-        caNumber: 'CA-DL-990123',
-        sanctionedLoadKw: 10,
-        connectionPhase: 3,
-        tariffCategory: 'Domestic (LT-1)',
-        discomId: 'TPDDL',
-        netMeterInstalled: true,
-        netMeterSerialNumber: 'MTR-LNT-998811',
-        solarCapacityKw: 8,
-        consumerType: 'PROSUMER',
-        vcIssuer: 'did:discom:tpddl',
-        vcStatus: 'ACTIVE',
-      };
-    } else {
-      return {
-        consumerNumber: '1008765432',
-        caNumber: 'CA-DL-990456',
-        sanctionedLoadKw: 5,
-        connectionPhase: 1,
-        tariffCategory: 'Domestic (LT-1)',
-        discomId: 'TPDDL',
-        netMeterInstalled: true,
-        netMeterSerialNumber: 'MTR-SEC-112233',
-        solarCapacityKw: 0,
-        consumerType: 'CONSUMER',
-        vcIssuer: 'did:discom:tpddl',
-        vcStatus: 'ACTIVE',
-      };
+    if (simulationMode) {
+      if (simulationRole === 'PROSUMER') {
+        return {
+          consumerNumber: '1002345678',
+          caNumber: 'CA-DL-990123',
+          sanctionedLoadKw: 10,
+          connectionPhase: 3,
+          tariffCategory: 'Domestic (LT-1) [Simulation Mode]',
+          discomId: 'TPDDL',
+          netMeterInstalled: true,
+          netMeterSerialNumber: 'MTR-LNT-998811',
+          solarCapacityKw: 8,
+          consumerType: 'PROSUMER',
+          vcIssuer: 'did:voltmesh:simulation',
+          vcStatus: 'ACTIVE',
+        };
+      } else {
+        return {
+          consumerNumber: '1008765432',
+          caNumber: 'CA-DL-990456',
+          sanctionedLoadKw: 5,
+          connectionPhase: 1,
+          tariffCategory: 'Domestic (LT-1) [Simulation Mode]',
+          discomId: 'TPDDL',
+          netMeterInstalled: true,
+          netMeterSerialNumber: 'MTR-SEC-112233',
+          solarCapacityKw: 0,
+          consumerType: 'CONSUMER',
+          vcIssuer: 'did:voltmesh:simulation',
+          vcStatus: 'ACTIVE',
+        };
+      }
     }
-  }, [effectiveAddress, demoRolePreference]);
+
+    if (roles.isParticipant && participantRoleType !== null) {
+      if (participantRoleType === 1) {
+        return {
+          consumerNumber: '1002345678',
+          caNumber: 'CA-DL-990123',
+          sanctionedLoadKw: 10,
+          connectionPhase: 3,
+          tariffCategory: 'Domestic (LT-1)',
+          discomId: 'TPDDL',
+          netMeterInstalled: true,
+          netMeterSerialNumber: 'MTR-LNT-998811',
+          solarCapacityKw: 8,
+          consumerType: 'PROSUMER',
+          vcIssuer: 'did:discom:tpddl',
+          vcStatus: 'ACTIVE',
+        };
+      } else {
+        return {
+          consumerNumber: '1008765432',
+          caNumber: 'CA-DL-990456',
+          sanctionedLoadKw: 5,
+          connectionPhase: 1,
+          tariffCategory: 'Domestic (LT-1)',
+          discomId: 'TPDDL',
+          netMeterInstalled: true,
+          netMeterSerialNumber: 'MTR-SEC-112233',
+          solarCapacityKw: 0,
+          consumerType: 'CONSUMER',
+          vcIssuer: 'did:discom:tpddl',
+          vcStatus: 'ACTIVE',
+        };
+      }
+    }
+
+    return {
+      consumerNumber: 'UNREGISTERED',
+      caNumber: 'N/A',
+      sanctionedLoadKw: 0,
+      connectionPhase: 1,
+      tariffCategory: 'Unregistered Participant',
+      discomId: 'TPDDL',
+      netMeterInstalled: false,
+      netMeterSerialNumber: 'UNBOUND',
+      solarCapacityKw: 0,
+      consumerType: 'CONSUMER',
+      vcIssuer: 'did:voltmesh:unregistered',
+      vcStatus: 'INACTIVE',
+    };
+  }, [effectiveAddress, simulationMode, simulationRole, roles.isParticipant, participantRoleType]);
 
   // Transaction manager
   const [activeTx, setActiveTx] = useState<TransactionRecord | null>(null);
@@ -380,6 +511,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setTokenBalance(0n);
       setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
       setRoles({ isAdmin: false, isOperator: false, isOracle: false, isRegistrar: false, isParticipant: false });
+      setParticipantRoleType(null);
       return;
     }
 
@@ -490,6 +622,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       }
 
+      let onChainRoleType: number | null = null;
       if (participantContract) {
         try {
           isParticipant = (await publicClient.readContract({
@@ -498,11 +631,23 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             functionName: 'isRegisteredAndActive',
             args: [address],
           })) as boolean;
+
+          const pRecord = (await publicClient.readContract({
+            address: participantContract.address,
+            abi: participantContract.abi,
+            functionName: 'participants',
+            args: [address],
+          })) as [string, number, number, string, boolean, bigint];
+
+          if (pRecord && pRecord[5] > 0n && !pRecord[4]) {
+            onChainRoleType = Number(pRecord[2]); // 0 = CONSUMER, 1 = PROSUMER, 2 = DISCOM_OPERATOR
+          }
         } catch (e) {
           console.warn('Failed to read participant status:', e);
         }
       }
 
+      setParticipantRoleType(onChainRoleType);
       setRoles({ isAdmin, isOperator, isOracle, isRegistrar, isParticipant });
     } catch (e) {
       console.warn('Error refreshing blockchain balances:', e);
@@ -1380,6 +1525,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         walletInstalled,
         error,
         utilityIdentity,
+        capabilities,
+        simulationMode,
+        setSimulationMode,
+        simulationRole,
+        setSimulationRole,
         switchDemoRole,
         ethBalance,
         tokenBalance,

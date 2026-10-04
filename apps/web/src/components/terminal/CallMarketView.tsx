@@ -12,6 +12,7 @@ import { OrderBook } from './OrderBook';
 import { OrderEntry } from './OrderEntry';
 import { OpenOrders } from './OpenOrders';
 import { RecentFills } from './RecentFills';
+import { ProofPipeline } from './ProofPipeline';
 
 // Lazy-load heavy Three.js Energy Exchange Engine
 const EnergyExchangeEngine = lazy(() =>
@@ -105,7 +106,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
             className="text-xs h-8 border-zinc-800 bg-zinc-900/60 hover:bg-zinc-850 text-zinc-300 cursor-pointer"
           >
             <Box className="w-3.5 h-3.5 mr-1 text-indigo-400" />
-            <span>{show3DEngine ? 'Hide 3D grid' : '3D grid engine'}</span>
+            <span>{show3DEngine ? 'Hide exchange engine' : 'Energy Exchange Engine'}</span>
             {show3DEngine ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
           </Button>
 
@@ -278,6 +279,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
           <OrderEntry
             currentInterval={currentInterval}
             zoneId={1}
+            existingOrders={orders}
             onAddOrder={onAddOrder}
           />
         </div>
@@ -295,6 +297,22 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
         <RecentFills
           clearingResult={clearingResult}
           onSelectDetail={onSelectDetail}
+        />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 5. VERIFICATION & SETTLEMENT PIPELINE (Collapsible Contextual Proofs)     */}
+      {/* ========================================================================= */}
+      <div className="space-y-2 pt-2">
+        <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+          <span className="font-medium text-zinc-300">Verification & settlement pipeline</span>
+          <span className="text-[11px] text-zinc-500 font-mono">
+            {clearingResult ? 'Batch active · 8 Stages' : 'Idle · Awaiting clearing batch'}
+          </span>
+        </div>
+        <ProofPipeline
+          collapsible={true}
+          defaultExpanded={Boolean(clearingResult)}
         />
       </div>
     </div>
