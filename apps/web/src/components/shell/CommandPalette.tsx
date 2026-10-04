@@ -216,9 +216,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       <div className="fixed inset-0 bg-black/75 transition-opacity" onClick={onClose} />
 
       {/* Palette Box */}
-      <div className="relative w-full max-w-xl bg-[#121215] border border-zinc-700/80 rounded-md shadow-2xl text-zinc-200 overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-100">
+      <div className="relative w-full max-w-xl bg-panel border border-white/10 rounded-md shadow-2xl text-zinc-200 overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-100">
         {/* Input Field */}
-        <div className="p-3 border-b border-zinc-800 flex items-center space-x-2.5 bg-zinc-950">
+        <div className="p-3 border-b border-white/[0.07] flex items-center space-x-2.5 bg-zinc-950">
           <Search className="w-4 h-4 text-zinc-500 shrink-0" />
           <input
             ref={inputRef}
@@ -231,13 +231,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             placeholder="Type a command or search (e.g. 'Market', 'Fault', 'Epoch')..."
             className="w-full bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none font-mono"
           />
-          <kbd className="hidden sm:inline bg-zinc-800 text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 font-mono">
+          <kbd className="hidden sm:inline bg-zinc-800 text-[11px] px-1.5 py-0.5 rounded border border-white/10 text-zinc-400 font-mono">
             ESC
           </kbd>
         </div>
 
         {/* Results List */}
-        <div className="max-h-80 overflow-y-auto divide-y divide-zinc-800/40 p-1">
+        <div className="max-h-80 overflow-y-auto divide-y divide-white/[0.06] p-1">
           {filteredItems.length === 0 ? (
             <div className="p-8 text-center text-xs font-mono text-zinc-500">
               No matching commands or navigation routes.
@@ -261,7 +261,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       className={`p-1.5 rounded-sm border ${
                         isSelected
                           ? 'bg-emerald-950 border-emerald-700 text-emerald-400'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                          : 'bg-zinc-900 border-white/[0.07] text-zinc-400'
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -275,7 +275,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   </div>
 
                   <div className="flex items-center space-x-2 shrink-0">
-                    <span className="text-[9px] font-mono uppercase px-1 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-500">
+                    <span className="text-[11px] font-mono px-1 py-0.5 rounded bg-zinc-900 border border-white/[0.07] text-zinc-500">
                       {item.category}
                     </span>
                     {isSelected && (
@@ -289,7 +289,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         </div>
 
         {/* Footer shortcuts */}
-        <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between text-[11px] font-mono text-zinc-500">
+        <div className="px-3 py-2 bg-zinc-950 border-t border-white/[0.07] flex items-center justify-between text-[11px] font-mono text-zinc-500">
           <div className="flex items-center space-x-3">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>

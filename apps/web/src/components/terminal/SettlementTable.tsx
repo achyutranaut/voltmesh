@@ -52,65 +52,65 @@ export const SettlementTable: React.FC<SettlementTableProps> = ({
 
   return (
     <div className="w-full space-y-2 font-sans">
-      <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
         <div className="flex items-center space-x-2">
           <span className="font-semibold text-white">Participant netting & reconciliation</span>
-          <span className="font-mono text-[11px] text-zinc-500">({records.length} accounts)</span>
+          <span className="font-mono text-xs text-zinc-500">({records.length} accounts)</span>
         </div>
-        <span className="text-[11px] text-zinc-500">Click participant to inspect</span>
+        <span className="text-xs text-zinc-500">Click participant to inspect</span>
       </div>
 
-      <div className="bg-[#080a0f] border border-zinc-800/60 rounded overflow-x-auto">
+      <div className="bg-panel border border-white/[0.07] rounded-lg overflow-x-auto">
         <table className="w-full text-left text-xs min-w-[700px]">
           <thead>
-            <tr className="border-b border-zinc-800/60 bg-zinc-900/30 text-[10px] text-zinc-500">
-              <th className="py-2.5 px-3 font-medium">Participant</th>
-              <th className="py-2.5 px-3 font-medium text-right">Contracted</th>
-              <th className="py-2.5 px-3 font-medium text-right">Delivered</th>
-              <th className="py-2.5 px-3 font-medium text-right">Shortfall</th>
-              <th className="py-2.5 px-3 font-medium text-right">Under-draw</th>
-              <th className="py-2.5 px-3 font-medium text-right">Fees (₹)</th>
-              <th className="py-2.5 px-3 font-medium text-right">Net amount (₹)</th>
-              <th className="py-2.5 px-3 font-medium text-center">Status</th>
+            <tr className="border-b border-white/[0.07] bg-white/[0.02] text-xs text-zinc-500">
+              <th className="py-2.5 px-3 font-normal">Participant</th>
+              <th className="py-2.5 px-3 font-normal text-right">Contracted</th>
+              <th className="py-2.5 px-3 font-normal text-right">Delivered</th>
+              <th className="py-2.5 px-3 font-normal text-right">Shortfall</th>
+              <th className="py-2.5 px-3 font-normal text-right">Under-draw</th>
+              <th className="py-2.5 px-3 font-normal text-right">Fees (₹)</th>
+              <th className="py-2.5 px-3 font-normal text-right">Net amount (₹)</th>
+              <th className="py-2.5 px-3 font-normal text-center">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-850/40">
+          <tbody className="divide-y divide-white/[0.05]">
             {records.map((rec) => {
               const isPositive = rec.netAmountRupees >= 0;
               return (
                 <tr
                   key={rec.participant}
                   onClick={() => handleInspectRecord(rec)}
-                  className="hover:bg-zinc-850/40 cursor-pointer transition-colors"
+                  className="hover:bg-white/[0.03] cursor-pointer transition-colors"
                 >
                   <td className="py-2.5 px-3">
                     <div className="flex items-center space-x-1.5">
-                      <span className="font-mono text-[11px] text-zinc-200">
+                      <span className="font-code text-xs text-zinc-200">
                         {rec.participant.slice(0, 6)}...{rec.participant.slice(-4)}
                       </span>
-                      <span className="text-[10px] text-zinc-500 font-sans">
+                      <span className={`text-xs font-sans ${rec.role === 'BUYER' ? 'text-bid-400' : 'text-ask-400'}`}>
                         ({rec.role === 'BUYER' ? 'Buyer' : 'Seller'})
                       </span>
                     </div>
                   </td>
 
-                  <td className="py-2.5 px-3 text-right font-mono text-zinc-300 text-[11px]">
+                  <td className="py-2.5 px-3 text-right font-mono text-zinc-300 text-xs">
                     {Number(rec.contractedWh).toLocaleString()} Wh
                   </td>
 
-                  <td className="py-2.5 px-3 text-right font-mono text-zinc-300 text-[11px]">
+                  <td className="py-2.5 px-3 text-right font-mono text-zinc-300 text-xs">
                     {Number(rec.deliveredWh).toLocaleString()} Wh
                   </td>
 
-                  <td className="py-2.5 px-3 text-right font-mono text-[11px] text-zinc-400">
+                  <td className="py-2.5 px-3 text-right font-mono text-xs text-zinc-400">
                     {Number(rec.shortfallWh).toLocaleString()} Wh
                   </td>
 
-                  <td className="py-2.5 px-3 text-right font-mono text-[11px] text-zinc-400">
+                  <td className="py-2.5 px-3 text-right font-mono text-xs text-zinc-400">
                     {Number(rec.underDrawWh).toLocaleString()} Wh
                   </td>
 
-                  <td className="py-2.5 px-3 text-right font-mono text-[11px] text-zinc-400">
+                  <td className="py-2.5 px-3 text-right font-mono text-xs text-zinc-400">
                     ₹{rec.feesRupees.toFixed(2)}
                   </td>
 
@@ -122,10 +122,10 @@ export const SettlementTable: React.FC<SettlementTableProps> = ({
 
                   <td className="py-2.5 px-3 text-center">
                     <span
-                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
                         rec.status === 'SETTLED'
                           ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
-                          : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+                          : 'bg-white/[0.04] text-zinc-400 border border-white/[0.07]'
                       }`}
                     >
                       {rec.status === 'SETTLED' ? 'Settled' : 'Reconciled'}

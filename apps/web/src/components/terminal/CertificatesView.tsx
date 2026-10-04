@@ -55,13 +55,13 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
       {/* 1. Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Certificates (GAC)
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-900 text-zinc-300 border border-white/[0.07]">
               <Award className="w-3 h-3 text-yellow-400" />
               Granular Attestation Certificate
             </span>
@@ -77,7 +77,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
             size="sm"
             disabled={!epochData || !isConnected}
             onClick={onClaimCertificate}
-            className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white font-medium cursor-pointer shadow-xs"
+            className="text-xs h-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer shadow-xs"
           >
             <Plus className="w-3.5 h-3.5 mr-1.5" />
             Claim GAC from verified Merkle proof
@@ -86,8 +86,8 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       </div>
 
       {/* 2. Explicit Regulatory & Standard Notice */}
-      <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 flex items-start space-x-3 text-xs">
-        <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+      <div className="p-3.5 rounded-lg bg-panel border border-white/[0.07] flex items-start space-x-3 text-xs">
+        <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
         <div className="space-y-1 leading-relaxed text-zinc-400">
           <div className="font-medium text-zinc-200">
             VoltMesh GAC — not a statutory Indian REC
@@ -99,27 +99,27 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       </div>
 
       {/* 3. Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 bg-[#080a0f] border border-zinc-800/60 rounded divide-y sm:divide-y-0 sm:divide-x divide-zinc-800/60 p-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 bg-panel border border-white/[0.07] rounded-lg divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06] p-3.5">
         <div className="space-y-0.5 pr-2">
-          <span className="text-[10px] text-zinc-500 block">Total issued</span>
+          <span className="text-xs text-zinc-500 block">Total issued</span>
           <span className="font-mono text-white text-base font-semibold block">
             {claimedCerts.length} GACs
           </span>
         </div>
         <div className="space-y-0.5 px-2">
-          <span className="text-[10px] text-zinc-500 block">Active circulating</span>
+          <span className="text-xs text-zinc-500 block">Active circulating</span>
           <span className="font-mono text-emerald-400 text-base font-semibold block">
             {activeCerts.length}
           </span>
         </div>
         <div className="space-y-0.5 px-2">
-          <span className="text-[10px] text-zinc-500 block">Retired / consumed</span>
+          <span className="text-xs text-zinc-500 block">Retired / consumed</span>
           <span className="font-mono text-zinc-400 text-base font-semibold block">
             {retiredCerts.length}
           </span>
         </div>
         <div className="space-y-0.5 pl-2">
-          <span className="text-[10px] text-zinc-500 block">Current delivery slot</span>
+          <span className="text-xs text-zinc-500 block">Current delivery slot</span>
           <span className="font-mono text-zinc-300 text-base block">
             Slot {currentInterval}
           </span>

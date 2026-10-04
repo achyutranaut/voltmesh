@@ -1,7 +1,5 @@
 import React from 'react';
 import { Order, OrderSide } from '@energy-dex/types';
-import { ArrowDownLeft, ArrowUpRight, TrendingUp } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { toHex } from 'viem';
 import { DetailDrawerData } from '@/types/ui';
 
@@ -22,14 +20,16 @@ export const OrderBook: React.FC<OrderBookProps> = ({
   const bestBid = bids.length > 0 ? Number(bids[0].pricePaisePerKWh) : null;
   const bestAsk = asks.length > 0 ? Number(asks[0].pricePaisePerKWh) : null;
 
-  let spreadPaise: number | null = null;
+  // In a call auction orders accumulate until the gate closes, so the book is
+  // normally "crossed" (best bid >= best ask) - that is where trades will happen.
+  let gapPaise: number | null = null;
   let midPricePaise: number | null = null;
-  let spreadPct: number | null = null;
+  let isCrossed = false;
 
   if (bestBid !== null && bestAsk !== null) {
-    spreadPaise = Math.abs(bestAsk - bestBid);
+    isCrossed = bestBid >= bestAsk;
+    gapPaise = Math.abs(bestBid - bestAsk);
     midPricePaise = (bestBid + bestAsk) / 2;
-    spreadPct = midPricePaise > 0 ? (spreadPaise / midPricePaise) * 100 : 0;
   }
 
   const handleOrderClick = (ord: Order) => {
@@ -75,170 +75,108 @@ export const OrderBook: React.FC<OrderBookProps> = ({
     });
   };
 
+  const renderSide = (title: string, orders: Order[], tone: 'bid' | 'ask', empty: string) => {
+    const total = orders.reduce((acc, o) => acc + Number(o.quantityWh), 0);
+    const priceTone = tone === 'bid' ? 'text-bid-300' : 'text-ask-300';
+    const dotTone = tone === 'bid' ? 'bg-bid-400' : 'bg-ask-400';
+    return (
+      <div className="min-w-0">
+        <div className="flex items-center justify-between pb-2">
+          <span className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+            <span className={`h-2 w-2 rounded-full ${dotTone}`} />
+            {title}
+          </span>
+          <span className="text-xs text-zinc-500 font-mono">{total.toLocaleString()} Wh</span>
+        </div>
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-white/[0.07] text-xs text-zinc-500">
+              <th className="py-2 pr-2 font-normal">Order</th>
+              <th className="py-2 px-2 font-normal text-right">Price (₹/kWh)</th>
+              <th className="py-2 px-2 font-normal text-right">Quantity</th>
+              <th className="py-2 pl-2 font-normal text-right">Signature</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.05]">
+            {orders.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-xs text-zinc-500">
+                  {empty}
+                </td>
+              </tr>
+            ) : (
+              orders.map((o) => {
+                const signed =
+                  o.signature.length === 65 &&
+                  !o.participant.startsWith(tone === 'bid' ? '0x2222' : '0x1111');
+                return (
+                  <tr
+                    key={o.orderId}
+                    onClick={() => handleOrderClick(o)}
+                    className="cursor-pointer transition-colors hover:bg-white/[0.03]"
+                  >
+                    <td className="py-2.5 pr-2 font-code text-xs text-zinc-400">{o.orderId}</td>
+                    <td className={`py-2.5 px-2 text-right font-mono font-medium ${priceTone}`}>
+                      {(Number(o.pricePaisePerKWh) / 100).toFixed(2)}
+                    </td>
+                    <td className="py-2.5 px-2 text-right font-mono text-zinc-300">
+                      {Number(o.quantityWh).toLocaleString()} Wh
+                    </td>
+                    <td className="py-2.5 pl-2 text-right">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+                        <span className={`h-1.5 w-1.5 rounded-full ${signed ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                        {signed ? 'Signed' : 'Simulated'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
-    <div className="w-full space-y-3 font-sans">
-      <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
-        <div className="flex items-center space-x-2">
-          <span className="font-semibold text-white text-xs">Order book</span>
-          <span className="text-[11px] text-zinc-500 font-mono">
-            ({bids.length + asks.length} active)
-          </span>
-        </div>
-        <span className="text-[11px] text-zinc-500">Click row to inspect</span>
+    <div className="w-full space-y-4 font-sans">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-sm font-semibold text-white">
+          Order book
+          <span className="ml-2 text-xs font-normal text-zinc-500">{bids.length + asks.length} open</span>
+        </h3>
+        <span className="text-xs text-zinc-500">Select an order to inspect</span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* BUY / BIDS COLUMN */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] text-indigo-400 font-medium px-1">
-            <span>Bids (Buy)</span>
-            <span className="font-mono text-zinc-500">
-              {bids.reduce((acc, o) => acc + Number(o.quantityWh), 0).toLocaleString()} Wh
-            </span>
-          </div>
-
-          <div className="bg-[#080a0f] border border-zinc-800/60 rounded overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-zinc-800/60 bg-zinc-900/30 text-[10px] text-zinc-500">
-                  <th className="py-2 px-2.5 font-medium">Order ID</th>
-                  <th className="py-2 px-2.5 font-medium text-right">Price (₹)</th>
-                  <th className="py-2 px-2.5 font-medium text-right">Quantity</th>
-                  <th className="py-2 px-2.5 font-medium text-center">Auth</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-850/40">
-                {bids.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-center text-zinc-600 text-xs italic">
-                      No buy bids in interval
-                    </td>
-                  </tr>
-                ) : (
-                  bids.map((b) => {
-                    const priceInRupees = (Number(b.pricePaisePerKWh) / 100).toFixed(2);
-                    return (
-                      <tr
-                        key={b.orderId}
-                        onClick={() => handleOrderClick(b)}
-                        className="hover:bg-zinc-850/40 cursor-pointer transition-colors"
-                      >
-                        <td className="py-2 px-2.5 text-zinc-300 font-mono text-[11px]">
-                          <div className="flex items-center space-x-1.5">
-                            <ArrowDownLeft className="w-3 h-3 text-indigo-400 shrink-0" />
-                            <span>{b.orderId}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-2.5 text-right font-mono font-medium text-white">
-                          ₹{priceInRupees}
-                        </td>
-                        <td className="py-2 px-2.5 text-right font-mono text-zinc-300 text-[11px]">
-                          {Number(b.quantityWh).toLocaleString()} Wh
-                        </td>
-                        <td className="py-2 px-2.5 text-center">
-                          {b.signature.length === 65 && !b.participant.startsWith('0x2222') ? (
-                            <span className="text-[9px] text-indigo-400 font-mono">EIP-712</span>
-                          ) : (
-                            <span className="text-[9px] text-zinc-500 font-mono">Sim</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* SELL / ASKS COLUMN */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] text-emerald-400 font-medium px-1">
-            <span>Asks (Sell)</span>
-            <span className="font-mono text-zinc-500">
-              {asks.reduce((acc, o) => acc + Number(o.quantityWh), 0).toLocaleString()} Wh
-            </span>
-          </div>
-
-          <div className="bg-[#080a0f] border border-zinc-800/60 rounded overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-zinc-800/60 bg-zinc-900/30 text-[10px] text-zinc-500">
-                  <th className="py-2 px-2.5 font-medium">Order ID</th>
-                  <th className="py-2 px-2.5 font-medium text-right">Price (₹)</th>
-                  <th className="py-2 px-2.5 font-medium text-right">Quantity</th>
-                  <th className="py-2 px-2.5 font-medium text-center">Auth</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-850/40">
-                {asks.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-center text-zinc-600 text-xs italic">
-                      No sell asks in interval
-                    </td>
-                  </tr>
-                ) : (
-                  asks.map((s) => {
-                    const priceInRupees = (Number(s.pricePaisePerKWh) / 100).toFixed(2);
-                    return (
-                      <tr
-                        key={s.orderId}
-                        onClick={() => handleOrderClick(s)}
-                        className="hover:bg-zinc-850/40 cursor-pointer transition-colors"
-                      >
-                        <td className="py-2 px-2.5 text-zinc-300 font-mono text-[11px]">
-                          <div className="flex items-center space-x-1.5">
-                            <ArrowUpRight className="w-3 h-3 text-emerald-400 shrink-0" />
-                            <span>{s.orderId}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-2.5 text-right font-mono font-medium text-white">
-                          ₹{priceInRupees}
-                        </td>
-                        <td className="py-2 px-2.5 text-right font-mono text-zinc-300 text-[11px]">
-                          {Number(s.quantityWh).toLocaleString()} Wh
-                        </td>
-                        <td className="py-2 px-2.5 text-center">
-                          {s.signature.length === 65 && !s.participant.startsWith('0x1111') ? (
-                            <span className="text-[9px] text-emerald-400 font-mono">EIP-712</span>
-                          ) : (
-                            <span className="text-[9px] text-zinc-500 font-mono">Sim</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+        {renderSide('Bids · buyers', bids, 'bid', 'No bids in this slot yet')}
+        {renderSide('Asks · sellers', asks, 'ask', 'No asks in this slot yet')}
       </div>
 
-      {/* SPREAD & CLEARING MIDPOINT BAR */}
-      <div className="py-2 px-3 rounded bg-zinc-900/40 border border-zinc-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="flex items-center space-x-3 text-zinc-400">
-          <div className="flex items-center space-x-1">
-            <span className="text-zinc-500">Spread:</span>
-            <span className="font-mono text-zinc-200">
-              {spreadPaise !== null ? `₹${(spreadPaise / 100).toFixed(2)} (${spreadPct?.toFixed(1)}%)` : '--'}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-3 text-sm">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-zinc-400">
+          <span>
+            {gapPaise === null
+              ? 'Spread'
+              : isCrossed
+              ? 'Crossed by'
+              : 'Spread'}{' '}
+            <span className="font-mono text-zinc-100">
+              {gapPaise !== null ? `₹${(gapPaise / 100).toFixed(2)}` : '—'}
             </span>
-          </div>
-          <span className="text-zinc-700">·</span>
-          <div className="flex items-center space-x-1">
-            <span className="text-zinc-500">Mid-price:</span>
-            <span className="font-mono text-zinc-200">
-              {midPricePaise !== null ? `₹${(midPricePaise / 100).toFixed(2)}` : '--'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-1.5 text-emerald-400">
-          <TrendingUp className="w-3.5 h-3.5" />
-          <span className="text-[11px] font-medium">
-            {clearingPrice ? `Uniform clearing: ₹${Number(clearingPrice).toFixed(2)} / kWh` : 'Auction pending clearing'}
+          </span>
+          <span>
+            Mid <span className="font-mono text-zinc-100">{midPricePaise !== null ? `₹${(midPricePaise / 100).toFixed(2)}` : '—'}</span>
+            <span className="ml-1 text-xs text-zinc-500">best bid / ask</span>
           </span>
         </div>
+        <span className={clearingPrice ? 'text-emerald-400' : 'text-zinc-500'}>
+          {clearingPrice
+            ? `Cleared at ₹${Number(clearingPrice).toFixed(2)} / kWh`
+            : isCrossed
+            ? 'Orders will match when the gate closes'
+            : 'Waiting for the auction to clear'}
+        </span>
       </div>
     </div>
   );

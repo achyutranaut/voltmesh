@@ -52,20 +52,20 @@ export const CertificateTable: React.FC<CertificateTableProps> = ({
 
   return (
     <div className="w-full space-y-2 font-sans">
-      <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
         <div className="flex items-center space-x-2">
           <span className="font-semibold text-white">Granular certificates ledger</span>
-          <span className="font-mono text-[11px] text-zinc-500">
+          <span className="font-mono text-xs text-zinc-500">
             ({certificates.length} GACs issued)
           </span>
         </div>
-        <span className="text-[11px] text-zinc-500">Click certificate to inspect</span>
+        <span className="text-xs text-zinc-500">Click certificate to inspect</span>
       </div>
 
-      <div className="bg-[#080a0f] border border-zinc-800/60 rounded overflow-x-auto">
+      <div className="bg-panel border border-white/[0.07] rounded-lg overflow-x-auto">
         <table className="w-full text-left text-xs min-w-[700px]">
           <thead>
-            <tr className="border-b border-zinc-800/60 bg-zinc-900/30 text-[10px] text-zinc-500">
+            <tr className="border-b border-white/[0.07] bg-zinc-900/30 text-xs text-zinc-500">
               <th className="py-2.5 px-3 font-medium">GAC Token</th>
               <th className="py-2.5 px-3 font-medium">Source</th>
               <th className="py-2.5 px-3 font-medium">Zone</th>
@@ -76,7 +76,7 @@ export const CertificateTable: React.FC<CertificateTableProps> = ({
               <th className="py-2.5 px-3 font-medium text-right">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-850/40">
+          <tbody className="divide-y divide-white/[0.06]">
             {certificates.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-zinc-600 text-xs italic">
@@ -90,12 +90,12 @@ export const CertificateTable: React.FC<CertificateTableProps> = ({
                   <tr
                     key={cert.nullifier}
                     onClick={() => handleInspectCert(cert)}
-                    className="hover:bg-zinc-850/40 cursor-pointer transition-colors"
+                    className="hover:bg-zinc-800/40 cursor-pointer transition-colors"
                   >
                     <td className="py-2.5 px-3">
                       <div className="flex items-center space-x-2">
                         <Award className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
-                        <span className="font-mono text-[11px] text-zinc-200">
+                        <span className="font-mono text-xs text-zinc-200">
                           {cert.tokenId.slice(0, 8)}...{cert.tokenId.slice(-6)}
                         </span>
                       </div>
@@ -104,15 +104,15 @@ export const CertificateTable: React.FC<CertificateTableProps> = ({
                     <td className="py-2.5 px-3">
                       <div className="flex items-center space-x-1.5 text-zinc-300">
                         <Sun className="w-3 h-3 text-amber-400" />
-                        <span className="font-mono text-[11px]">{cert.deviceId}</span>
+                        <span className="font-code text-xs">{cert.deviceId}</span>
                       </div>
                     </td>
 
-                    <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
+                    <td className="py-2.5 px-3 text-zinc-400 text-xs">
                       Zone 01
                     </td>
 
-                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-zinc-400">
+                    <td className="py-2.5 px-3 text-center font-mono text-xs text-zinc-400">
                       Slot {cert.intervalIdx}
                     </td>
 
@@ -120,13 +120,13 @@ export const CertificateTable: React.FC<CertificateTableProps> = ({
                       {Number(cert.energyWh).toLocaleString()} Wh
                     </td>
 
-                    <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
+                    <td className="py-2.5 px-3 text-zinc-400 text-xs">
                       {cert.claimedAt}
                     </td>
 
                     <td className="py-2.5 px-3 text-center">
                       <span
-                        className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                           isRetired
                             ? 'bg-rose-950/60 text-rose-300 border border-rose-800/60'
                             : 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
@@ -151,7 +151,7 @@ export const CertificateTable: React.FC<CertificateTableProps> = ({
                           Retire
                         </Button>
                       ) : (
-                        <span className="text-[10px] text-zinc-500 font-mono">Nullified</span>
+                        <span className="text-xs text-zinc-500 font-mono">Nullified</span>
                       )}
                     </td>
                   </tr>

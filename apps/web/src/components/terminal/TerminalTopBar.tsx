@@ -58,6 +58,12 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
     }
   };
 
+  const todayFormatted = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date());
+
   const networkLabel =
     chainId === 11155111
       ? 'Sepolia'
@@ -66,12 +72,12 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
       : 'Devnet';
 
   return (
-    <header className="sticky top-0 z-20 flex h-12 w-full items-center justify-between border-b border-zinc-800/60 bg-[#08090f]/95 px-3 md:px-4 backdrop-blur-md text-zinc-300 font-sans text-xs select-none">
+    <header className="sticky top-0 z-20 flex h-12 w-full items-center justify-between border-b border-white/[0.07] bg-panel/95 px-3 md:px-4 backdrop-blur-md text-zinc-300 font-sans text-xs select-none">
       {/* Left Context: Sidebar Toggle + Contextual Breadcrumb */}
       <div className="flex items-center space-x-3 min-w-0">
         <SidebarTrigger className="text-zinc-400 hover:text-white" />
 
-        <div className="h-3.5 w-[1px] bg-zinc-800" />
+        <div className="h-3.5 w-[1px] bg-white/[0.08]" />
 
         <div className="flex items-center space-x-2 min-w-0">
           <span className="font-semibold text-white tracking-tight text-xs whitespace-nowrap">
@@ -87,7 +93,7 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
           <span className="text-zinc-600 hidden md:inline">·</span>
 
           <span className="text-zinc-400 hidden md:inline text-xs whitespace-nowrap">
-            15 Oct 2026
+            {todayFormatted}
           </span>
 
           <span className="text-zinc-600 hidden md:inline">·</span>
@@ -100,41 +106,41 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
 
       {/* Right Context: Network, Wallet Address, Command Palette */}
       <div className="flex items-center space-x-2.5 shrink-0">
-        <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 border border-zinc-800/70 text-zinc-400">
+        <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/[0.04] border border-white/[0.07] text-zinc-400">
           {networkLabel}
         </span>
 
         {/* Command palette search trigger */}
         <button
           onClick={onOpenCommandPalette}
-          className="flex items-center space-x-1.5 px-2 py-1 rounded bg-zinc-900/60 hover:bg-zinc-850 border border-zinc-800/70 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer text-[11px]"
+          className="flex items-center space-x-1.5 px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer text-xs"
           title="Open command palette (⌘K)"
           aria-label="Open command palette"
         >
-          <Command className="w-3 h-3 text-zinc-400" />
-          <span className="hidden sm:inline font-mono text-[10px]">⌘K</span>
+          <Command className="w-3.5 h-3.5 text-zinc-400" />
+          <span className="hidden sm:inline font-mono text-xs">⌘K</span>
         </button>
 
         {/* Wallet Address / Status */}
         <button
           onClick={onOpenWalletModal}
-          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded border text-[11px] font-sans transition-colors cursor-pointer ${
+          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs font-sans transition-colors cursor-pointer ${
             isConnected
-              ? 'bg-zinc-900/60 border-zinc-800/80 hover:border-zinc-700 text-zinc-300 hover:text-white'
-              : 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500/30 text-white font-medium'
+              ? 'bg-white/[0.04] border-white/[0.08] hover:border-white/[0.15] text-zinc-300 hover:text-white'
+              : 'bg-emerald-500 hover:bg-emerald-400 border-transparent text-zinc-950 font-medium'
           }`}
           aria-label="Account status"
         >
           {isConnected ? (
             <>
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="font-mono text-[11px]">
+              <span className="font-code text-xs">
                 {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}
               </span>
             </>
           ) : (
             <>
-              <Wallet className="w-3 h-3 mr-1" />
+              <Wallet className="w-3.5 h-3.5 mr-1" />
               <span>Connect</span>
             </>
           )}

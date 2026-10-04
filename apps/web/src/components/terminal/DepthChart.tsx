@@ -56,20 +56,20 @@ export const DepthChart: React.FC<DepthChartProps> = ({
     <div className="w-full space-y-2 font-sans">
       <div className="flex items-center justify-between text-xs text-zinc-400">
         <span className="font-medium text-zinc-300">Cumulative market depth</span>
-        <span className="text-[11px] text-zinc-500 font-mono">Bids vs Asks (Wh)</span>
+        <span className="text-xs text-zinc-500 font-mono">Bids vs Asks (Wh)</span>
       </div>
 
-      <div className="h-48 w-full bg-[#08090f] border border-zinc-800/60 rounded p-2">
+      <div className="h-48 w-full bg-panel border border-white/[0.07] rounded-lg p-2">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={depthData} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="demandGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                <stop offset="5%" stopColor="#5A9FEB" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#5A9FEB" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="supplyGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                <stop offset="5%" stopColor="#EE8A3F" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#EE8A3F" stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
@@ -116,7 +116,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({
               type="stepAfter"
               dataKey="demandWh"
               name="Demand"
-              stroke="#6366f1"
+              stroke="#5A9FEB"
               strokeWidth={1.5}
               fill="url(#demandGrad)"
             />
@@ -124,7 +124,7 @@ export const DepthChart: React.FC<DepthChartProps> = ({
               type="stepAfter"
               dataKey="supplyWh"
               name="Supply"
-              stroke="#f43f5e"
+              stroke="#EE8A3F"
               strokeWidth={1.5}
               fill="url(#supplyGrad)"
             />
@@ -132,13 +132,13 @@ export const DepthChart: React.FC<DepthChartProps> = ({
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center justify-end space-x-4 text-[11px] text-zinc-400">
+      <div className="flex items-center justify-end space-x-4 text-xs text-zinc-400">
         <div className="flex items-center space-x-1.5">
-          <div className="w-2 h-2 bg-indigo-500 rounded-xs" />
+          <div className="w-2 h-2 bg-bid-400 rounded-xs" />
           <span>Demand (Bids)</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <div className="w-2 h-2 bg-rose-500 rounded-xs" />
+          <div className="w-2 h-2 bg-ask-400 rounded-xs" />
           <span>Supply (Asks)</span>
         </div>
       </div>

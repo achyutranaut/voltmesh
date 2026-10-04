@@ -55,19 +55,19 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
   return (
     <aside
       aria-label="Inspector"
-      className="fixed inset-y-0 right-0 z-40 w-full sm:w-[400px] border-l border-zinc-800/80 bg-[#0b0d12]/95 backdrop-blur-md text-zinc-200 flex flex-col justify-between shadow-2xl transition-transform duration-200"
+      className="fixed inset-y-0 right-0 z-40 w-full sm:w-[400px] border-l border-white/[0.07] bg-panel/95 backdrop-blur-md text-zinc-200 flex flex-col justify-between shadow-2xl transition-transform duration-200"
     >
       {/* 1. Header */}
-      <div className="p-4 border-b border-zinc-800/80 bg-[#0e1017]">
+      <div className="p-4 border-b border-white/[0.07] bg-panel">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
-            <span className="text-[11px] font-medium text-zinc-400 bg-zinc-850 px-2 py-0.5 rounded">
+            <span className="text-xs font-medium text-zinc-400 bg-white/[0.04] border border-white/[0.07] px-2 py-0.5 rounded">
               {data.category}
             </span>
             {data.statusBadge && (
               <Badge
                 variant={getStatusBadgeVariant(data.statusBadge.variant)}
-                className="text-[10px] font-medium py-0"
+                className="text-xs font-medium py-0"
               >
                 {data.statusBadge.label}
               </Badge>
@@ -76,7 +76,7 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
           <button
             onClick={onClose}
             aria-label="Close inspector"
-            className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
+            className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -97,14 +97,14 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
         {/* Primary Information / Key Metrics */}
         {data.metrics && data.metrics.length > 0 && (
           <div>
-            <h3 className="text-[11px] font-medium text-zinc-400 mb-2">Primary metrics</h3>
+            <h3 className="text-xs font-medium text-zinc-400 mb-2">Primary metrics</h3>
             <div className="grid grid-cols-2 gap-2">
               {data.metrics.map((m, idx) => (
                 <div
                   key={idx}
-                  className="bg-zinc-900/60 border border-zinc-800/60 p-2.5 rounded"
+                  className="bg-white/[0.02] border border-white/[0.07] p-3 rounded-lg"
                 >
-                  <div className="text-[10px] text-zinc-400 font-medium">{m.label}</div>
+                  <div className="text-xs text-zinc-400 font-medium">{m.label}</div>
                   <div className="text-sm font-semibold text-white mt-0.5">
                     <span className="font-mono">{m.value}</span>{' '}
                     {m.unit && <span className="text-xs font-normal text-zinc-400">{m.unit}</span>}
@@ -118,8 +118,8 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
         {/* Details: Key-Value Properties */}
         {data.properties && data.properties.length > 0 && (
           <div>
-            <h3 className="text-[11px] font-medium text-zinc-400 mb-2">Properties & state</h3>
-            <div className="border border-zinc-800/70 rounded divide-y divide-zinc-800/60 bg-zinc-900/30">
+            <h3 className="text-xs font-medium text-zinc-400 mb-2">Properties & state</h3>
+            <div className="border border-white/[0.07] rounded-lg divide-y divide-white/[0.05] bg-white/[0.02]">
               {data.properties.map((prop, idx) => (
                 <div
                   key={idx}
@@ -129,7 +129,7 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
                   <div className="flex items-center space-x-1.5 min-w-0">
                     <span
                       className={`text-right truncate ${
-                        prop.mono ? 'font-mono text-zinc-200 text-[11px]' : 'text-zinc-100 font-medium'
+                        prop.mono ? 'font-code text-zinc-200 text-xs' : 'text-zinc-100 font-medium'
                       }`}
                     >
                       {String(prop.value)}
@@ -141,9 +141,9 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
                         title="Copy value"
                       >
                         {copiedKey === `prop-${idx}` ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
                         ) : (
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-3.5 h-3.5" />
                         )}
                       </button>
                     )}
@@ -158,33 +158,33 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
         {data.signature && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+              <h3 className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Cryptographic signature</span>
               </h3>
               <Badge
                 variant={data.signature.status === 'VALID' ? 'success' : 'destructive'}
-                className="text-[9px] py-0 font-medium"
+                className="text-xs py-0 font-medium"
               >
                 {data.signature.status}
               </Badge>
             </div>
 
-            <div className="p-3 bg-zinc-900/40 border border-zinc-800/70 rounded space-y-2">
+            <div className="p-3 bg-white/[0.02] border border-white/[0.07] rounded-lg space-y-2">
               {data.signature.algorithm && (
-                <div className="text-[11px] text-zinc-400">
+                <div className="text-xs text-zinc-400">
                   Algorithm: <span className="text-zinc-200">{data.signature.algorithm}</span>
                 </div>
               )}
               <div>
-                <span className="text-[10px] text-zinc-500 block">Signer public key</span>
-                <div className="mt-0.5 p-1.5 bg-zinc-950 rounded font-mono text-[10px] text-zinc-300 break-all border border-zinc-800/80">
+                <span className="text-xs text-zinc-500 block">Signer public key</span>
+                <div className="mt-1 p-2 bg-black/40 rounded-md font-code text-xs text-zinc-300 break-all border border-white/[0.07]">
                   {data.signature.publicKey}
                 </div>
               </div>
               <div>
-                <span className="text-[10px] text-zinc-500 block">Signature bytes</span>
-                <div className="mt-0.5 p-1.5 bg-zinc-950 rounded font-mono text-[10px] text-zinc-300 break-all border border-zinc-800/80">
+                <span className="text-xs text-zinc-500 block">Signature bytes</span>
+                <div className="mt-1 p-2 bg-black/40 rounded-md font-code text-xs text-zinc-300 break-all border border-white/[0.07]">
                   {data.signature.signatureHex}
                 </div>
               </div>
@@ -196,34 +196,34 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
         {data.merkleProof && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
-                <Binary className="w-3.5 h-3.5 text-cyan-400" />
+              <h3 className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+                <Binary className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Merkle inclusion proof (RFC 6962)</span>
               </h3>
             </div>
 
-            <div className="p-3 bg-zinc-900/40 border border-zinc-800/70 rounded space-y-2">
+            <div className="p-3 bg-white/[0.02] border border-white/[0.07] rounded-lg space-y-2">
               <div>
-                <span className="text-[10px] text-zinc-500 block">Root hash</span>
-                <div className="mt-0.5 p-1.5 bg-zinc-950 rounded font-mono text-[10px] text-zinc-300 break-all border border-zinc-800/80">
+                <span className="text-xs text-zinc-500 block">Root hash</span>
+                <div className="mt-1 p-2 bg-black/40 rounded-md font-code text-xs text-zinc-300 break-all border border-white/[0.07]">
                   {data.merkleProof.root}
                 </div>
               </div>
               <div>
-                <span className="text-[10px] text-zinc-500 block">Leaf hash</span>
-                <div className="mt-0.5 p-1.5 bg-zinc-950 rounded font-mono text-[10px] text-emerald-400 break-all border border-zinc-800/80">
+                <span className="text-xs text-zinc-500 block">Leaf hash</span>
+                <div className="mt-1 p-2 bg-black/40 rounded-md font-code text-xs text-emerald-400 break-all border border-white/[0.07]">
                   {data.merkleProof.leaf}
                 </div>
               </div>
               <div>
-                <span className="text-[10px] text-zinc-500 block">
+                <span className="text-xs text-zinc-500 block">
                   Proof siblings ({data.merkleProof.siblings.length} nodes)
                 </span>
                 <div className="space-y-1 mt-1 max-h-32 overflow-y-auto">
                   {data.merkleProof.siblings.map((sibling, idx) => (
                     <div
                       key={idx}
-                      className="p-1 bg-zinc-950 rounded font-mono text-[9px] text-zinc-400 break-all border border-zinc-800/60 flex items-center justify-between"
+                      className="p-1.5 bg-black/40 rounded-md font-code text-xs text-zinc-400 break-all border border-white/[0.07] flex items-center justify-between"
                     >
                       <span className="truncate">{sibling}</span>
                       <span className="text-zinc-600 pl-1 shrink-0 font-sans">L{idx}</span>
@@ -240,7 +240,7 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
           <div>
             <button
               onClick={() => setShowRawPayload(!showRawPayload)}
-              className="w-full flex items-center justify-between py-1.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+              className="w-full flex items-center justify-between py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
             >
               <span>Raw JSON payload</span>
               {showRawPayload ? (
@@ -250,7 +250,7 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
               )}
             </button>
             {showRawPayload && (
-              <pre className="mt-1.5 p-3 bg-zinc-950 rounded border border-zinc-800/80 font-mono text-[10px] text-zinc-300 overflow-x-auto whitespace-pre-wrap max-h-48">
+              <pre className="mt-1.5 p-3 bg-black/40 rounded-lg border border-white/[0.07] font-code text-xs text-zinc-300 overflow-x-auto whitespace-pre-wrap max-h-48">
                 {JSON.stringify(data.rawPayload || data.properties, null, 2)}
               </pre>
             )}
@@ -259,13 +259,13 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
       </div>
 
       {/* 3. Actions / Footer */}
-      <div className="p-3 border-t border-zinc-800/80 bg-[#0e1017] flex items-center justify-between">
-        <span className="text-[11px] text-zinc-500 font-sans">VoltMesh Inspector</span>
+      <div className="p-3 border-t border-white/[0.07] bg-panel flex items-center justify-between">
+        <span className="text-xs text-zinc-500 font-sans">VoltMesh Inspector</span>
         <Button
           variant="secondary"
           size="sm"
           onClick={onClose}
-          className="text-xs h-7 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+          className="text-xs h-7 px-3 bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border-white/[0.07]"
         >
           Close
         </Button>

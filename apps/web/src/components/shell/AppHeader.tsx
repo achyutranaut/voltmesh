@@ -57,12 +57,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   return (
     <>
-      <header className="border-b border-zinc-800 bg-[#0c0c0e] px-4 py-2.5 flex items-center justify-between text-zinc-300">
+      <header className="border-b border-white/[0.07] bg-panel px-4 py-2.5 flex items-center justify-between text-zinc-300">
         {/* Brand & Market Zone Context */}
         <div className="flex items-center space-x-3">
           <VoltMeshBrand subtitle="TRADING TERMINAL" size="sm" />
 
-          <div className="hidden lg:flex items-center space-x-2 pl-3 border-l border-zinc-800 text-[11px] font-mono text-zinc-400">
+          <div className="hidden lg:flex items-center space-x-2 pl-3 border-l border-white/[0.07] text-[11px] font-mono text-zinc-400">
             <span>Zone {zoneId} / DL-TPDDL-Z1</span>
             <span className="text-zinc-700">·</span>
             <span className="text-zinc-500">{feederName} · TR {transformerKva}kVA</span>
@@ -75,7 +75,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <div className="hidden sm:flex items-center space-x-1.5 text-[11px] font-mono text-zinc-400">
             <span className="text-zinc-500">Interval</span>
             <span className="font-medium text-white">{currentInterval}</span>
-            <span className="text-zinc-500 font-mono text-[10px]">({intervalStartStr}–{intervalEndStr})</span>
+            <span className="text-zinc-500 font-mono text-[11px]">({intervalStartStr}–{intervalEndStr})</span>
           </div>
 
           <span className="text-zinc-700 hidden xl:inline">·</span>
@@ -88,7 +88,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           {/* Dev Diagnostics Modal Trigger Button */}
           <button
             onClick={() => setIsDiagnosticsOpen(true)}
-            className="hidden lg:flex items-center space-x-1.5 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-500/50 text-zinc-400 hover:text-emerald-400 px-2 py-1 rounded text-xs font-mono transition-colors"
+            className="hidden lg:flex items-center space-x-1.5 bg-zinc-900/90 hover:bg-zinc-800 border border-white/[0.07] hover:border-emerald-500/50 text-zinc-400 hover:text-emerald-400 px-2 py-1 rounded text-xs font-mono transition-colors"
             title="Open EVM RPC Diagnostics & Test Suite"
           >
             <Terminal className="w-3.5 h-3.5 text-emerald-400" />
@@ -98,12 +98,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           {/* Command Palette Trigger Button */}
           <button
             onClick={onOpenCommandPalette}
-            className="hidden md:flex items-center space-x-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-300 hover:text-white px-2.5 py-1 rounded text-xs font-mono transition-colors"
+            className="hidden md:flex items-center space-x-2 bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white px-2.5 py-1 rounded text-xs font-mono transition-colors"
             title="Open Command Palette (⌘K)"
           >
             <Command className="w-3.5 h-3.5" />
             <span className="hidden sm:inline text-[11px]">CMD</span>
-            <kbd className="bg-zinc-800 text-[10px] px-1 py-0.2 rounded border border-zinc-700 text-zinc-400">⌘K</kbd>
+            <kbd className="bg-zinc-800 text-[11px] px-1 py-0.2 rounded border border-white/10 text-zinc-400">⌘K</kbd>
           </button>
 
           {/* 4. WALLET CONTROL */}
@@ -125,7 +125,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 title="Open Wallet Drawer"
               >
                 <span className="font-semibold">{address?.slice(0, 6)}...{address?.slice(-4)}</span>
-                <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
+                <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
                   WRONG NET
                 </span>
@@ -142,7 +142,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           ) : (
             <button
               onClick={() => setIsWalletModalOpen(true)}
-              className="flex items-center space-x-2 px-3 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-xs font-mono transition-colors text-left cursor-pointer group"
+              className="flex items-center space-x-2 px-3 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/[0.07] hover:border-white/10 text-xs font-mono transition-colors text-left cursor-pointer group"
               title="Open Wallet Account Drawer"
             >
               <span className="text-white font-semibold group-hover:text-emerald-300">

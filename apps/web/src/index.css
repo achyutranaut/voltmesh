@@ -70,14 +70,16 @@
 
 body {
   margin: 0;
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background-color: #050607;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
+  background-color: #090a0d;
   color: #f3f4f6;
   -webkit-font-smoothing: antialiased;
 }
 
-code, pre {
+code, pre, .font-mono, .font-code {
   font-family: 'JetBrains Mono', monospace;
+  font-feature-settings: 'tnum';
 }
 
 /* Custom Scrollbar for Terminal */

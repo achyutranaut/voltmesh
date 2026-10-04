@@ -77,13 +77,13 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
       {/* ========================================================================= */}
       {/* 1. PAGE HEADER                                                            */}
       {/* ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Call Market
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               {clearingResult ? 'Cleared' : 'Gate open'}
             </span>
@@ -103,40 +103,37 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
             variant="outline"
             size="sm"
             onClick={() => setShow3DEngine(!show3DEngine)}
-            className="text-xs h-8 border-zinc-800 bg-zinc-900/60 hover:bg-zinc-850 text-zinc-300 cursor-pointer"
+            className="text-xs h-8 border-white/[0.07] bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 cursor-pointer"
           >
-            <Box className="w-3.5 h-3.5 mr-1 text-indigo-400" />
-            <span>{show3DEngine ? 'Hide exchange engine' : 'Energy Exchange Engine'}</span>
+            <Box className="w-3.5 h-3.5 mr-1 text-zinc-400" />
+            <span>{show3DEngine ? 'Hide 3D view' : '3D grid view'}</span>
             {show3DEngine ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
           </Button>
 
-          <Button
-            variant="default"
-            size="sm"
-            disabled={!canExecuteStage('CLEARING')}
-            onClick={() => {
-              if (canExecuteStage('CLEARING')) {
-                onClearMarket();
-              }
-            }}
-            className={`text-xs h-8 font-medium cursor-pointer ${
-              canExecuteStage('CLEARING')
-                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
-                : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-            }`}
-          >
-            <Play className="w-3 h-3 mr-1 fill-current" />
-            {canExecuteStage('CLEARING') ? 'Clear market' : 'Awaiting Merkle root'}
-          </Button>
+          {canExecuteStage('CLEARING') ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onClearMarket}
+              className="text-xs h-8 font-medium cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
+            >
+              <Play className="w-3 h-3 mr-1 fill-current" />
+              Clear market
+            </Button>
+          ) : (
+            <span className="hidden text-xs text-zinc-500 md:inline">
+              Clearing unlocks once the oracle commits this slot
+            </span>
+          )}
         </div>
       </div>
 
       {/* Optional 3D Energy Exchange Engine Drawer/Panel */}
       {show3DEngine && (
-        <div className="border border-zinc-800/70 rounded bg-[#07080d] p-3 space-y-2">
-          <div className="flex items-center justify-between text-xs text-zinc-400 pb-1 border-b border-zinc-800/50">
+        <div className="border border-white/[0.07] rounded-lg bg-panel p-3 space-y-2">
+          <div className="flex items-center justify-between text-xs text-zinc-400 pb-1 border-b border-white/[0.07]">
             <span className="font-medium text-zinc-300">3D Energy exchange visualization</span>
-            <span className="text-[11px] text-zinc-500">Physical substation feeder topology</span>
+            <span className="text-xs text-zinc-500">Physical substation feeder topology</span>
           </div>
           <Suspense
             fallback={
@@ -158,62 +155,62 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
       {/* ========================================================================= */}
       {/* 2. MARKET STATISTICS RIBBON                                               */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 bg-[#080a0f] border border-zinc-800/60 rounded divide-y lg:divide-y-0 lg:divide-x divide-zinc-800/60">
-        <div className="p-3.5 space-y-0.5">
-          <div className="text-[11px] font-medium text-zinc-400">Clearing price</div>
-          <div className="text-base font-semibold text-white">
+      <div className="grid grid-cols-2 lg:grid-cols-4 border-y border-white/[0.07] divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+        <div className="px-5 py-4 space-y-1 first:pl-0">
+          <div className="text-xs font-medium text-zinc-400">Clearing price</div>
+          <div className="text-2xl font-semibold tracking-tight text-white">
             {clearingPrice !== null ? (
               <span className="font-mono">
                 ₹{clearingPrice}{' '}
-                <span className="text-xs font-normal text-zinc-400 font-sans">/ kWh</span>
+                <span className="text-sm font-normal text-zinc-400 font-sans">/ kWh</span>
               </span>
             ) : (
-              <span className="text-zinc-500 font-mono text-sm">Awaiting clearing</span>
+              <span className="text-zinc-500 text-base font-normal">Awaiting clearing</span>
             )}
           </div>
-          <div className="text-[11px] text-zinc-500">
-            {clearingResult ? 'Uniform price match' : 'Continuous double auction'}
+          <div className="text-xs text-zinc-500">
+            {clearingResult ? 'Uniform price match' : 'Uniform-price call auction'}
           </div>
         </div>
 
-        <div className="p-3.5 space-y-0.5">
-          <div className="text-[11px] font-medium text-zinc-400">Cleared volume</div>
-          <div className="text-base font-semibold text-white">
+        <div className="px-5 py-4 space-y-1 first:pl-0">
+          <div className="text-xs font-medium text-zinc-400">Cleared volume</div>
+          <div className="text-2xl font-semibold tracking-tight text-white">
             {clearedVolume !== null ? (
               <span className="font-mono">
                 {clearedVolume}{' '}
-                <span className="text-xs font-normal text-zinc-400 font-sans">Wh</span>
+                <span className="text-sm font-normal text-zinc-400 font-sans">Wh</span>
               </span>
             ) : (
-              <span className="text-zinc-500 font-mono text-sm">0 Wh</span>
+              <span className="text-zinc-500 text-base font-normal">0 Wh</span>
             )}
           </div>
-          <div className="text-[11px] text-zinc-500">
+          <div className="text-xs text-zinc-500">
             {clearingResult ? 'Matched obligations' : 'Unmatched'}
           </div>
         </div>
 
-        <div className="p-3.5 space-y-0.5">
-          <div className="text-[11px] font-medium text-zinc-400">Active orders</div>
-          <div className="text-base font-semibold text-white font-mono">
+        <div className="px-5 py-4 space-y-1 first:pl-0">
+          <div className="text-xs font-medium text-zinc-400">Active orders</div>
+          <div className="text-2xl font-semibold tracking-tight text-white font-mono">
             {orders.length}
           </div>
-          <div className="text-[11px] text-zinc-500">
+          <div className="text-xs text-zinc-500">
             {bids.length} bids · {asks.length} asks
           </div>
         </div>
 
-        <div className="p-3.5 space-y-1">
-          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400">
+        <div className="px-5 py-4 space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-medium text-zinc-400">
             <span>Feeder loading</span>
             <span className="font-mono text-white">{feederUtilizationPct}%</span>
           </div>
           <Progress
             value={feederUtilizationPct}
             className="h-1 bg-zinc-800"
-            indicatorClassName={feederUtilizationPct > 80 ? 'bg-amber-400' : 'bg-indigo-500'}
+            indicatorClassName={feederUtilizationPct > 80 ? 'bg-amber-400' : 'bg-emerald-500'}
           />
-          <div className="text-[11px] text-zinc-500">
+          <div className="text-xs text-zinc-500">
             500 kVA feeder threshold
           </div>
         </div>
@@ -227,12 +224,12 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
         <div className="lg:col-span-8 space-y-5">
           {/* Chart Header & Toggle (Price vs Depth) */}
           <div className="space-y-2">
-            <div className="flex items-center space-x-2 border-b border-zinc-800/60 pb-1">
+            <div className="flex items-center space-x-2 border-b border-white/[0.07] pb-1">
               <button
                 onClick={() => setActiveChartTab('price')}
                 className={`text-xs font-medium pb-1.5 transition-colors border-b-2 cursor-pointer ${
                   activeChartTab === 'price'
-                    ? 'border-indigo-500 text-white'
+                    ? 'border-emerald-500 text-white'
                     : 'border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -242,7 +239,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
                 onClick={() => setActiveChartTab('depth')}
                 className={`text-xs font-medium pb-1.5 transition-colors border-b-2 cursor-pointer ${
                   activeChartTab === 'depth'
-                    ? 'border-indigo-500 text-white'
+                    ? 'border-emerald-500 text-white'
                     : 'border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -306,7 +303,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
       <div className="space-y-2 pt-2">
         <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
           <span className="font-medium text-zinc-300">Verification & settlement pipeline</span>
-          <span className="text-[11px] text-zinc-500 font-mono">
+          <span className="text-xs text-zinc-500 font-mono">
             {clearingResult ? 'Batch active · 8 Stages' : 'Idle · Awaiting clearing batch'}
           </span>
         </div>

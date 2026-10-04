@@ -58,18 +58,18 @@ export const OpenOrders: React.FC<OpenOrdersProps> = ({
 
   return (
     <div className="w-full space-y-2 font-sans">
-      <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
         <div className="flex items-center space-x-2">
           <span className="font-semibold text-white">Open orders</span>
-          <span className="font-mono text-[11px] text-zinc-500">({orders.length})</span>
+          <span className="font-mono text-xs text-zinc-500">({orders.length})</span>
         </div>
-        <span className="text-[11px] text-zinc-500">Active market interval</span>
+        <span className="text-xs text-zinc-500">Active market interval</span>
       </div>
 
-      <div className="bg-[#080a0f] border border-zinc-800/60 rounded overflow-x-auto">
+      <div className="bg-panel border border-white/[0.07] rounded-lg overflow-x-auto">
         <table className="w-full text-left text-xs min-w-[500px]">
           <thead>
-            <tr className="border-b border-zinc-800/60 bg-zinc-900/30 text-[10px] text-zinc-500">
+            <tr className="border-b border-white/[0.07] bg-zinc-900/30 text-xs text-zinc-500">
               <th className="py-2.5 px-3 font-medium">Order ID</th>
               <th className="py-2.5 px-3 font-medium">Side</th>
               <th className="py-2.5 px-3 font-medium">Participant</th>
@@ -78,7 +78,7 @@ export const OpenOrders: React.FC<OpenOrdersProps> = ({
               <th className="py-2.5 px-3 font-medium text-center">Auth</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-850/40">
+          <tbody className="divide-y divide-white/[0.06]">
             {orders.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-6 text-center text-zinc-600 text-xs italic">
@@ -93,43 +93,43 @@ export const OpenOrders: React.FC<OpenOrdersProps> = ({
                   <tr
                     key={ord.orderId}
                     onClick={() => handleOrderClick(ord)}
-                    className="hover:bg-zinc-850/40 cursor-pointer transition-colors"
+                    className="hover:bg-zinc-800/40 cursor-pointer transition-colors"
                   >
-                    <td className="py-2 px-3 font-mono text-[11px] text-zinc-300">
+                    <td className="py-2 px-3 font-mono text-xs text-zinc-300">
                       {ord.orderId}
                     </td>
                     <td className="py-2 px-3">
                       <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                           isBuy
-                            ? 'bg-indigo-950/60 text-indigo-300 border border-indigo-800/60'
-                            : 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                            ? 'bg-bid-950/60 text-bid-300 border border-bid-800/60'
+                            : 'bg-ask-950/60 text-ask-300 border border-ask-800/60'
                         }`}
                       >
                         {isBuy ? (
-                          <ArrowDownLeft className="w-3 h-3 mr-1 text-indigo-400" />
+                          <ArrowDownLeft className="w-3 h-3 mr-1 text-bid-400" />
                         ) : (
-                          <ArrowUpRight className="w-3 h-3 mr-1 text-emerald-400" />
+                          <ArrowUpRight className="w-3 h-3 mr-1 text-ask-400" />
                         )}
                         {isBuy ? 'Buy' : 'Sell'}
                       </span>
                     </td>
-                    <td className="py-2 px-3 font-mono text-[11px] text-zinc-400">
+                    <td className="py-2 px-3 font-mono text-xs text-zinc-400">
                       {ord.participant.slice(0, 6)}...{ord.participant.slice(-4)}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-medium text-white">
                       ₹{priceInRupees}
                     </td>
-                    <td className="py-2 px-3 text-right font-mono text-zinc-300 text-[11px]">
+                    <td className="py-2 px-3 text-right font-mono text-zinc-300 text-xs">
                       {Number(ord.quantityWh).toLocaleString()} Wh
                     </td>
                     <td className="py-2 px-3 text-center">
                       {ord.signature.length === 65 &&
                       !ord.participant.startsWith('0x2222') &&
                       !ord.participant.startsWith('0x1111') ? (
-                        <span className="text-[10px] text-indigo-400 font-mono">EIP-712</span>
+                        <span className="text-xs text-bid-400 font-mono">EIP-712</span>
                       ) : (
-                        <span className="text-[10px] text-zinc-500 font-mono">Sim</span>
+                        <span className="text-xs text-zinc-500 font-mono">Sim</span>
                       )}
                     </td>
                   </tr>

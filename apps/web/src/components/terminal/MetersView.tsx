@@ -128,22 +128,24 @@ export const MetersView: React.FC<MetersViewProps> = ({
     },
   ];
 
+  const showDevTools =
+    import.meta.env.DEV || new URLSearchParams(window.location.search).has('dev');
+
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
       {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Meters & Telemetry
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
-              <Zap className="w-3 h-3 text-amber-400" />
-              Operational telemetry
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-900 text-zinc-300 border border-white/[0.07]">
+              Simulated data
             </span>
           </div>
           <p className="text-xs text-zinc-400">
-            Hardware-attested DLMS/COSEM meter readings with Ed25519 root-of-trust signatures.
+            Signed meter readings per 15-minute slot. Each reading carries an Ed25519 signature that is checked before it is accepted. Meters in this environment are simulated.
           </p>
         </div>
 
@@ -152,7 +154,7 @@ export const MetersView: React.FC<MetersViewProps> = ({
             variant="default"
             size="sm"
             onClick={onGenerateReading}
-            className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white font-medium cursor-pointer shadow-xs"
+            className="text-xs h-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer shadow-xs"
           >
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Emit meter reading
@@ -160,16 +162,21 @@ export const MetersView: React.FC<MetersViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Simulator & Fault Injection Controls */}
-      <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-3">
-        <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/50">
+      {/* 2. Simulator & Fault Injection Controls (developer tooling) */}
+      {showDevTools && (
+      <details className="group rounded-lg border border-white/[0.07] bg-panel">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm text-zinc-300 hover:text-white">
+          Simulator controls <span className="ml-2 text-xs text-zinc-500">developer only</span>
+        </summary>
+      <div className="space-y-3 px-4 pb-4">
+        <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
           <span className="font-medium text-zinc-200">Test harness controls</span>
-          <span className="text-[11px] text-zinc-500">Device: meter-delhi-solar-001</span>
+          <span className="text-xs text-zinc-500">Device: meter-delhi-solar-001</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div>
-            <label className="text-[11px] text-zinc-400 block mb-1">
+            <label className="text-xs text-zinc-400 block mb-1">
               Rated capacity (W)
             </label>
             <input
@@ -179,15 +186,15 @@ export const MetersView: React.FC<MetersViewProps> = ({
               step="500"
               value={ratedCapacity}
               onChange={(e) => setRatedCapacity(Number(e.target.value))}
-              className="w-full accent-indigo-500 cursor-pointer"
+              className="w-full accent-emerald-500 cursor-pointer"
             />
-            <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
+            <div className="text-xs text-zinc-500 font-mono mt-0.5">
               {ratedCapacity} W ({(ratedCapacity / 1000).toFixed(1)} kW)
             </div>
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-[11px] text-zinc-400 block mb-1">
+            <label className="text-xs text-zinc-400 block mb-1">
               Fault injection test
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -202,10 +209,10 @@ export const MetersView: React.FC<MetersViewProps> = ({
                   key={fault.value}
                   type="button"
                   onClick={() => setActiveFault(fault.value)}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors cursor-pointer border ${
+                  className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer border ${
                     activeFault === fault.value
                       ? 'bg-amber-950/60 border-amber-700/80 text-amber-300 font-medium'
-                      : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      : 'bg-zinc-900/60 border-white/[0.07] text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   {fault.label}
@@ -215,8 +222,8 @@ export const MetersView: React.FC<MetersViewProps> = ({
           </div>
 
           <div>
-            <label className="text-[11px] text-zinc-400 block mb-1">
-              Enclave attestation
+            <label className="text-xs text-zinc-400 block mb-1">
+              Signature check
             </label>
             <div className="flex items-center space-x-1.5 mt-1 text-xs">
               {sigValid === false ? (
@@ -227,32 +234,34 @@ export const MetersView: React.FC<MetersViewProps> = ({
               ) : (
                 <span className="text-emerald-400 flex items-center font-medium">
                   <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-                  Ed25519 valid
+                  Valid
                 </span>
               )}
             </div>
           </div>
         </div>
       </div>
+      </details>
+      )}
 
       {/* 3. Primary: Energy Flow / Generation / Consumption Chart */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span className="font-medium text-zinc-300">Substation energy telemetry</span>
-          <span className="text-[11px] text-zinc-500 font-mono">Generation vs consumption (Wh)</span>
+          <span className="text-xs text-zinc-500 font-mono">Generation vs consumption (Wh)</span>
         </div>
 
-        <div className="h-52 w-full bg-[#080a0f] border border-zinc-800/60 rounded p-2">
+        <div className="h-52 w-full bg-panel border border-white/[0.07] rounded-lg p-2">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={telemetryHistory} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id="genGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#45BC87" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#45BC87" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="conGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#5A9FEB" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#5A9FEB" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis
@@ -272,7 +281,7 @@ export const MetersView: React.FC<MetersViewProps> = ({
               />
               <RechartsTooltip
                 contentStyle={{
-                  backgroundColor: '#0e1017',
+                  backgroundColor: '#0e0f12',
                   borderColor: '#27272a',
                   borderRadius: '4px',
                   fontSize: '11px',
@@ -285,18 +294,18 @@ export const MetersView: React.FC<MetersViewProps> = ({
                 labelFormatter={(label) => `Interval ${label}`}
               />
               <Area
-                type="monotone"
+                type="stepAfter"
                 dataKey="generationWh"
                 name="generationWh"
-                stroke="#10b981"
+                stroke="#45BC87"
                 strokeWidth={1.5}
                 fill="url(#genGrad)"
               />
               <Area
-                type="monotone"
+                type="stepAfter"
                 dataKey="consumptionWh"
                 name="consumptionWh"
-                stroke="#6366f1"
+                stroke="#5A9FEB"
                 strokeWidth={1.5}
                 fill="url(#conGrad)"
               />
@@ -304,13 +313,13 @@ export const MetersView: React.FC<MetersViewProps> = ({
           </ResponsiveContainer>
         </div>
 
-        <div className="flex items-center justify-end space-x-4 text-[11px] text-zinc-400">
+        <div className="flex items-center justify-end space-x-4 text-xs text-zinc-400">
           <div className="flex items-center space-x-1.5">
-            <div className="w-2 h-2 bg-emerald-500 rounded-xs" />
+            <div className="w-2 h-2 bg-brand-400 rounded-xs" />
             <span>Generation (Injection)</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <div className="w-2 h-2 bg-indigo-500 rounded-xs" />
+            <div className="w-2 h-2 bg-bid-400 rounded-xs" />
             <span>Consumption (Draw)</span>
           </div>
         </div>

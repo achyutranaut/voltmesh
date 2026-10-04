@@ -199,14 +199,14 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
       {/* 1. Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               T+1 Settlement
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
-              <Layers className="w-3 h-3 text-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-white/[0.04] text-zinc-300 border border-white/[0.07]">
+              <Layers className="w-3.5 h-3.5 text-emerald-400" />
               Atomic escrow netting
             </span>
           </div>
@@ -224,8 +224,8 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
               onClick={handleExecuteSettlement}
               className={`text-xs h-8 font-medium cursor-pointer ${
                 canExecuteStage('SETTLEMENT')
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
-                  : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-xs'
+                  : 'bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
@@ -240,10 +240,10 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
                   href={getExplorerTxUrl(settlementTxHash, chainId ?? DEFAULT_CHAIN_ID)}
                   target="_blank"
                   rel="noreferrer"
-                  className="ml-1 text-zinc-300 hover:text-white flex items-center font-mono text-[11px]"
+                  className="ml-1 text-zinc-300 hover:text-white flex items-center font-code text-xs"
                 >
                   <span>{settlementTxHash.slice(0, 8)}...</span>
-                  <ExternalLink className="w-3 h-3 ml-0.5" />
+                  <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
                 </a>
               )}
             </div>
@@ -252,7 +252,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
       </div>
 
       {actionError && (
-        <div className="p-2.5 rounded bg-rose-950/30 border border-rose-800/60 text-rose-300 text-xs flex items-center space-x-2">
+        <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-800/60 text-rose-300 text-xs flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{actionError}</span>
         </div>
@@ -264,10 +264,10 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
       {/* 3. Escrow Collateral Balances & Controls */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Token Balance */}
-        <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-2">
-          <div className="text-[11px] text-zinc-400 font-medium flex items-center justify-between">
+        <div className="p-4 rounded-lg bg-panel border border-white/[0.07] space-y-2">
+          <div className="text-xs text-zinc-400 font-medium flex items-center justify-between">
             <span>Participant ERC-20 token balance</span>
-            <Coins className="w-3.5 h-3.5 text-indigo-400" />
+            <Coins className="w-3.5 h-3.5 text-zinc-400" />
           </div>
           <div className="font-mono text-lg font-semibold text-white">
             {tokenBalance ? `${Number(tokenBalance).toLocaleString()} VLT` : '0 VLT'}
@@ -277,15 +277,15 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
             size="sm"
             disabled={isMinting || !isConnected}
             onClick={handleMintTokens}
-            className="w-full text-xs h-7 border-zinc-800 bg-zinc-900/60 hover:bg-zinc-850 text-zinc-300 cursor-pointer"
+            className="w-full text-xs h-7 border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 cursor-pointer"
           >
             {isMinting ? 'Minting...' : 'Faucet +1,000 VLT'}
           </Button>
         </div>
 
         {/* Locked Escrow Collateral */}
-        <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-2">
-          <div className="text-[11px] text-zinc-400 font-medium">
+        <div className="p-4 rounded-lg bg-panel border border-white/[0.07] space-y-2">
+          <div className="text-xs text-zinc-400 font-medium">
             Collateral in escrow contract
           </div>
           <div className="font-mono text-lg font-semibold text-emerald-400">
@@ -296,7 +296,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
               type="number"
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
-              className="bg-zinc-950 border-zinc-800 text-xs font-mono h-7"
+              className="bg-black/30 border-white/[0.07] text-xs font-mono h-7"
               placeholder="100"
             />
             <Button
@@ -304,7 +304,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
               size="sm"
               disabled={isDepositing || !isConnected}
               onClick={handleDeposit}
-              className="text-xs h-7 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium cursor-pointer"
+              className="text-xs h-7 px-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer"
             >
               Deposit
             </Button>
@@ -312,8 +312,8 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
         </div>
 
         {/* Free Collateral Withdrawal */}
-        <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-2">
-          <div className="text-[11px] text-zinc-400 font-medium">
+        <div className="p-4 rounded-lg bg-panel border border-white/[0.07] space-y-2">
+          <div className="text-xs text-zinc-400 font-medium">
             Free unencumbered collateral
           </div>
           <div className="font-mono text-lg font-semibold text-zinc-200">
@@ -324,7 +324,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
               type="number"
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
-              className="bg-zinc-950 border-zinc-800 text-xs font-mono h-7"
+              className="bg-black/30 border-white/[0.07] text-xs font-mono h-7"
               placeholder="50"
             />
             <Button
@@ -332,7 +332,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
               size="sm"
               disabled={isWithdrawing || !isConnected}
               onClick={handleWithdraw}
-              className="text-xs h-7 px-3 border-zinc-800 bg-zinc-900/60 text-zinc-300 cursor-pointer"
+              className="text-xs h-7 px-3 border-white/[0.07] bg-white/[0.04] text-zinc-300 cursor-pointer"
             >
               Withdraw
             </Button>

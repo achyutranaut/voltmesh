@@ -171,14 +171,14 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
       {/* 1. Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Merkle Tree Explorer
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
-              <GitBranch className="w-3 h-3 text-purple-400" />
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-900 text-zinc-300 border border-white/[0.07]">
+              <GitBranch className="w-3 h-3 text-zinc-400" />
               RFC 6962 binary tree
             </span>
           </div>
@@ -194,7 +194,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
               size="sm"
               disabled={isCommitting || !isConnected}
               onClick={handleCommitOnChain}
-              className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white font-medium cursor-pointer shadow-xs"
+              className="text-xs h-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer shadow-xs"
             >
               <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
               {isCommitting ? 'Committing...' : 'Commit root to EpochOracle.sol'}
@@ -207,7 +207,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
                 href={getExplorerTxUrl(commitTxHash, chainId ?? DEFAULT_CHAIN_ID)}
                 target="_blank"
                 rel="noreferrer"
-                className="ml-1 text-zinc-300 hover:text-white flex items-center font-mono text-[11px]"
+                className="ml-1 text-zinc-300 hover:text-white flex items-center font-mono text-xs"
               >
                 <span>{commitTxHash.slice(0, 8)}...</span>
                 <ExternalLink className="w-3 h-3 ml-0.5" />
@@ -220,26 +220,26 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       {/* 2. Distinction: Off-Chain Data vs On-Chain Commitment */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Off-Chain Data */}
-        <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-2">
-          <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/50">
+        <div className="p-3.5 rounded-lg bg-panel border border-white/[0.07] space-y-2">
+          <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
             <span className="font-medium text-zinc-200">Off-chain data</span>
-            <span className="text-[10px] text-zinc-500 font-mono">Hardware attestation source</span>
+            <span className="text-xs text-zinc-500 font-mono">Hardware attestation source</span>
           </div>
           <div className="space-y-1.5 text-xs text-zinc-400">
             <div>
               <span className="text-zinc-500">Payload:</span> DLMS/COSEM HDLC telemetry frames signed by meter secure enclaves.
             </div>
             <div>
-              <span className="text-zinc-500">Aggregation:</span> Built into an RFC 6962 compliant binary Merkle tree with prefix <code className="text-zinc-300 font-mono text-[11px]">0x00</code> for leaves and <code className="text-zinc-300 font-mono text-[11px]">0x01</code> for internal nodes.
+              <span className="text-zinc-500">Aggregation:</span> Built into an RFC 6962 compliant binary Merkle tree with prefix <code className="text-zinc-300 font-mono text-xs">0x00</code> for leaves and <code className="text-zinc-300 font-mono text-xs">0x01</code> for internal nodes.
             </div>
           </div>
         </div>
 
         {/* On-Chain Commitment */}
-        <div className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-2">
-          <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/50">
+        <div className="p-3.5 rounded-lg bg-panel border border-white/[0.07] space-y-2">
+          <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
             <span className="font-medium text-zinc-200">On-chain commitment</span>
-            <span className="text-[10px] text-zinc-500 font-mono">EpochOracle.sol</span>
+            <span className="text-xs text-zinc-500 font-mono">EpochOracle.sol</span>
           </div>
           <div className="space-y-1.5 text-xs text-zinc-400">
             <div>
@@ -253,27 +253,27 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       </div>
 
       {/* 3. Tree Summary Telemetry */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 bg-[#080a0f] border border-zinc-800/60 rounded divide-y sm:divide-y-0 sm:divide-x divide-zinc-800/60 p-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 bg-panel border border-white/[0.07] rounded-lg divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06] p-3.5">
         <div className="space-y-0.5 pr-2">
-          <span className="text-[10px] text-zinc-500 block">Root hash</span>
-          <span className="font-mono text-emerald-400 text-[11px] truncate block select-all">
+          <span className="text-xs text-zinc-500 block">Root hash</span>
+          <span className="font-mono text-emerald-400 text-xs truncate block select-all">
             {epochTree.merkleRoot.slice(0, 10)}...{epochTree.merkleRoot.slice(-8)}
           </span>
         </div>
         <div className="space-y-0.5 px-2">
-          <span className="text-[10px] text-zinc-500 block">Leaf count</span>
+          <span className="text-xs text-zinc-500 block">Leaf count</span>
           <span className="font-mono text-white text-xs font-medium block">
             {sampleReadings.length} leaves
           </span>
         </div>
         <div className="space-y-0.5 px-2">
-          <span className="text-[10px] text-zinc-500 block">Trading epoch</span>
+          <span className="text-xs text-zinc-500 block">Trading epoch</span>
           <span className="font-mono text-zinc-200 text-xs block">
             Slot {initialInterval}
           </span>
         </div>
         <div className="space-y-0.5 pl-2">
-          <span className="text-[10px] text-zinc-500 block">Grid zone</span>
+          <span className="text-xs text-zinc-500 block">Grid zone</span>
           <span className="text-zinc-200 text-xs block">
             Zone 0{initialZoneId}
           </span>
@@ -284,16 +284,16 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: Tree Visual Hierarchy (7 cols) */}
         <div className="lg:col-span-7 space-y-3">
-          <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+          <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
             <span className="font-semibold text-white">Tree hierarchy</span>
-            <span className="text-[11px] text-zinc-500">Select leaf to verify inclusion</span>
+            <span className="text-xs text-zinc-500">Select leaf to verify inclusion</span>
           </div>
 
-          <div className="bg-[#080a0f] border border-zinc-800/60 rounded p-4 space-y-4">
+          <div className="bg-panel border border-white/[0.07] rounded-lg p-4 space-y-4">
             {/* Root Node */}
-            <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 text-center space-y-1">
-              <span className="text-[10px] text-zinc-500 block">Root (RFC 6962)</span>
-              <div className="font-mono text-[11px] text-emerald-400 truncate break-all select-all">
+            <div className="p-3 rounded bg-zinc-900/60 border border-white/[0.07] text-center space-y-1">
+              <span className="text-xs text-zinc-500 block">Root (RFC 6962)</span>
+              <div className="font-mono text-xs text-emerald-400 truncate break-all select-all">
                 {epochTree.merkleRoot}
               </div>
             </div>
@@ -313,21 +313,21 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
                     onClick={() => setSelectedLeafIndex(idx)}
                     className={`p-2.5 rounded border text-left transition-colors cursor-pointer ${
                       isSelected
-                        ? 'bg-zinc-850/90 border-indigo-500'
-                        : 'bg-zinc-950/40 border-zinc-850 hover:bg-zinc-900/40'
+                        ? 'bg-zinc-800/90 border-emerald-500'
+                        : 'bg-zinc-950/40 border-white/[0.07] hover:bg-zinc-900/40'
                     }`}
                   >
                     <div className="flex items-center justify-between text-xs pb-1">
-                      <span className="font-mono text-[11px] text-zinc-200">
+                      <span className="font-mono text-xs text-zinc-200">
                         {reading.deviceId}
                       </span>
-                      <span className="font-mono text-[10px] text-zinc-500">
+                      <span className="font-mono text-xs text-zinc-500">
                         Leaf #{idx}
                       </span>
                     </div>
-                    <div className="text-[11px] text-zinc-400 flex items-center justify-between">
+                    <div className="text-xs text-zinc-400 flex items-center justify-between">
                       <span>{reading.energyWh.toString()} Wh</span>
-                      <span className="text-[10px] text-emerald-400">Verified</span>
+                      <span className="text-xs text-emerald-400">Verified</span>
                     </div>
                   </button>
                 );
@@ -338,22 +338,22 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
 
         {/* Right: Selected Leaf Inspector (5 cols) */}
         <div className="lg:col-span-5 space-y-3">
-          <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+          <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
             <span className="font-semibold text-white">Selected leaf proof</span>
             <Button
               variant="outline"
               size="sm"
               onClick={handleInspectLeaf}
-              className="text-xs h-6 px-2 border-zinc-800 bg-zinc-900/60 text-zinc-300"
+              className="text-xs h-6 px-2 border-white/[0.07] bg-zinc-900/60 text-zinc-300"
             >
               Open inspector
             </Button>
           </div>
 
-          <div className="bg-[#080a0f] border border-zinc-800/60 rounded p-3.5 space-y-3 text-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/50">
-              <span className="font-mono font-medium text-white">{selectedReading.deviceId}</span>
-              <span className="text-emerald-400 font-medium text-[11px] flex items-center">
+          <div className="bg-panel border border-white/[0.07] rounded-lg p-3.5 space-y-3 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.07]">
+              <span className="font-code font-medium text-white">{selectedReading.deviceId}</span>
+              <span className="text-emerald-400 font-medium text-xs flex items-center">
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 Proof valid
               </span>
@@ -361,21 +361,21 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
 
             <div className="space-y-2">
               <div>
-                <span className="text-[10px] text-zinc-500 block">Leaf hash</span>
-                <div className="mt-0.5 p-1.5 rounded bg-zinc-950 border border-zinc-850 font-mono text-[10px] text-emerald-400 break-all select-all">
+                <span className="text-xs text-zinc-500 block">Leaf hash</span>
+                <div className="mt-0.5 p-1.5 rounded bg-zinc-950 border border-white/[0.07] font-mono text-xs text-emerald-400 break-all select-all">
                   {selectedProof?.leafHash}
                 </div>
               </div>
 
               <div>
-                <span className="text-[10px] text-zinc-500 block">
+                <span className="text-xs text-zinc-500 block">
                   Sibling path ({selectedProof?.proof.length ?? 0} steps)
                 </span>
                 <div className="space-y-1 mt-1 max-h-36 overflow-y-auto">
                   {selectedProof?.proof.map((sib: `0x${string}`, sIdx: number) => (
                     <div
                       key={sIdx}
-                      className="p-1 rounded bg-zinc-950 border border-zinc-850 font-mono text-[9px] text-zinc-400 break-all flex items-center justify-between"
+                      className="p-1 rounded bg-zinc-950 border border-white/[0.07] font-mono text-xs text-zinc-400 break-all flex items-center justify-between"
                     >
                       <span className="truncate">{sib}</span>
                       <span className="text-zinc-600 pl-1 shrink-0 font-sans">Level {sIdx}</span>
@@ -384,7 +384,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-zinc-800/50 text-[11px] text-zinc-400">
+              <div className="pt-2 border-t border-white/[0.07] text-xs text-zinc-400">
                 <span>Verification check: </span>
                 <span className="text-emerald-400 font-medium">
                   {isLeafValid ? 'Hash matches canonical root RFC 6962' : 'Invalid proof'}

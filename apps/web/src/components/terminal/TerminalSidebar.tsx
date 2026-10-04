@@ -61,10 +61,10 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-zinc-800/60 bg-[#080a0f] text-zinc-300 font-sans select-none"
+      className="border-r border-white/[0.07] bg-panel text-zinc-300 font-sans select-none"
     >
       {/* 1. Header with Authentic Brand Identity */}
-      <SidebarHeader className="border-b border-zinc-800/60 p-3.5 bg-[#090b12]">
+      <SidebarHeader className="border-b border-white/[0.07] p-3.5 bg-panel">
         <div className="flex items-center justify-between">
           <VoltMeshBrand subtitle="Trading terminal" size="sm" />
         </div>
@@ -72,9 +72,9 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
         {onReturnToStory && (
           <button
             onClick={onReturnToStory}
-            className="mt-2.5 flex items-center space-x-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors py-1 px-2 rounded bg-zinc-900/60 hover:bg-zinc-850 border border-zinc-800/70 cursor-pointer"
+            className="mt-2.5 flex items-center space-x-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors py-1 px-2 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] cursor-pointer"
           >
-            <ArrowLeft className="w-3 h-3 shrink-0" />
+            <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">Return to overview</span>
           </button>
         )}
@@ -84,7 +84,7 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
       <SidebarContent className="px-2 py-3 space-y-4">
         {/* Trading */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
+          <SidebarGroupLabel className="text-xs font-medium text-zinc-400 px-2 tracking-wide">
             Trading
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -96,14 +96,14 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Call Market"
                   className={
                     activeTab === 'market'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <TrendingUp className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <TrendingUp className={`w-4 h-4 shrink-0 ${activeTab === 'market' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Call Market</span>
                   {orderCount > 0 && (
-                    <span className="ml-auto text-[10px] text-zinc-400 font-mono bg-zinc-850 px-1.5 py-0.2 rounded">
+                    <span className="ml-auto text-xs text-zinc-400 font-mono bg-white/[0.06] px-1.5 py-0.5 rounded">
                       {orderCount}
                     </span>
                   )}
@@ -113,11 +113,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator className="bg-zinc-800/40" />
+        <SidebarSeparator className="bg-white/[0.06]" />
 
         {/* Infrastructure */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
+          <SidebarGroupLabel className="text-xs font-medium text-zinc-400 px-2 tracking-wide">
             Infrastructure
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -129,11 +129,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Meters"
                   className={
                     activeTab === 'energy'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <Zap className="w-4 h-4 text-amber-400/90 shrink-0" />
+                  <Zap className={`w-4 h-4 shrink-0 ${activeTab === 'energy' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Meters</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -145,11 +145,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Oracle & Epochs"
                   className={
                     activeTab === 'oracle'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <Shield className="w-4 h-4 text-cyan-400/90 shrink-0" />
+                  <Shield className={`w-4 h-4 shrink-0 ${activeTab === 'oracle' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Oracle & Epochs</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -161,11 +161,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Merkle Explorer"
                   className={
                     activeTab === 'merkle'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <GitBranch className="w-4 h-4 text-purple-400/90 shrink-0" />
+                  <GitBranch className={`w-4 h-4 shrink-0 ${activeTab === 'merkle' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Merkle Explorer</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -173,11 +173,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator className="bg-zinc-800/40" />
+        <SidebarSeparator className="bg-white/[0.06]" />
 
         {/* Settlement */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
+          <SidebarGroupLabel className="text-xs font-medium text-zinc-400 px-2 tracking-wide">
             Settlement
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -189,11 +189,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="T+1 Settlement"
                   className={
                     activeTab === 'settlement'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <Layers className="w-4 h-4 text-emerald-400/90 shrink-0" />
+                  <Layers className={`w-4 h-4 shrink-0 ${activeTab === 'settlement' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">T+1 Settlement</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -205,11 +205,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Certificates"
                   className={
                     activeTab === 'certificates'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <Award className="w-4 h-4 text-yellow-400/90 shrink-0" />
+                  <Award className={`w-4 h-4 shrink-0 ${activeTab === 'certificates' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Certificates</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -217,11 +217,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator className="bg-zinc-800/40" />
+        <SidebarSeparator className="bg-white/[0.06]" />
 
         {/* System */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-medium text-zinc-400 px-2 tracking-wide">
+          <SidebarGroupLabel className="text-xs font-medium text-zinc-400 px-2 tracking-wide">
             System
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -233,11 +233,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Operations"
                   className={
                     activeTab === 'operations'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <Cpu className="w-4 h-4 text-zinc-400 shrink-0" />
+                  <Cpu className={`w-4 h-4 shrink-0 ${activeTab === 'operations' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Operations</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -249,11 +249,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Contracts"
                   className={
                     activeTab === 'contracts'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <FileCode2 className="w-4 h-4 text-cyan-400/90 shrink-0" />
+                  <FileCode2 className={`w-4 h-4 shrink-0 ${activeTab === 'contracts' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Contracts</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -265,11 +265,11 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                   tooltip="Activity"
                   className={
                     activeTab === 'activity'
-                      ? 'bg-zinc-800/80 text-white font-medium border-l-2 border-indigo-500 rounded-l-none'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                   }
                 >
-                  <History className="w-4 h-4 text-emerald-400/90 shrink-0" />
+                  <History className={`w-4 h-4 shrink-0 ${activeTab === 'activity' ? 'text-white' : 'text-zinc-400'}`} />
                   <span className="text-xs">Activity</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -279,7 +279,7 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
       </SidebarContent>
 
       {/* 3. Footer with Real Wallet State */}
-      <SidebarFooter className="border-t border-zinc-800/60 p-3 bg-[#07090e]">
+      <SidebarFooter className="border-t border-white/[0.07] p-3 bg-panel">
         <WalletControl onOpenModal={onOpenWalletModal} compact={true} />
       </SidebarFooter>
     </Sidebar>

@@ -171,17 +171,17 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
   if (isConnected && !canBuy && !canSell) {
     return (
       <div className="w-full space-y-3 font-sans">
-        <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+        <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
           <span className="font-semibold text-white">Order entry</span>
-          <span className="text-[11px] text-zinc-500">Authorization required</span>
+          <span className="text-xs text-zinc-500">Authorization required</span>
         </div>
 
-        <div className="bg-[#080a0f] border border-zinc-800/60 rounded p-4 space-y-3">
+        <div className="bg-panel border border-white/[0.07] rounded-lg p-4 space-y-3">
           <div className="flex items-start space-x-2.5 text-amber-400">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h4 className="text-xs font-semibold text-zinc-200">Trading unavailable</h4>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-400 leading-relaxed">
                 Your wallet is not registered as an active market participant in the on-chain ParticipantRegistry.
                 Under DERC/UPERC regulatory guidelines, only authenticated consumers with verified service connections
                 or prosumers with smart net metering can submit orders.
@@ -189,11 +189,11 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-zinc-800/50 flex flex-col gap-2">
-            <div className="text-[11px] text-zinc-500">
-              Wallet: <span className="font-mono text-zinc-400">{address?.slice(0, 8)}...{address?.slice(-6)}</span>
+          <div className="pt-2 border-t border-white/[0.07] flex flex-col gap-2">
+            <div className="text-xs text-zinc-500">
+              Wallet: <span className="font-code text-zinc-400">{address?.slice(0, 8)}...{address?.slice(-6)}</span>
             </div>
-            <div className="text-[10px] text-zinc-500">
+            <div className="text-xs text-zinc-500">
               To participate, please link your DISCOM consumer number (CA number) with this wallet address.
             </div>
           </div>
@@ -205,43 +205,43 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
   return (
     <div className="w-full space-y-3 font-sans">
       {/* Header */}
-      <div className="flex items-center justify-between text-xs pb-1 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
         <div className="flex items-center space-x-2">
           <span className="font-semibold text-white">Order entry</span>
           {simulationMode && (
-            <span className="text-[10px] text-amber-400/90 bg-amber-950/40 border border-amber-800/50 px-1.5 py-0.2 rounded font-mono">
-              [Simulation Mode]
+            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-xs text-zinc-300">
+              Simulation
             </span>
           )}
         </div>
-        <span className="text-[11px] text-zinc-500">EIP-712 off-chain commitment</span>
+        <span className="text-xs text-zinc-500">Signed with your wallet</span>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3 bg-[#080a0f] border border-zinc-800/60 rounded p-3.5">
+      <form onSubmit={handleSubmit} className="space-y-4 bg-panel border border-white/[0.07] rounded-lg p-4">
         {/* Role-Aware Order Side Selection */}
         <div>
-          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs font-medium text-zinc-400 mb-1.5">
             <span>Order side</span>
             {canBuy && !canSell && (
-              <span className="text-[10px] text-indigo-400 font-mono">Consumer · Buy only</span>
+              <span className="text-xs text-bid-400 font-mono">Consumer · Buy only</span>
             )}
             {!canBuy && canSell && (
-              <span className="text-[10px] text-rose-400 font-mono">Generator · Sell only</span>
+              <span className="text-xs text-ask-400 font-mono">Generator · Sell only</span>
             )}
             {canBuy && canSell && (
-              <span className="text-[10px] text-zinc-400 font-mono">Prosumer · Bilateral</span>
+              <span className="text-xs text-zinc-400 font-mono">Prosumer · Bilateral</span>
             )}
           </div>
 
           {canBuy && canSell ? (
             /* Prosumer: Segmented switch between Buy and Sell */
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-950 rounded border border-zinc-800/70">
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded-lg border border-white/[0.07]">
               <button
                 type="button"
                 onClick={() => setSide(OrderSide.BUY)}
                 className={`py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
                   side === OrderSide.BUY
-                    ? 'bg-indigo-600 text-white shadow-xs'
+                    ? 'bg-bid-500 text-white shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -252,7 +252,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
                 onClick={() => setSide(OrderSide.SELL)}
                 className={`py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
                   side === OrderSide.SELL
-                    ? 'bg-rose-600 text-white shadow-xs'
+                    ? 'bg-ask-500 text-white shadow-xs'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -262,24 +262,24 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
           ) : canBuy ? (
             /* Pure Consumer: Fixed Buy ticket with explanatory notice */
             <div className="space-y-1.5">
-              <div className="py-1.5 px-3 bg-zinc-950 rounded border border-indigo-500/30 text-xs font-medium text-indigo-300 flex items-center justify-between">
+              <div className="py-2 px-3 bg-bid-950/40 rounded-lg border border-bid-800 text-xs font-medium text-bid-300 flex items-center justify-between">
                 <span>Buy energy (Bid)</span>
-                <span className="text-[10px] text-zinc-500">Import from grid</span>
+                <span className="text-xs text-zinc-400">Import from grid</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-[10px] text-zinc-500 px-1">
-                <Info className="w-3 h-3 text-zinc-500 shrink-0" />
+              <div className="flex items-center space-x-1.5 text-xs text-zinc-500 px-1">
+                <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                 <span>Selling requires prosumer net-metering registration and verified generation capacity.</span>
               </div>
             </div>
           ) : (
             /* Pure Seller: Fixed Sell ticket */
             <div className="space-y-1.5">
-              <div className="py-1.5 px-3 bg-zinc-950 rounded border border-rose-500/30 text-xs font-medium text-rose-300 flex items-center justify-between">
+              <div className="py-2 px-3 bg-ask-950/40 rounded-lg border border-ask-800 text-xs font-medium text-ask-300 flex items-center justify-between">
                 <span>Sell energy (Ask)</span>
-                <span className="text-[10px] text-zinc-500">Export to grid</span>
+                <span className="text-xs text-zinc-400">Export to grid</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-[10px] text-zinc-500 px-1">
-                <Info className="w-3 h-3 text-zinc-500 shrink-0" />
+              <div className="flex items-center space-x-1.5 text-xs text-zinc-500 px-1">
+                <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                 <span>Buying disabled for generation-only account.</span>
               </div>
             </div>
@@ -288,9 +288,9 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
 
         {/* Limit Price Input in ₹/kWh */}
         <div>
-          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs font-medium text-zinc-400 mb-1">
             <span>Limit price</span>
-            <span className="font-mono text-zinc-500 text-[10px]">
+            <span className="font-mono text-zinc-500 text-xs">
               {pricePaise > 0 ? `${pricePaise} paise/kWh` : '—'}
             </span>
           </div>
@@ -303,13 +303,13 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
               value={priceRupeesInput}
               onChange={(e) => setPriceRupeesInput(e.target.value)}
               placeholder="5.50"
-              className="bg-zinc-950 border-zinc-800 text-xs font-mono pr-16 h-8"
+              className="bg-black/30 border-white/[0.07] text-xs font-mono pr-16 h-8 focus:border-white/20"
             />
-            <span className="absolute right-2.5 top-2 text-[10px] text-zinc-500 font-sans pointer-events-none">
+            <span className="absolute right-2.5 top-2 text-xs text-zinc-500 font-sans pointer-events-none">
               ₹/kWh
             </span>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-1 px-0.5">
+          <div className="flex items-center justify-between text-xs text-zinc-500 mt-1 px-0.5">
             <span>Circuit bounds: ₹2.00 – ₹12.00/kWh</span>
             {isPriceOutOfBounds && (
               <span className="text-amber-400 font-medium">Exceeds regulatory limits</span>
@@ -319,9 +319,9 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
 
         {/* Quantity Input in kWh */}
         <div>
-          <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400 mb-1">
+          <div className="flex items-center justify-between text-xs font-medium text-zinc-400 mb-1">
             <span>Quantity</span>
-            <span className="font-mono text-zinc-500 text-[10px]">
+            <span className="font-mono text-zinc-500 text-xs">
               {qtyWh > 0 ? `${qtyWh.toLocaleString()} Wh` : '—'}
             </span>
           </div>
@@ -334,35 +334,35 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
               value={qtyKwhInput}
               onChange={(e) => setQtyKwhInput(e.target.value)}
               placeholder="2.00"
-              className="bg-zinc-950 border-zinc-800 text-xs font-mono pr-14 h-8"
+              className="bg-black/30 border-white/[0.07] text-xs font-mono pr-14 h-8 focus:border-white/20"
             />
-            <span className="absolute right-2.5 top-2 text-[10px] text-zinc-500 font-sans pointer-events-none">
+            <span className="absolute right-2.5 top-2 text-xs text-zinc-500 font-sans pointer-events-none">
               kWh
             </span>
           </div>
         </div>
 
         {/* Read-Only Interval & Zone Metadata Rows */}
-        <div className="p-2.5 rounded bg-zinc-950/60 border border-zinc-800/60 space-y-1.5 text-xs">
+        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.07] space-y-1.5 text-xs">
           <div className="flex items-center justify-between text-zinc-400">
-            <span className="text-[11px]">Delivery interval</span>
-            <span className="font-mono text-zinc-200 text-[11px]">
+            <span>Delivery interval</span>
+            <span className="font-mono text-zinc-200">
               Slot {currentInterval} ({intervalStr} IST)
             </span>
           </div>
           <div className="flex items-center justify-between text-zinc-400">
-            <span className="text-[11px]">Distribution zone</span>
-            <span className="text-zinc-200 text-[11px]">
+            <span>Distribution zone</span>
+            <span className="text-zinc-200">
               Zone 0{zoneId} (DL-TPDDL)
             </span>
           </div>
         </div>
 
         {/* Estimated Value Row */}
-        <div className="p-2.5 rounded bg-zinc-950 border border-zinc-800/70 flex items-center justify-between text-xs">
+        <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.07] flex items-center justify-between text-xs">
           <div className="space-y-0.5">
-            <div className="text-[11px] text-zinc-400">Estimated value</div>
-            <div className="text-[10px] text-zinc-500 font-mono">
+            <div className="text-zinc-400">Estimated value</div>
+            <div className="text-xs text-zinc-500 font-mono">
               ₹{(pricePaise / 100).toFixed(2)}/kWh × {(qtyWh / 1000).toFixed(2)} kWh
             </div>
           </div>
@@ -373,12 +373,12 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
 
         {/* Self-Trade Prevention Warning */}
         {hasOpposingOrder && (
-          <div className="p-2 rounded bg-amber-950/40 border border-amber-800/70 text-amber-300 text-[11px] space-y-1">
+          <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/70 text-amber-300 text-xs space-y-1">
             <div className="flex items-center space-x-1.5 font-medium">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Self-Trade Prevention active</span>
             </div>
-            <p className="text-[10px] text-amber-300/90 leading-tight">
+            <p className="text-xs text-amber-300/90 leading-tight">
               You already have an active {opposingSide === OrderSide.SELL ? 'Sell' : 'Buy'} order in Slot {currentInterval}.
               Your order cannot match against another order from the same economic identity.
             </p>
@@ -387,14 +387,14 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
 
         {/* Error / Success Feedback */}
         {errorMessage && (
-          <div className="p-2 rounded bg-rose-950/30 border border-rose-800/60 text-rose-300 text-[11px] flex items-start space-x-1.5">
+          <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-800/60 text-rose-300 text-xs flex items-start space-x-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {successNotice && (
-          <div className="p-2 rounded bg-emerald-950/30 border border-emerald-800/60 text-emerald-300 text-[11px] flex items-start space-x-1.5">
+          <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/60 text-emerald-300 text-xs flex items-start space-x-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>{successNotice}</span>
           </div>
@@ -407,7 +407,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
             variant="default"
             size="sm"
             onClick={connectMetaMask}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs h-9 cursor-pointer shadow-xs"
+            className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium text-xs h-9 cursor-pointer shadow-xs"
           >
             <Wallet className="w-3.5 h-3.5 mr-1.5" />
             Connect wallet to sign
@@ -418,10 +418,10 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
             disabled={isSigning || hasOpposingOrder || isPriceOutOfBounds}
             className={`w-full font-medium text-xs h-9 cursor-pointer transition-colors shadow-xs ${
               hasOpposingOrder || isPriceOutOfBounds
-                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                ? 'bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]'
                 : side === OrderSide.BUY
-                ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                : 'bg-rose-600 hover:bg-rose-500 text-white'
+                ? 'bg-bid-500 hover:bg-bid-400 text-white'
+                : 'bg-ask-500 hover:bg-ask-400 text-white'
             }`}
           >
             {isSigning ? (
@@ -439,7 +439,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
                   <FileCheck className="w-3.5 h-3.5" />
                   {side === OrderSide.BUY ? 'Place buy order' : 'Place sell order'}
                 </span>
-                <span className="text-[9px] opacity-80 font-normal">
+                <span className="text-xs opacity-80 font-normal">
                   Requires EIP-712 wallet signature
                 </span>
               </div>
@@ -450,3 +450,4 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
     </div>
   );
 };
+

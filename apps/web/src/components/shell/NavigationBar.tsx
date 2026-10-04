@@ -57,7 +57,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   ];
 
   return (
-    <nav className="border-b border-zinc-800 bg-[#0e0e11] px-4 flex items-center justify-between overflow-x-auto select-none">
+    <nav className="border-b border-white/[0.07] bg-panel px-4 flex items-center justify-between overflow-x-auto select-none">
       <div className="flex space-x-1 sm:space-x-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -77,10 +77,10 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
               <span>{tab.label}</span>
               {tab.badge && (
                 <span
-                  className={`text-[10px] px-1 py-0.2 rounded-sm border ${
+                  className={`text-[11px] px-1 py-0.2 rounded-sm border ${
                     isActive
-                      ? 'bg-zinc-800 border-zinc-700 text-zinc-300'
-                      : 'bg-zinc-900 border-zinc-800/80 text-zinc-500'
+                      ? 'bg-zinc-800 border-white/10 text-zinc-300'
+                      : 'bg-zinc-900 border-white/[0.07] text-zinc-500'
                   }`}
                 >
                   {tab.badge}

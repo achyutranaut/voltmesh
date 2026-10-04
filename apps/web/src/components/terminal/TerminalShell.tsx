@@ -40,7 +40,7 @@ export const TerminalShell: React.FC<TerminalShellProps> = ({
 }) => {
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="relative flex min-h-screen w-full bg-[#06070a] text-zinc-300 font-sans selection:bg-indigo-950 selection:text-indigo-200">
+      <div className="relative flex min-h-screen w-full bg-canvas text-zinc-300 font-sans selection:bg-emerald-950 selection:text-emerald-200">
         {/* Persistent Desktop / Collapsible Tablet / Sheet Mobile Sidebar */}
         <TerminalSidebar
           activeTab={activeTab}
@@ -53,7 +53,7 @@ export const TerminalShell: React.FC<TerminalShellProps> = ({
         />
 
         {/* Main Terminal Inset */}
-        <SidebarInset className="bg-[#06070a] flex flex-col min-h-screen min-w-0">
+        <SidebarInset className="bg-canvas flex flex-col min-h-screen min-w-0">
           {/* Contextual Top Bar */}
           <TerminalTopBar
             activeTab={activeTab}

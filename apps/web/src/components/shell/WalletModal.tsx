@@ -94,17 +94,17 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
 
       {/* Right-Side Slide-Over Wallet Drawer */}
       <div
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-[#0c0d12] border-l border-zinc-800 shadow-2xl p-5 flex flex-col justify-between font-mono text-xs text-zinc-200 overflow-y-auto animate-in slide-in-from-right duration-200"
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-panel border-l border-white/[0.07] shadow-2xl p-5 flex flex-col justify-between font-mono text-xs text-zinc-200 overflow-y-auto animate-in slide-in-from-right duration-200"
         role="dialog"
         aria-modal="true"
         aria-label="Wallet Account Drawer"
       >
         <div className="space-y-4">
           {/* 1. Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
             <div className="flex items-center space-x-2">
               <Wallet className="w-4 h-4 text-emerald-400" />
-              <span className="font-bold text-white text-sm uppercase font-sans tracking-wide">
+              <span className="font-bold text-white text-sm font-sans tracking-wide">
                 WALLET
               </span>
             </div>
@@ -127,8 +127,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           </div>
 
           {/* 2. Address */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500">
               <span className="uppercase tracking-wider font-semibold">ADDRESS</span>
               <button
                 onClick={() => handleCopy(address)}
@@ -138,22 +138,22 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                 <span>{copied ? 'COPIED' : 'COPY'}</span>
               </button>
             </div>
-            <div className="text-white font-mono text-[11px] break-all bg-zinc-900/60 p-2 rounded border border-zinc-800/60 font-semibold select-all">
+            <div className="text-white font-mono text-[11px] break-all bg-zinc-900/60 p-2 rounded border border-white/[0.07] font-semibold select-all">
               {address}
             </div>
 
             {/* Roles tags */}
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-semibold">
+              <span className="text-[11px] px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-900 text-zinc-400 font-semibold">
                 TRADER
               </span>
               {roles.isParticipant && (
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-emerald-400 font-semibold">
+                <span className="text-[11px] px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-emerald-400 font-semibold">
                   REGISTERED PARTICIPANT
                 </span>
               )}
               {roles.isAdmin && (
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-950 border border-purple-800 text-purple-400 font-semibold">
+                <span className="text-[11px] px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-900 text-zinc-400 font-semibold">
                   ADMIN
                 </span>
               )}
@@ -161,31 +161,31 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           </div>
 
           {/* 2b. ON-CHAIN CAPABILITIES & [SIMULATION / DEMO MODE] */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-2.5">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-2.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
               <span className="flex items-center gap-1.5">
-                <Shield className="w-3 h-3 text-indigo-400" />
+                <Shield className="w-3 h-3 text-emerald-400" />
                 <span>PARTICIPANT CAPABILITIES</span>
               </span>
               {simulationMode ? (
-                <span className="text-amber-400 font-mono text-[9px] bg-amber-950/60 border border-amber-800/60 px-1 py-0.2 rounded">
+                <span className="text-amber-400 font-mono text-[11px] bg-amber-950/60 border border-amber-800/60 px-1 py-0.2 rounded">
                   [Simulation / Demo Mode]
                 </span>
               ) : (
-                <span className="text-emerald-400 font-mono text-[9px] bg-emerald-950/60 border border-emerald-800/60 px-1 py-0.2 rounded">
+                <span className="text-emerald-400 font-mono text-[11px] bg-emerald-950/60 border border-emerald-800/60 px-1 py-0.2 rounded">
                   ON-CHAIN AUTHORIZED
                 </span>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
-              <div className="p-1.5 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
+              <div className="p-1.5 rounded bg-zinc-900/60 border border-white/[0.07] flex items-center justify-between">
                 <span className="text-zinc-500">canBuy</span>
                 <span className={capabilities.canBuy ? 'text-emerald-400 font-semibold' : 'text-zinc-600'}>
                   {capabilities.canBuy ? 'YES ✓' : 'NO'}
                 </span>
               </div>
-              <div className="p-1.5 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
+              <div className="p-1.5 rounded bg-zinc-900/60 border border-white/[0.07] flex items-center justify-between">
                 <span className="text-zinc-500">canSell</span>
                 <span className={capabilities.canSell ? 'text-emerald-400 font-semibold' : 'text-zinc-600'}>
                   {capabilities.canSell ? 'YES ✓' : 'NO'}
@@ -196,13 +196,13 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
             {/* Simulation mode dev toggle */}
             <div className="pt-2 border-t border-zinc-900 space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-500">DEV SIMULATION:</span>
+                <span className="text-[11px] text-zinc-500">DEV SIMULATION:</span>
                 <button
                   onClick={() => setSimulationMode(!simulationMode)}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer font-sans font-medium ${
+                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors cursor-pointer font-sans font-medium ${
                     simulationMode
                       ? 'bg-amber-950/80 border-amber-600 text-amber-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                      : 'bg-zinc-900 border-white/[0.07] text-zinc-400 hover:text-white'
                   }`}
                 >
                   {simulationMode ? 'Active (Click to Exit)' : 'Enable [Simulation / Demo Mode]'}
@@ -214,26 +214,26 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => setSimulationRole('PROSUMER')}
-                      className={`py-1 px-1.5 rounded text-[10px] font-semibold border transition-colors cursor-pointer text-center ${
+                      className={`py-1 px-1.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer text-center ${
                         simulationRole === 'PROSUMER'
-                          ? 'bg-indigo-950 border-indigo-500 text-indigo-200'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                          ? 'bg-emerald-950 border-emerald-500 text-emerald-200'
+                          : 'bg-zinc-900 border-white/[0.07] text-zinc-400 hover:text-white'
                       }`}
                     >
                       Prosumer (Buy + Sell)
                     </button>
                     <button
                       onClick={() => setSimulationRole('CONSUMER')}
-                      className={`py-1 px-1.5 rounded text-[10px] font-semibold border transition-colors cursor-pointer text-center ${
+                      className={`py-1 px-1.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer text-center ${
                         simulationRole === 'CONSUMER'
-                          ? 'bg-indigo-950 border-indigo-500 text-indigo-200'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                          ? 'bg-emerald-950 border-emerald-500 text-emerald-200'
+                          : 'bg-zinc-900 border-white/[0.07] text-zinc-400 hover:text-white'
                       }`}
                     >
                       Consumer (Buy Only)
                     </button>
                   </div>
-                  <p className="text-[9px] text-amber-400/80 leading-tight">
+                  <p className="text-[11px] text-amber-400/80 leading-tight">
                     Simulation mode previews UI behavior. Real orders require cryptographic keys.
                   </p>
                 </div>
@@ -242,13 +242,13 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           </div>
 
           {/* 2c. DISCOM UTILITY IDENTITY & VERIFIABLE CREDENTIAL (IES) */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-2.5">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-2.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
               <span className="flex items-center space-x-1.5">
                 <Shield className="w-3 h-3 text-emerald-400" />
                 <span>DISCOM UTILITY IDENTITY</span>
               </span>
-              <span className="text-emerald-400 font-mono text-[9px] bg-emerald-950/60 border border-emerald-800/60 px-1 py-0.2 rounded">
+              <span className="text-emerald-400 font-mono text-[11px] bg-emerald-950/60 border border-emerald-800/60 px-1 py-0.2 rounded">
                 VC: {utilityIdentity.vcStatus}
               </span>
             </div>
@@ -260,7 +260,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500">Consumer No:</span>
-                <span className="text-cyan-300 font-semibold">{utilityIdentity.consumerNumber}</span>
+                <span className="text-zinc-400 font-semibold">{utilityIdentity.consumerNumber}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500">CA Number:</span>
@@ -283,7 +283,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                   <span className="text-amber-300 font-semibold">{utilityIdentity.solarCapacityKw} kW Rated</span>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-1 border-t border-zinc-900 text-[10px]">
+              <div className="flex items-center justify-between pt-1 border-t border-zinc-900 text-[11px]">
                 <span className="text-zinc-500">Credential DID:</span>
                 <span className="text-zinc-400 truncate max-w-[170px]">{utilityIdentity.vcIssuer}</span>
               </div>
@@ -291,8 +291,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           </div>
 
           {/* 3. Network */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-2">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-2">
+            <div className="text-[11px] text-zinc-500 font-semibold">
               NETWORK
             </div>
             <div className="flex items-center justify-between">
@@ -306,13 +306,13 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                   {isCorrectNetwork ? 'VoltMesh Testnet (31337)' : `Chain ID ${chainId ?? 'Unknown'}`}
                 </span>
               </div>
-              <span className={`text-[10px] font-semibold ${isCorrectNetwork ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span className={`text-[11px] font-semibold ${isCorrectNetwork ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {isCorrectNetwork ? 'VERIFIED' : 'WRONG NET'}
               </span>
             </div>
 
             {!isCorrectNetwork && (
-              <div className="pt-2 border-t border-zinc-800/60">
+              <div className="pt-2 border-t border-white/[0.07]">
                 <button
                   onClick={() => switchNetwork(DEFAULT_CHAIN_ID)}
                   className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 rounded bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs transition-colors cursor-pointer"
@@ -325,8 +325,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           </div>
 
           {/* 4. Balance */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-3">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-3">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
               <span>BALANCES</span>
               <div className="flex items-center space-x-2">
                 <button
@@ -358,7 +358,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
             </div>
 
             {ethBalance === 0n && (
-              <div className="p-2 bg-amber-950/40 border border-amber-800/80 rounded text-amber-300 text-[10px] flex items-center justify-between">
+              <div className="p-2 bg-amber-950/40 border border-amber-800/80 rounded text-amber-300 text-[11px] flex items-center justify-between">
                 <span>0 ETH: Gas fee will be unavailable!</span>
                 <button
                   onClick={handleFundGas}
@@ -383,20 +383,20 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
             </div>
 
             {/* Escrow Collateral */}
-            <div className="pt-2 border-t border-zinc-800/60 space-y-1">
+            <div className="pt-2 border-t border-white/[0.07] space-y-1">
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-zinc-400">Escrow Total:</span>
                 <span className="text-zinc-200 font-semibold">
                   {Number(formatUnits(escrowBalances.total, 18)).toFixed(2)} vUSD
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[10px] text-zinc-500">
+              <div className="flex items-center justify-between text-[11px] text-zinc-500">
                 <span>Free Headroom:</span>
                 <span className="text-emerald-400">
                   {Number(formatUnits(escrowBalances.free, 18)).toFixed(2)} vUSD
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[10px] text-zinc-500">
+              <div className="flex items-center justify-between text-[11px] text-zinc-500">
                 <span>Locked Margin:</span>
                 <span className="text-amber-400">
                   {Number(formatUnits(escrowBalances.locked, 18)).toFixed(2)} vUSD
@@ -406,8 +406,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           </div>
 
           {/* 5. Connected Via */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1">
+            <div className="text-[11px] text-zinc-500 font-semibold">
               CONNECTED
             </div>
             <div className="flex items-center justify-between text-zinc-300">
@@ -423,14 +423,14 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
           {/* 6. Recent Session Transactions */}
           {txHistory.length > 0 && (
             <div className="space-y-1">
-              <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+              <div className="text-[11px] text-zinc-500 font-semibold">
                 RECENT TRANSACTIONS
               </div>
               <div className="space-y-1 max-h-28 overflow-y-auto">
                 {txHistory.slice(0, 5).map((tx, idx) => (
                   <div
                     key={idx}
-                    className="p-1.5 bg-zinc-950 border border-zinc-800/60 rounded flex items-center justify-between text-[10px]"
+                    className="p-1.5 bg-zinc-950 border border-white/[0.07] rounded flex items-center justify-between text-[11px]"
                   >
                     <span className="text-zinc-300 truncate max-w-[180px]">{tx.description}</span>
                     <span
@@ -452,7 +452,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
         </div>
 
         {/* 7. Action Footer: DEV DIAGNOSTICS / VIEW ON EXPLORER / DISCONNECT */}
-        <div className="pt-4 border-t border-zinc-800 space-y-2 mt-4">
+        <div className="pt-4 border-t border-white/[0.07] space-y-2 mt-4">
           {onOpenDiagnostics && (
             <button
               onClick={() => {
@@ -470,7 +470,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
             href={getExplorerAddressUrl(address, chainId ?? DEFAULT_CHAIN_ID)}
             target="_blank"
             rel="noreferrer"
-            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer text-xs"
+            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/[0.07] text-zinc-300 hover:text-white transition-colors cursor-pointer text-xs"
           >
             <span>VIEW ON EXPLORER</span>
             <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
@@ -481,7 +481,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
               disconnect();
               onClose();
             }}
-            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 rounded bg-zinc-900 hover:bg-rose-950/40 text-rose-400 border border-zinc-800 hover:border-rose-900 transition-colors cursor-pointer text-xs font-semibold"
+            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 rounded bg-zinc-900 hover:bg-rose-950/40 text-rose-400 border border-white/[0.07] hover:border-rose-900 transition-colors cursor-pointer text-xs font-semibold"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>DISCONNECT</span>

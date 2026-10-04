@@ -51,14 +51,14 @@ export const SettlementTimeline: React.FC = () => {
 
   return (
     <div className="w-full space-y-3 font-sans">
-      <div className="text-xs pb-1 border-b border-zinc-800/60 font-semibold text-white">
+      <div className="text-xs pb-1 border-b border-white/[0.07] font-semibold text-white">
         T+1 Settlement lifecycle timeline
       </div>
 
-      <div className="bg-[#080a0f] border border-zinc-800/60 rounded p-4 overflow-x-auto">
+      <div className="bg-panel border border-white/[0.07] rounded-lg p-4 overflow-x-auto">
         <div className="flex items-center justify-between min-w-[700px] relative">
           {/* Timeline track line */}
-          <div className="absolute top-3.5 left-4 right-4 h-[1px] bg-zinc-800 -z-0" />
+          <div className="absolute top-3.5 left-4 right-4 h-[1px] bg-white/[0.07] -z-0" />
 
           {steps.map((step, idx) => {
             const isDone = step.status === 'completed';
@@ -71,14 +71,14 @@ export const SettlementTimeline: React.FC = () => {
                     isDone
                       ? 'bg-emerald-950 border-emerald-600 text-emerald-400'
                       : isActive
-                      ? 'bg-indigo-950 border-indigo-500 text-indigo-400 animate-pulse'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-600'
+                      ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400 animate-pulse'
+                      : 'bg-white/[0.02] border-white/[0.07] text-zinc-600'
                   }`}
                 >
                   {isDone ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   ) : isActive ? (
-                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
                   ) : (
                     <Circle className="w-2.5 h-2.5 text-zinc-600" />
                   )}
@@ -87,12 +87,12 @@ export const SettlementTimeline: React.FC = () => {
                 <div className="space-y-0.5">
                   <div
                     className={`text-xs font-medium ${
-                      isDone ? 'text-zinc-200' : isActive ? 'text-indigo-300' : 'text-zinc-500'
+                      isDone ? 'text-zinc-200' : isActive ? 'text-emerald-400' : 'text-zinc-500'
                     }`}
                   >
                     {step.label}
                   </div>
-                  <div className="text-[10px] text-zinc-500 max-w-[110px] leading-tight">
+                  <div className="text-xs text-zinc-500 max-w-[120px] leading-tight">
                     {step.description}
                   </div>
                 </div>

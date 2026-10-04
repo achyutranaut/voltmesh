@@ -119,13 +119,13 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
       {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Operations Observability
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-900 text-zinc-300 border border-white/[0.07]">
               <Cpu className="w-3 h-3 text-zinc-400" />
               Subsystem status
             </span>
@@ -141,15 +141,15 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
         {subsystems.map((sub, idx) => (
           <div
             key={idx}
-            className="p-3.5 rounded bg-[#080a0f] border border-zinc-800/60 space-y-2 text-xs"
+            className="p-3.5 rounded-lg bg-panel border border-white/[0.07] space-y-2 text-xs"
           >
             <div className="flex items-center justify-between">
               <span className="font-medium text-white">{sub.name}</span>
               <span
-                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                   sub.healthy
                     ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
-                    : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+                    : 'bg-zinc-900 text-zinc-400 border border-white/[0.07]'
                 }`}
               >
                 {sub.healthy ? (
@@ -161,11 +161,11 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
               </span>
             </div>
 
-            <div className="text-[11px] text-zinc-400 leading-normal">
+            <div className="text-xs text-zinc-400 leading-normal">
               {sub.detail}
             </div>
 
-            <div className="pt-2 border-t border-zinc-850/60 flex items-center justify-between text-[10px] text-zinc-500">
+            <div className="pt-2 border-t border-white/[0.07] flex items-center justify-between text-xs text-zinc-500">
               <span>Provenance:</span>
               <span className="font-mono text-zinc-400">{sub.provenance}</span>
             </div>
@@ -177,12 +177,12 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span className="font-medium text-zinc-300">RPC response latency</span>
-          <span className="font-mono text-[11px] text-zinc-500">
+          <span className="font-mono text-xs text-zinc-500">
             {rpcLatency ? `${rpcLatency} ms current` : 'Local devnet'}
           </span>
         </div>
 
-        <div className="h-44 w-full bg-[#080a0f] border border-zinc-800/60 rounded p-2">
+        <div className="h-44 w-full bg-panel border border-white/[0.07] rounded-lg p-2">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={latencyHistory} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
               <XAxis

@@ -40,22 +40,22 @@ export const PriceChart: React.FC<PriceChartProps> = ({
           <span className="font-medium text-zinc-200">
             {isFinalCleared ? 'Final clearing price history' : 'Indicative clearing price series'}
           </span>
-          <span className="text-[10px] text-zinc-500 font-mono bg-zinc-900 border border-zinc-800 px-1.5 py-0.2 rounded">
+          <span className="text-xs text-zinc-500 font-mono bg-white/[0.04] border border-white/[0.07] px-2 py-0.5 rounded">
             Simulated market data
           </span>
         </div>
-        <span className="font-mono text-[11px] text-zinc-500">
+        <span className="font-mono text-xs text-zinc-500">
           Discrete 15-min slots
         </span>
       </div>
 
-      <div className="h-48 w-full bg-[#08090f] border border-zinc-800/60 rounded p-2">
+      <div className="h-48 w-full bg-panel border border-white/[0.07] rounded-lg p-2">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
@@ -77,10 +77,10 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             />
             <RechartsTooltip
               contentStyle={{
-                backgroundColor: '#0c0d14',
-                borderColor: '#27272a',
-                borderRadius: '4px',
-                fontSize: '11px',
+                backgroundColor: '#101217',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '6px',
+                fontSize: '12px',
                 color: '#fff',
               }}
               formatter={(val: any) => [`₹${(Number(val) / 100).toFixed(2)}/kWh`, isFinalCleared ? 'Final Price' : 'Indicative Price']}
@@ -89,11 +89,11 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             {clearingPrice && (
               <ReferenceLine
                 y={Number(clearingPrice) * 100}
-                stroke="#6366f1"
+                stroke="#10b981"
                 strokeDasharray="3 3"
                 label={{
                   value: `Final: ₹${Number(clearingPrice).toFixed(2)}/kWh`,
-                  fill: '#818cf8',
+                  fill: '#34d399',
                   fontSize: 10,
                   position: 'insideTopRight',
                 }}
@@ -103,11 +103,11 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             <Area
               type="stepAfter"
               dataKey="price"
-              stroke="#6366f1"
+              stroke="#10b981"
               strokeWidth={1.75}
               fill="url(#priceGradient)"
-              dot={{ r: 3, fill: '#6366f1', stroke: '#08090f', strokeWidth: 1.5 }}
-              activeDot={{ r: 5, fill: '#818cf8', stroke: '#08090f', strokeWidth: 2 }}
+              dot={{ r: 3, fill: '#10b981', stroke: '#101217', strokeWidth: 1.5 }}
+              activeDot={{ r: 5, fill: '#34d399', stroke: '#101217', strokeWidth: 2 }}
             />
           </AreaChart>
         </ResponsiveContainer>

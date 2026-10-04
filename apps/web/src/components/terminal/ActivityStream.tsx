@@ -40,14 +40,14 @@ export const ActivityStream: React.FC<ActivityStreamProps> = ({ onSelectDetail }
   const getEventIcon = (type: string) => {
     switch (type) {
       case 'order':
-        return <FileCheck className="w-3.5 h-3.5 text-indigo-400" />;
+        return <FileCheck className="w-3.5 h-3.5 text-emerald-400" />;
       case 'clearing':
         return <Layers className="w-3.5 h-3.5 text-amber-400" />;
       case 'escrow':
       case 'faucet':
         return <Coins className="w-3.5 h-3.5 text-emerald-400" />;
       case 'oracle':
-        return <Shield className="w-3.5 h-3.5 text-cyan-400" />;
+        return <Shield className="w-3.5 h-3.5 text-zinc-400" />;
       case 'certificate':
         return <Award className="w-3.5 h-3.5 text-yellow-400" />;
       case 'retirement':
@@ -84,13 +84,13 @@ export const ActivityStream: React.FC<ActivityStreamProps> = ({ onSelectDetail }
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
       {/* 1. Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Activity Stream
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-300 border border-zinc-800">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-900 text-zinc-300 border border-white/[0.07]">
               <History className="w-3 h-3 text-emerald-400" />
               Event log
             </span>
@@ -110,8 +110,8 @@ export const ActivityStream: React.FC<ActivityStreamProps> = ({ onSelectDetail }
               onClick={() => setFilterType(cat)}
               className={`px-2.5 py-1 rounded capitalize text-xs transition-colors cursor-pointer border ${
                 filterType === cat
-                  ? 'bg-zinc-800 text-white border-zinc-700 font-medium'
-                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-800/70 hover:text-zinc-200'
+                  ? 'bg-zinc-800 text-white border-white/10 font-medium'
+                  : 'bg-zinc-900/60 text-zinc-400 border-white/[0.07] hover:text-zinc-200'
               }`}
             >
               {cat === 'all' ? 'All events' : cat}
@@ -125,23 +125,23 @@ export const ActivityStream: React.FC<ActivityStreamProps> = ({ onSelectDetail }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search events or hashes..."
-            className="pl-8 bg-zinc-950 border-zinc-800 text-xs h-7"
+            className="pl-8 bg-zinc-950 border-white/[0.07] text-xs h-7"
           />
         </div>
       </div>
 
       {/* 3. Event Stream Table */}
-      <div className="bg-[#080a0f] border border-zinc-800/60 rounded overflow-x-auto">
+      <div className="bg-panel border border-white/[0.07] rounded-lg overflow-x-auto">
         <table className="w-full text-left text-xs min-w-[650px]">
           <thead>
-            <tr className="border-b border-zinc-800/60 bg-zinc-900/30 text-[10px] text-zinc-500">
+            <tr className="border-b border-white/[0.07] bg-zinc-900/30 text-xs text-zinc-500">
               <th className="py-2.5 px-3 font-medium">Timestamp</th>
               <th className="py-2.5 px-3 font-medium">Event</th>
               <th className="py-2.5 px-3 font-medium">Details</th>
               <th className="py-2.5 px-3 font-medium text-right">Transaction</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-850/40">
+          <tbody className="divide-y divide-white/[0.06]">
             {filteredEvents.length === 0 ? (
               <tr>
                 <td colSpan={4} className="py-8 text-center text-zinc-600 text-xs italic">
@@ -153,9 +153,9 @@ export const ActivityStream: React.FC<ActivityStreamProps> = ({ onSelectDetail }
                 <tr
                   key={item.id}
                   onClick={() => handleInspectEvent(item)}
-                  className="hover:bg-zinc-850/40 cursor-pointer transition-colors"
+                  className="hover:bg-zinc-800/40 cursor-pointer transition-colors"
                 >
-                  <td className="py-2.5 px-3 font-mono text-[11px] text-zinc-500 whitespace-nowrap">
+                  <td className="py-2.5 px-3 font-mono text-xs text-zinc-500 whitespace-nowrap">
                     {item.timestamp}
                   </td>
 
@@ -177,13 +177,13 @@ export const ActivityStream: React.FC<ActivityStreamProps> = ({ onSelectDetail }
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center font-mono text-[11px] text-indigo-400 hover:text-indigo-300"
+                        className="inline-flex items-center font-mono text-xs text-emerald-400 hover:text-emerald-300"
                       >
                         <span>{item.txHash.slice(0, 6)}...{item.txHash.slice(-4)}</span>
                         <ExternalLink className="w-3 h-3 ml-1" />
                       </a>
                     ) : (
-                      <span className="text-zinc-600 font-mono text-[11px]">Off-chain</span>
+                      <span className="text-zinc-600 font-mono text-xs">Off-chain</span>
                     )}
                   </td>
                 </tr>

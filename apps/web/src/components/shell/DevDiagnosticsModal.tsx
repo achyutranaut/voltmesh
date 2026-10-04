@@ -264,16 +264,16 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl bg-[#0c0d12] border border-zinc-800 rounded-lg shadow-2xl p-6 font-mono text-xs text-zinc-200 space-y-5 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-2xl bg-panel border border-white/[0.07] rounded-lg shadow-2xl p-6 font-mono text-xs text-zinc-200 space-y-5 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
           <div className="flex items-center space-x-2.5">
             <Terminal className="w-5 h-5 text-emerald-400" />
             <div>
               <div className="font-bold text-white text-sm tracking-wide">
                 VOLTMESH DEVNET RPC DIAGNOSTICS & TEST SUITE
               </div>
-              <div className="text-[10px] text-zinc-500">
+              <div className="text-[11px] text-zinc-500">
                 Live EVM JSON-RPC Telemetry · Chain ID 31337
               </div>
             </div>
@@ -299,22 +299,22 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
         {/* 1. RPC Status Overview Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {/* Network */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">NETWORK</div>
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1">
+            <div className="text-[11px] text-zinc-500 font-semibold">NETWORK</div>
             <div className="text-white font-bold text-xs truncate">VoltMesh Testnet</div>
-            <div className="text-[10px] text-zinc-400">Local Devnet</div>
+            <div className="text-[11px] text-zinc-400">Local Devnet</div>
           </div>
 
           {/* Chain ID */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">CHAIN ID</div>
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1">
+            <div className="text-[11px] text-zinc-500 font-semibold">CHAIN ID</div>
             <div className="text-emerald-400 font-bold text-xs">31337</div>
-            <div className="text-[10px] text-zinc-500 font-mono">0x7a69 (hex)</div>
+            <div className="text-[11px] text-zinc-500 font-mono">0x7a69 (hex)</div>
           </div>
 
           {/* RPC Status */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">RPC STATUS</div>
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1">
+            <div className="text-[11px] text-zinc-500 font-semibold">RPC STATUS</div>
             <div className="flex items-center space-x-1.5">
               <span
                 className={`w-2 h-2 rounded-full ${
@@ -337,16 +337,16 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
                 {rpcStatus}
               </span>
             </div>
-            <div className="text-[10px] text-zinc-500 font-mono truncate">{rpcUrl}</div>
+            <div className="text-[11px] text-zinc-500 font-mono truncate">{rpcUrl}</div>
           </div>
 
           {/* Latest Block */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">LATEST BLOCK</div>
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1">
+            <div className="text-[11px] text-zinc-500 font-semibold">LATEST BLOCK</div>
             <div className="text-white font-bold text-xs">
               {latestBlock !== null ? `#${latestBlock.toString()}` : '—'}
             </div>
-            <div className="text-[10px] text-zinc-500 font-mono">
+            <div className="text-[11px] text-zinc-500 font-mono">
               Limit: {blockGasLimit ? `${(Number(blockGasLimit) / 1_000_000).toFixed(0)}M gas` : '—'}
             </div>
           </div>
@@ -354,8 +354,8 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
 
         {/* 2. Gas & EIP-1559 Telemetry */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
               <span className="flex items-center gap-1">
                 <Fuel className="w-3.5 h-3.5 text-amber-400" />
                 RPC GAS PRICE
@@ -365,31 +365,31 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
             <div className="text-white font-bold text-sm">
               {gasPrice !== null ? `${Number(formatGwei(gasPrice)).toFixed(6)} Gwei` : '—'}
             </div>
-            <div className="text-[10px] text-zinc-500 font-mono">
+            <div className="text-[11px] text-zinc-500 font-mono">
               {gasPrice !== null ? `${gasPrice.toString()} wei` : '—'}
             </div>
           </div>
 
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="p-3 bg-zinc-950/80 border border-white/[0.07] rounded space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
               <span className="flex items-center gap-1">
-                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                <Activity className="w-3.5 h-3.5 text-zinc-400" />
                 BASE FEE (EIP-1559)
               </span>
-              <span className="text-cyan-400 font-mono">baseFeePerGas</span>
+              <span className="text-zinc-400 font-mono">baseFeePerGas</span>
             </div>
             <div className="text-white font-bold text-sm">
               {baseFee !== null ? `${baseFee.toString()} wei` : 'N/A (Legacy Chain)'}
             </div>
-            <div className="text-[10px] text-zinc-500 font-mono">
+            <div className="text-[11px] text-zinc-500 font-mono">
               {baseFee !== null ? `${Number(formatGwei(baseFee)).toFixed(8)} Gwei` : '—'}
             </div>
           </div>
         </div>
 
         {/* 3. Connected Wallet & Native Balance */}
-        <div className="p-3.5 bg-zinc-950 border border-zinc-800/80 rounded space-y-2.5">
-          <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+        <div className="p-3.5 bg-zinc-950 border border-white/[0.07] rounded space-y-2.5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
             <span>CONNECTED WALLET IDENTITY</span>
             {isConnected && (
               <button
@@ -406,7 +406,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
             <div className="sm:col-span-8 space-y-1">
               <div className="text-[11px] text-zinc-400">Address:</div>
-              <div className="text-white font-mono text-xs break-all bg-zinc-900/60 p-1.5 rounded border border-zinc-800 select-all">
+              <div className="text-white font-mono text-xs break-all bg-zinc-900/60 p-1.5 rounded border border-white/[0.07] select-all">
                 {address || 'Wallet disconnected'}
               </div>
             </div>
@@ -437,13 +437,13 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
         </div>
 
         {/* 4. Active Contract & Live Gas Estimation */}
-        <div className="p-3.5 bg-zinc-950 border border-zinc-800/80 rounded space-y-2.5">
-          <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+        <div className="p-3.5 bg-zinc-950 border border-white/[0.07] rounded space-y-2.5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
             <span>TARGET CONTRACT & LIVE GAS ESTIMATION</span>
             <button
               onClick={runContractGasEstimate}
               disabled={isEstimatingGas || !isConnected}
-              className="text-cyan-400 hover:text-cyan-300 underline cursor-pointer disabled:opacity-50"
+              className="text-zinc-400 hover:text-zinc-400 underline cursor-pointer disabled:opacity-50"
             >
               {isEstimatingGas ? 'ESTIMATING...' : 'RE-RUN ESTIMATION'}
             </button>
@@ -452,11 +452,11 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
             {/* Contract selector */}
             <div className="sm:col-span-5 space-y-1">
-              <label className="text-[10px] text-zinc-500 uppercase">Select Contract</label>
+              <label className="text-[11px] text-zinc-500">Select Contract</label>
               <select
                 value={selectedContractKey}
                 onChange={(e) => setSelectedContractKey(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 font-mono focus:border-emerald-500 outline-none"
+                className="w-full bg-zinc-900 border border-white/[0.07] rounded px-2.5 py-1.5 text-xs text-zinc-200 font-mono focus:border-emerald-500 outline-none"
               >
                 <option value="EpochOracle">EpochOracle.sol</option>
                 <option value="MockERC20">MockERC20.sol (vUSD)</option>
@@ -469,22 +469,22 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
 
             {/* Address */}
             <div className="sm:col-span-4 space-y-1">
-              <label className="text-[10px] text-zinc-500 uppercase">On-Chain Address</label>
-              <div className="text-zinc-300 font-mono text-xs truncate bg-zinc-900/60 p-1.5 rounded border border-zinc-800">
+              <label className="text-[11px] text-zinc-500">On-Chain Address</label>
+              <div className="text-zinc-300 font-mono text-xs truncate bg-zinc-900/60 p-1.5 rounded border border-white/[0.07]">
                 {activeContract?.address || 'Not deployed'}
               </div>
             </div>
 
             {/* Live Estimate */}
             <div className="sm:col-span-3 space-y-1 sm:text-right">
-              <label className="text-[10px] text-zinc-500 uppercase">Live Gas Estimate</label>
+              <label className="text-[11px] text-zinc-500">Live Gas Estimate</label>
               <div className="text-white font-bold text-xs">
                 {liveGasEstimate !== null ? (
                   <span className="text-emerald-400">{liveGasEstimate.toString()} gas</span>
                 ) : isEstimatingGas ? (
                   <span className="text-zinc-500">Estimating...</span>
                 ) : (
-                  <span className="text-rose-400 text-[10px]">Failed</span>
+                  <span className="text-rose-400 text-[11px]">Failed</span>
                 )}
               </div>
             </div>
@@ -502,11 +502,11 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Play className="w-4 h-4 text-emerald-400" />
-              <span className="font-bold text-white text-xs uppercase tracking-wide">
+              <span className="font-bold text-white text-xs">
                 DEV ACTION: TEST REAL TRANSACTION WITH METAMASK
               </span>
             </div>
-            <span className="text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800">
+            <span className="text-[11px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800">
               LEGITIMATE ON-CHAIN CALL
             </span>
           </div>
@@ -562,7 +562,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-              <div className="text-[10px] text-zinc-400 font-mono break-all">
+              <div className="text-[11px] text-zinc-400 font-mono break-all">
                 Tx Hash: {testTxHash}
               </div>
             </div>
@@ -582,7 +582,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-zinc-800 text-[11px] text-zinc-500">
+        <div className="flex items-center justify-between pt-3 border-t border-white/[0.07] text-[11px] text-zinc-500">
           <div>VoltMesh Decentralized Energy Exchange · Core Engine</div>
           <button
             onClick={onClose}

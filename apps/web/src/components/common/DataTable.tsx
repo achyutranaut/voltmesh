@@ -79,10 +79,10 @@ export function DataTable<T>({
   };
 
   return (
-    <div className="flex flex-col border border-zinc-800 bg-[#121215] rounded-none">
+    <div className="flex flex-col border border-white/[0.07] bg-panel rounded-none">
       {/* Search Header if searchFilter provided */}
       {searchFilter && (
-        <div className="p-2.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/40">
+        <div className="p-2.5 border-b border-white/[0.07] flex items-center justify-between bg-zinc-900/40">
           <div className="relative w-72">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
@@ -90,7 +90,7 @@ export function DataTable<T>({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 pl-8 pr-3 py-1 rounded placeholder-zinc-600 focus:outline-none focus:border-emerald-600 font-mono"
+              className="w-full bg-zinc-950 border border-white/[0.07] text-xs text-zinc-200 pl-8 pr-3 py-1 rounded placeholder-zinc-600 focus:outline-none focus:border-emerald-600 font-mono"
             />
           </div>
           <div className="text-[11px] font-mono text-zinc-500">
@@ -103,7 +103,7 @@ export function DataTable<T>({
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-900/60 text-[11px] font-mono tracking-wider text-zinc-400 uppercase select-none">
+            <tr className="border-b border-white/[0.07] bg-zinc-900/60 text-[11px] font-medium text-zinc-400 select-none">
               {columns.map((col) => {
                 const isSorted = sortKey === col.key;
                 const alignClass =
@@ -139,7 +139,7 @@ export function DataTable<T>({
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/60 text-xs">
+          <tbody className="divide-y divide-white/[0.06] text-xs">
             {filteredData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="text-center py-8 text-zinc-500 font-mono text-xs">

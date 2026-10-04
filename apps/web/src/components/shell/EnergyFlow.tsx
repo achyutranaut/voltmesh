@@ -31,9 +31,9 @@ export const EnergyFlow: React.FC<EnergyFlowProps> = ({
   ];
 
   return (
-    <aside aria-label="Energy flow pipeline" className="border-b border-zinc-800 bg-[#09090b] px-4 py-2 overflow-x-auto select-none">
+    <aside aria-label="Energy flow pipeline" className="border-b border-white/[0.07] bg-panel px-4 py-2 overflow-x-auto select-none">
       <div className="flex items-center space-x-1 min-w-max">
-        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mr-2 hidden md:inline">
+        <span className="text-[11px] font-mono text-zinc-500 mr-2 hidden md:inline">
           PROOF PIPELINE:
         </span>
         {stages.map((stage, idx) => {
@@ -47,17 +47,17 @@ export const EnergyFlow: React.FC<EnergyFlowProps> = ({
                 className={`group flex items-center space-x-2 px-2.5 py-1.5 rounded-sm border transition-all text-left ${
                   isSelected
                     ? 'bg-zinc-800/90 border-emerald-500/80 shadow-sm'
-                    : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-800/50 hover:border-zinc-700'
+                    : 'bg-zinc-900/40 border-white/[0.07] hover:bg-zinc-800/50 hover:border-white/10'
                 }`}
               >
                 <div className="flex items-center space-x-1.5">
-                  <span className="font-mono text-[10px] text-zinc-500 group-hover:text-zinc-400">
+                  <span className="font-mono text-[11px] text-zinc-500 group-hover:text-zinc-400">
                     {stage.num}
                   </span>
                   {status === 'verified' ? (
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                   ) : status === 'active' ? (
-                    <CircleDot className="w-3 h-3 text-cyan-400 animate-pulse" />
+                    <CircleDot className="w-3 h-3 text-zinc-400 animate-pulse" />
                   ) : (
                     <div className="w-2.5 h-2.5 rounded-full border border-zinc-600 bg-zinc-800" />
                   )}
@@ -71,7 +71,7 @@ export const EnergyFlow: React.FC<EnergyFlowProps> = ({
                   >
                     {stage.label}
                   </span>
-                  <span className="font-mono text-[9px] text-zinc-500">
+                  <span className="font-mono text-[11px] text-zinc-500">
                     {stage.sublabel}
                   </span>
                 </div>
