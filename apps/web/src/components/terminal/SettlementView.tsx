@@ -270,7 +270,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
             <Coins className="w-3.5 h-3.5 text-zinc-400" />
           </div>
           <div className="font-mono text-lg font-semibold text-white">
-            {tokenBalance ? `${Number(tokenBalance).toLocaleString()} VLT` : '0 VLT'}
+            {`${Number(formatUnits(tokenBalance ?? 0n, 18)).toLocaleString('en-US', { maximumFractionDigits: 2 })} VLT`}
           </div>
           <Button
             variant="outline"
