@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
+import { keccak256, encodePacked, type Hash } from 'viem';
+import { EpochBuilder } from '@energy-dex/epoch-builder';
 import { DetailDrawerData, NavigationTab } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
 import { StageLockGate } from './StageLockGate';
 import { CertificateTable, CertificateItem } from './CertificateTable';
-import { Award, Plus, Info, ShieldCheck, Flame } from 'lucide-react';
+import { Award, Plus, Info, ShieldCheck, Flame, AlertCircle } from 'lucide-react';
+import { can } from '@/auth/permissions';
+import { useSession } from '@/auth/SessionContext';
+import {
+  DEMO_SELLER_DEVICE_ID,
+  DEMO_SELLER_DEVICE_ENERGY_WH,
+  DEMO_SELLER_DEVICE_COUNTER,
+  SOURCE_TYPE_SOLAR_PV,
+  buildDemoEpochReadings,
+} from '@/data/demoEpoch';
 import { Button } from '@/components/ui/button';
 
 export interface CertificatesViewProps {
@@ -12,7 +23,7 @@ export interface CertificatesViewProps {
   epochData: any;
   claimedCerts: CertificateItem[];
   retiredNullifiers: string[];
-  onClaimCertificate: () => void;
+  onClaimCertificate: (cert: CertificateItem) => void;
   onRetireCertificate: (nullifier: string) => void;
   onSelectDetail: (detail: DetailDrawerData) => void;
   onNavigateTab?: (tab: NavigationTab) => void;
@@ -28,8 +39,71 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   onSelectDetail,
   onNavigateTab,
 }) => {
-  const { isConnected } = useWallet();
-  const { canEnterStage, getStageBlocker, selectStage } = usePipeline();
+  const { isConnected, address, claimCertificateOnChain } = useWallet();
+  const { session } = useSession();
+  const { flow, canEnterStage, getStageBlocker, selectStage, claimCertificate } = usePipeline();
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  const canClaim = can(session?.role, 'cert.claim');
+
+  // Claims the seller's meter reading from the epoch that is already committed on-chain.
+  const handleClaim = async () => {
+    setClaimError(null);
+    try {
+      setIsClaiming(true);
+      if (!flow.epochRoot) {
+        throw new Error('No epoch root is committed on-chain yet. Commit the epoch in Merkle Explorer first.');
+      }
+      const zoneId = flow.zoneId ?? 1;
+      const intervalIdx = flow.intervalIdx;
+
+      // Rebuild the same canonical tree that was committed and take this device's inclusion proof.
+      const epoch = EpochBuilder.buildEpoch(zoneId, intervalIdx, buildDemoEpochReadings(zoneId, intervalIdx));
+      if (epoch.merkleRoot.toLowerCase() !== flow.epochRoot.toLowerCase()) {
+        throw new Error(
+          `The committed root for slot ${intervalIdx} does not match the root rebuilt locally. ` +
+            'Commit the epoch for this slot again in Merkle Explorer, then retry.'
+        );
+      }
+      const inclusion = epoch.getProofForDevice(DEMO_SELLER_DEVICE_ID);
+      if (!inclusion) throw new Error('Seller meter reading is missing from the epoch.');
+
+      const txHash = await claimCertificateOnChain(
+        zoneId,
+        intervalIdx,
+        DEMO_SELLER_DEVICE_ID as Hash,
+        DEMO_SELLER_DEVICE_ENERGY_WH,
+        SOURCE_TYPE_SOLAR_PV,
+        DEMO_SELLER_DEVICE_COUNTER,
+        inclusion.proof as Hash[]
+      );
+
+      // Same derivations as CertificateRegistry.claimCertificate
+      const tokenId = BigInt(
+        keccak256(encodePacked(['uint32', 'uint8', 'uint32'], [zoneId, SOURCE_TYPE_SOLAR_PV, intervalIdx]))
+      );
+      const nullifier = keccak256(
+        encodePacked(['bytes32', 'uint32', 'uint64'], [DEMO_SELLER_DEVICE_ID, intervalIdx, DEMO_SELLER_DEVICE_COUNTER])
+      );
+
+      await claimCertificate(tokenId.toString(), txHash);
+      onClaimCertificate({
+        tokenId: tokenId.toString(),
+        deviceId: 'meter-delhi-solar-seller-001',
+        energyWh: DEMO_SELLER_DEVICE_ENERGY_WH.toString(),
+        intervalIdx,
+        claimedAt: new Date().toLocaleTimeString() + ' IST',
+        nullifier,
+        owner: address ?? undefined,
+        status: 'ACTIVE',
+      });
+    } catch (err: any) {
+      setClaimError(err?.shortMessage || err?.message || 'Certificate claim failed.');
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   // Route lock gate check
   const blockerInfo = getStageBlocker('CERTIFICATE');
@@ -75,15 +149,25 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           <Button
             variant="default"
             size="sm"
-            disabled={!epochData || !isConnected}
-            onClick={onClaimCertificate}
+            disabled={isClaiming || !isConnected || !canClaim || !flow.epochRoot}
+            onClick={handleClaim}
             className="text-xs h-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer shadow-xs"
           >
             <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Claim GAC from verified Merkle proof
+            {isClaiming ? 'Claiming on-chain...' : 'Claim GAC from verified Merkle proof'}
           </Button>
         </div>
       </div>
+
+      {claimError && (
+        <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-800/60 text-rose-300 text-xs flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{claimError}</span>
+        </div>
+      )}
+      {!canClaim && isConnected && (
+        <div className="text-xs text-zinc-500">Only the Seller role can claim GAC certificates.</div>
+      )}
 
       {/* 2. Explicit Regulatory & Standard Notice */}
       <div className="p-3.5 rounded-lg bg-panel border border-white/[0.07] flex items-start space-x-3 text-xs">

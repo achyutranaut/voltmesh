@@ -245,6 +245,35 @@ async function seedDemoAccounts() {
     }
   }
 
+  // C2. Register the seller's solar meter so the seller can claim GAC certificates for it
+  try {
+    const { DeviceRegistry } = deployments.contracts;
+    const seller = privateKeyToAccount(DEMO_ACCOUNTS[1].key);
+    const deviceId = keccak256(toHex('meter-delhi-solar-seller-001'));
+    const sellerParticipantId = keccak256(toHex(seller.address)); // same derivation as registration above
+    const existing = (await publicClient.readContract({
+      address: DeviceRegistry.address,
+      abi: DeviceRegistry.abi,
+      functionName: 'isDeviceValid',
+      args: [deviceId],
+    })) as boolean;
+    if (existing) {
+      console.log('  \u2713 Seller solar meter already registered in DeviceRegistry');
+    } else {
+      const txHash = await deployerWallet.writeContract({
+        address: DeviceRegistry.address,
+        abi: DeviceRegistry.abi,
+        functionName: 'registerDevice',
+        // signerType 0 = SIMULATED, sourceType 0 = SOLAR_PV, zone 1, 10 kWh/15-min capacity, trust 100
+        args: [deviceId, seller.address, 0, 0, 1, 10000n, 100, sellerParticipantId],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      console.log(`  \u2713 Registered seller solar meter in DeviceRegistry (tx: ${txHash.slice(0, 10)}...)`);
+    }
+  } catch (err: any) {
+    console.warn(`  \u26a0\ufe0f  Seller device registration notice: ${err?.shortMessage || err.message}`);
+  }
+
   // D. Ensure Devnet Oracle Node key has ORACLE_ROLE
   const DEVNET_ORACLE_ADDRESS: Address = '0x25A71a07cecf1753ee65b00E0a3AAEf7e0F51c0F';
   try {

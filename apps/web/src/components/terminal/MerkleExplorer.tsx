@@ -24,6 +24,7 @@ import {
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
 import { Hash, createPublicClient, http } from 'viem';
 import { OracleNode } from '@energy-dex/oracle-node';
+import { buildDemoEpochReadings } from '@/data/demoEpoch';
 
 export interface MerkleExplorerProps {
   initialInterval?: number;
@@ -145,44 +146,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
 
   // Canonical sample readings for this interval
   const sampleReadings: MeterReadingPayload[] = useMemo(
-    () => [
-      {
-        deviceId: 'meter-delhi-solar-001',
-        zoneId: initialZoneId,
-        intervalIdx: selectedInterval,
-        energyWh: 1250n,
-        direction: EnergyDirection.INJECTION,
-        counter: 1n,
-        timestampUtc: 1714560000,
-      },
-      {
-        deviceId: 'meter-delhi-solar-002',
-        zoneId: initialZoneId,
-        intervalIdx: selectedInterval,
-        energyWh: 2400n,
-        direction: EnergyDirection.INJECTION,
-        counter: 1n,
-        timestampUtc: 1714560000,
-      },
-      {
-        deviceId: 'meter-delhi-bess-001',
-        zoneId: initialZoneId,
-        intervalIdx: selectedInterval,
-        energyWh: 3800n,
-        direction: EnergyDirection.INJECTION,
-        counter: 1n,
-        timestampUtc: 1714560000,
-      },
-      {
-        deviceId: 'meter-delhi-grid-001',
-        zoneId: initialZoneId,
-        intervalIdx: selectedInterval,
-        energyWh: 4500n,
-        direction: EnergyDirection.CONSUMPTION,
-        counter: 1n,
-        timestampUtc: 1714560000,
-      },
-    ],
+    () => buildDemoEpochReadings(initialZoneId, selectedInterval),
     [selectedInterval, initialZoneId]
   );
 

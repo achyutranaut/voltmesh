@@ -304,25 +304,11 @@ export default function App() {
     setEpochData({ ...epoch, proof, readingsCount: readings.length });
   };
 
-  // 4. Claim Certificate
-  const handleClaimCertificate = () => {
+  // 4. Record a certificate that was minted on-chain (CertificatesView performs the transaction)
+  const handleClaimCertificate = (cert: any) => {
     if (!can(session?.role, 'cert.claim')) return;
-    if (!epochData || !epochData.proof) return;
-    const deviceId = 'meter-delhi-solar-001';
-    const deviceIdHex = pad(stringToHex(deviceId), { size: 32 });
-    const tokenIdBigInt = BigInt(keccak256(encodePacked(['uint32', 'uint8', 'uint32'], [1, 1, currentInterval])));
-    const nullifierHex = keccak256(encodePacked(['bytes32', 'uint32', 'uint64'], [deviceIdHex, currentInterval, 1n]));
-
-    const cert = {
-      tokenId: tokenIdBigInt.toString(),
-      deviceId,
-      energyWh: latestEnvelope ? latestEnvelope.payload.energyWh.toString() : '2000',
-      intervalIdx: currentInterval,
-      claimedAt: new Date().toLocaleTimeString() + ' IST',
-      nullifier: nullifierHex,
-      status: 'ACTIVE' as const,
-    };
-    setClaimedCerts((prev) => [...prev, cert]);
+    if (!cert) return;
+    setClaimedCerts((prev) => (prev.some((c) => c.nullifier === cert.nullifier) ? prev : [...prev, cert]));
   };
 
   // 5. Retire Certificate
