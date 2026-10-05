@@ -13,6 +13,7 @@
     "contracts:build": "cd contracts && forge build",
     "lint": "pnpm --filter \"./packages/*\" run lint",
     "integrity-check": "tsx scripts/data-integrity-check.ts",
+    "seed:demo": "tsx scripts/seed-demo-accounts.ts",
     "clean": "pnpm -r run clean"
   },
   "devDependencies": {

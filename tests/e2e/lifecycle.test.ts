@@ -59,7 +59,15 @@ describe('End-to-End System Integration: Meter-to-Retirement Lifecycle', () => {
     // Step 2: Ingest Gateway Verifies and Stalls Duplicate / Malformed Telemetry
     // -------------------------------------------------------------------------
     const storage = new MemoryReadingStorage();
-    const gateway = buildApp({ storage });
+    const trustedDevices = new Map();
+    trustedDevices.set(prosumerMeter.deviceId, {
+      deviceId: prosumerMeter.deviceId,
+      publicKey: prosumerMeter.getPublicKey(),
+      zoneId,
+      capacityWh: 100_000_000n,
+      status: 'ACTIVE' as const,
+    });
+    const gateway = buildApp({ storage, trustedDevices });
 
     const ingestResponse = await gateway.inject({
       method: 'POST',

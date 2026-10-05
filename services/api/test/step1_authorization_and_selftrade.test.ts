@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { buildApiServer, deriveParticipantId } from '../src/app.js';
 import { ParticipantRole, OrderSide, SourceType } from '@energy-dex/types';
 import { FastifyInstance } from 'fastify';
+import { privateKeyToAccount } from 'viem/accounts';
 
 describe('Step 1: Participant Identity, Authorization & Self-Trade Hardening', () => {
   let app: FastifyInstance;
@@ -452,5 +453,197 @@ describe('Step 1: Participant Identity, Authorization & Self-Trade Hardening', (
       },
     });
     expect(sellRes.statusCode).toBe(201);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 9. Challenge / Verify SIWE Flow & Role Resolution
+  // ---------------------------------------------------------------------------
+  it('test_SIWE_ChallengeVerifyAndRoleResolution: authenticates demo accounts and resolves role authoritative server-side', async () => {
+    const sellerAcc = privateKeyToAccount('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a');
+    const buyerAcc = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
+    const discomAcc = privateKeyToAccount('0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6');
+    const regulatorAcc = privateKeyToAccount('0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a');
+
+    // 1. Seller challenge & verify
+    const sellerChal = await app.inject({
+      method: 'POST',
+      url: '/auth/challenge',
+      payload: { address: sellerAcc.address },
+    });
+    expect(sellerChal.statusCode).toBe(200);
+    const { message: sellerMsg } = JSON.parse(sellerChal.payload);
+    const sellerSig = await sellerAcc.signMessage({ message: sellerMsg });
+
+    const sellerVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: sellerAcc.address, message: sellerMsg, signature: sellerSig },
+    });
+    expect(sellerVer.statusCode).toBe(200);
+    const sellerRes = JSON.parse(sellerVer.payload);
+    expect(sellerRes.role).toBe('seller');
+    expect(sellerRes.token).toBeDefined();
+
+    // 2. Buyer challenge & verify
+    const buyerChal = await app.inject({
+      method: 'POST',
+      url: '/auth/challenge',
+      payload: { address: buyerAcc.address },
+    });
+    const { message: buyerMsg } = JSON.parse(buyerChal.payload);
+    const buyerSig = await buyerAcc.signMessage({ message: buyerMsg });
+
+    const buyerVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: buyerAcc.address, message: buyerMsg, signature: buyerSig },
+    });
+    expect(buyerVer.statusCode).toBe(200);
+    const buyerRes = JSON.parse(buyerVer.payload);
+    expect(buyerRes.role).toBe('buyer');
+
+    // 3. DISCOM challenge & verify
+    const discomChal = await app.inject({
+      method: 'POST',
+      url: '/auth/challenge',
+      payload: { address: discomAcc.address },
+    });
+    const { message: discomMsg } = JSON.parse(discomChal.payload);
+    const discomSig = await discomAcc.signMessage({ message: discomMsg });
+
+    const discomVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: discomAcc.address, message: discomMsg, signature: discomSig },
+    });
+    expect(discomVer.statusCode).toBe(200);
+    const discomRes = JSON.parse(discomVer.payload);
+    expect(discomRes.role).toBe('discom');
+
+    // 4. Regulator challenge & verify
+    const regChal = await app.inject({
+      method: 'POST',
+      url: '/auth/challenge',
+      payload: { address: regulatorAcc.address },
+    });
+    const { message: regMsg } = JSON.parse(regChal.payload);
+    const regSig = await regulatorAcc.signMessage({ message: regMsg });
+
+    const regVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: regulatorAcc.address, message: regMsg, signature: regSig },
+    });
+    expect(regVer.statusCode).toBe(200);
+    const regRes = JSON.parse(regVer.payload);
+    expect(regRes.role).toBe('regulator');
+
+    // 5. Unregistered wallet returns undefined role
+    const unregAcc = privateKeyToAccount('0x0123456789012345678901234567890123456789012345678901234567890123');
+    const unregChal = await app.inject({
+      method: 'POST',
+      url: '/auth/challenge',
+      payload: { address: unregAcc.address },
+    });
+    const { message: unregMsg } = JSON.parse(unregChal.payload);
+    const unregSig = await unregAcc.signMessage({ message: unregMsg });
+
+    const unregVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: unregAcc.address, message: unregMsg, signature: unregSig },
+    });
+    expect(unregVer.statusCode).toBe(200);
+    const unregRes = JSON.parse(unregVer.payload);
+    expect(unregRes.role).toBeUndefined();
+  });
+
+  it('test_SIWE_SingleUseChallengeReplayPrevention: consumed challenge cannot be replayed', async () => {
+    const sellerAcc = privateKeyToAccount('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a');
+
+    const chal = await app.inject({
+      method: 'POST',
+      url: '/auth/challenge',
+      payload: { address: sellerAcc.address },
+    });
+    const { message } = JSON.parse(chal.payload);
+    const signature = await sellerAcc.signMessage({ message });
+
+    // First verify succeeds
+    const firstVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: sellerAcc.address, message, signature },
+    });
+    expect(firstVer.statusCode).toBe(200);
+
+    // Second verify with same challenge message is rejected with 401
+    const replayVer = await app.inject({
+      method: 'POST',
+      url: '/auth/verify',
+      payload: { address: sellerAcc.address, message, signature },
+    });
+    expect(replayVer.statusCode).toBe(401);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 10. Order Participant Mismatch Enforcement
+  // ---------------------------------------------------------------------------
+  it('test_OrderParticipantMismatchRejected: order participant differing from token subject is rejected', async () => {
+    const maliciousClaimRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: { authorization: `Bearer ${consumerToken}` },
+      payload: {
+        zoneId: 1,
+        intervalIdx: 15,
+        side: OrderSide.BUY,
+        quantityWh: '1000',
+        pricePaisePerKWh: '400',
+        expiry: Math.floor(Date.now() / 1000) + 3600,
+        participant: '0x9999999999999999999999999999999999999999', // Claiming a different wallet
+      },
+    });
+
+    expect(maliciousClaimRes.statusCode).toBe(403);
+    const body = JSON.parse(maliciousClaimRes.payload);
+    expect(body.error).toBe('PARTICIPANT_MISMATCH');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 11. Rapid Succession Orders Monotonic Nonce Collision Prevention
+  // ---------------------------------------------------------------------------
+  it('test_RapidSuccessionOrdersWithoutNonce: successive orders succeed without timestamp collision', async () => {
+    const ordersBatch = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/orders',
+        headers: { authorization: `Bearer ${consumerToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 21,
+          side: OrderSide.BUY,
+          quantityWh: '1000',
+          pricePaisePerKWh: '400',
+          expiry: Math.floor(Date.now() / 1000) + 3600,
+        },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/orders',
+        headers: { authorization: `Bearer ${consumerToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 22,
+          side: OrderSide.BUY,
+          quantityWh: '1000',
+          pricePaisePerKWh: '400',
+          expiry: Math.floor(Date.now() / 1000) + 3600,
+        },
+      }),
+    ]);
+
+    expect(ordersBatch[0].statusCode).toBe(201);
+    expect(ordersBatch[1].statusCode).toBe(201);
   });
 });

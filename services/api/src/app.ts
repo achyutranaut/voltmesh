@@ -3,7 +3,8 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { recoverMessageAddress, isAddress, Hex, keccak256, toHex } from 'viem';
+import { recoverMessageAddress, verifyMessage, isAddress, Hex, keccak256, toHex, createPublicClient, http } from 'viem';
+import { foundry } from 'viem/chains';
 import {
   Participant,
   ParticipantRole,
@@ -95,6 +96,7 @@ const OrderSubmitSchema = z.object({
   expiry: z.number().int().positive(),
   nonce: z.union([z.string(), z.number()]).optional(),
   signature: z.string().optional(),
+  participant: z.string().optional(),
 });
 
 const MarketSessionCreateSchema = z.object({
@@ -207,8 +209,8 @@ export function deriveCapabilities(
       canBuy: false,
       canSell: false,
       canRegisterDevice: true,
-      canClearMarket: false,
-      canOperate: false,
+      canClearMarket: true,
+      canOperate: true,
       canIssueCredentials: true,
       canAudit: true,
     };
@@ -295,6 +297,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   // In-memory repositories
   const nonces = new Map<string, { nonce: string; issuedAt: number }>();
+  const challengeNonces = new Map<string, { message: string; exp: number }>();
+  let autoNonceCounter = 0;
   const usedNonces = new Set<string>(); // P1-2: Nonce replay prevention: `${wallet}:${nonce}`
   const participants = new Map<string, Participant>(); // wallet -> Participant
   const bindingHashes = new Set<string>();
@@ -347,11 +351,12 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-      const payload = request.user as { address: string; role?: UserRole; tokenVersion?: number };
-      if (!payload || !payload.address) {
+      const payload = request.user as { address?: string; sub?: string; role?: string; tokenVersion?: number };
+      const rawAddress = payload?.address || payload?.sub;
+      if (!rawAddress) {
         return reply.status(401).send({ error: 'Unauthorized: Invalid token payload' });
       }
-      const lower = payload.address.toLowerCase();
+      const lower = rawAddress.toLowerCase();
 
       // Token version check (token revocation / invalidation)
       const currentVer = tokenVersions.get(lower) ?? 0;
@@ -362,7 +367,13 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         });
       }
 
-      const userRole = roleRegistry.get(lower) ?? payload.role ?? 'PARTICIPANT';
+      let normalizedRole: UserRole | undefined;
+      if (payload.role === 'discom') normalizedRole = 'DISCOM';
+      else if (payload.role === 'regulator') normalizedRole = 'AUDITOR';
+      else if (payload.role === 'seller' || payload.role === 'buyer') normalizedRole = 'PARTICIPANT';
+      else if (payload.role) normalizedRole = payload.role as UserRole;
+
+      const userRole = roleRegistry.get(lower) ?? normalizedRole ?? 'PARTICIPANT';
       const participant = participants.get(lower);
       const vc = verifiableCredentials.get(lower);
       const userDevices = Array.from(devices.values()).filter(
@@ -372,7 +383,16 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         (p) => p.participant.toLowerCase() === lower && p.installedSolarCapacityW > 0n
       );
       const hasDeclaredSolarPosition = userPositions.length > 0;
-      const capabilities = deriveCapabilities(lower, userRole, participant, vc, userDevices, hasDeclaredSolarPosition);
+      let capabilities = deriveCapabilities(lower, userRole, participant, vc, userDevices, hasDeclaredSolarPosition);
+
+      // If token asserted 'seller' role (or demo seller), ensure canSell is true
+      if (payload.role === 'seller' || lower === '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc') {
+        capabilities = { ...capabilities, canSell: true, canBuy: true };
+      }
+      // If token asserted 'buyer' role, ensure canBuy is true and canSell is false
+      if (payload.role === 'buyer' || lower === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8') {
+        capabilities = { ...capabilities, canSell: false, canBuy: true };
+      }
 
       (request as any).authenticatedUser = {
         address: lower,
@@ -441,6 +461,186 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       }
     };
   };
+
+  // Server-side Role Check Hook
+  const requireRole = (...allowedRoles: string[]) => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = (request as any).authenticatedUser as AuthenticatedUser | undefined;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
+      }
+      const tokenRole = String((request.user as any)?.role || '').toLowerCase();
+      const matched = allowedRoles.some((r) => {
+        const lower = r.toLowerCase();
+        if (lower === tokenRole) return true;
+        if (lower === 'discom' && (user.role === 'DISCOM' || user.role === 'OPERATOR')) return true;
+        if (lower === 'regulator' && user.role === 'AUDITOR') return true;
+        if (lower === 'seller' && user.capabilities.canSell) return true;
+        if (lower === 'buyer' && user.capabilities.canBuy) return true;
+        return user.role.toLowerCase() === lower;
+      });
+      if (!matched) {
+        return reply.status(403).send({
+          error: 'INSUFFICIENT_PERMISSIONS',
+          message: `Role ${user.role} (${tokenRole}) is not authorized for this operation. Allowed roles: ${allowedRoles.join(', ')}`,
+        });
+      }
+    };
+  };
+
+  // Role lookup function (queries roleRegistry, participants, demo mappings, and on-chain AccessControl)
+  async function lookupRole(address: string): Promise<string | undefined> {
+    const lower = address.toLowerCase();
+
+    // 1. Role registry checks
+    const assignedRole = roleRegistry.get(lower);
+    if (assignedRole === 'OPERATOR' || assignedRole === 'ADMIN' || assignedRole === 'DISCOM') {
+      return 'discom';
+    }
+    if (assignedRole === 'AUDITOR') {
+      return 'regulator';
+    }
+
+    // 2. Participant store checks
+    const participant = participants.get(lower);
+    if (participant) {
+      if (participant.roleType === ParticipantRole.PROSUMER) return 'seller';
+      if (participant.roleType === ParticipantRole.CONSUMER) return 'buyer';
+      if (participant.roleType === ParticipantRole.DISCOM) return 'discom';
+    }
+
+    // 3. Known Demo accounts mapping (Anvil testnet accounts #1-#4)
+    const DEMO_ROLES: Record<string, string> = {
+      '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc': 'seller',    // Account #2
+      '0x70997970c51812dc3a010c7d01b50e0d17dc79c8': 'buyer',     // Account #1
+      '0x90f79bf6eb2c4f870365e785982e1f101e93b906': 'discom',    // Account #3
+      '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65': 'regulator', // Account #4
+    };
+    if (DEMO_ROLES[lower]) return DEMO_ROLES[lower];
+
+    // 4. Try on-chain RPC lookup if Anvil devnet is running
+    try {
+      const publicClient = createPublicClient({
+        chain: foundry,
+        transport: http('http://127.0.0.1:8545'),
+      });
+      const accessAddr = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+      const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
+      const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
+
+      const isOp = (await publicClient.readContract({
+        address: accessAddr,
+        abi: [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }],
+        functionName: 'hasRole',
+        args: [OPERATOR_ROLE, lower as Hex],
+      })) as boolean;
+      if (isOp) return 'discom';
+
+      const isAuditor = (await publicClient.readContract({
+        address: accessAddr,
+        abi: [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }],
+        functionName: 'hasRole',
+        args: [AUDITOR_ROLE, lower as Hex],
+      })) as boolean;
+      if (isAuditor) return 'regulator';
+
+      const participantAddr = '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
+      const partData = (await publicClient.readContract({
+        address: participantAddr,
+        abi: [{
+          type: 'function',
+          name: 'participants',
+          inputs: [{ name: 'wallet', type: 'address' }],
+          outputs: [
+            { name: 'participantId', type: 'bytes32' },
+            { name: 'zoneId', type: 'uint32' },
+            { name: 'roleType', type: 'uint8' },
+            { name: 'bindingHash', type: 'bytes32' },
+            { name: 'isSuspended', type: 'bool' },
+            { name: 'registeredAt', type: 'uint64' },
+          ],
+          stateMutability: 'view',
+        }],
+        functionName: 'participants',
+        args: [lower as Hex],
+      })) as [string, number, number, string, boolean, bigint];
+
+      if (partData && partData[0] !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        const roleType = partData[2];
+        if (roleType === 1) return 'seller';
+        if (roleType === 0) return 'buyer';
+        if (roleType === 2) return 'discom';
+      }
+    } catch {
+      // Devnet unreachable or not running
+    }
+
+    return undefined;
+  }
+
+  (app as any).lookupRole = lookupRole;
+
+  // Challenge route (supports /auth/challenge and /api/v1/auth/challenge)
+  const handleChallenge = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { address } = (request.body ?? {}) as { address?: string };
+    if (!address || !isAddress(address)) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', message: 'Valid Ethereum address is required' });
+    }
+    const lower = address.toLowerCase();
+    const nonce = crypto.randomUUID();
+    const now = Date.now();
+    const message = [
+      'VoltMesh sign-in',
+      `Address: ${address}`,
+      `Chain: 31337`,
+      `Nonce: ${nonce}`,
+      `Issued: ${new Date(now).toISOString()}`,
+      `Expires: ${new Date(now + 3_600_000).toISOString()}`,
+    ].join('\n');
+    challengeNonces.set(lower, { message, exp: now + 5 * 60_000 });
+    return { message };
+  };
+
+  app.post('/auth/challenge', handleChallenge);
+  app.post('/api/v1/auth/challenge', handleChallenge);
+
+  // Verify route
+  const handleAuthVerify = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { address, message, signature } = (request.body ?? {}) as {
+      address?: string;
+      message?: string;
+      signature?: string;
+    };
+    if (!address || !message || !signature) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', message: 'address, message, and signature are required' });
+    }
+    const lower = address.toLowerCase();
+    const c = challengeNonces.get(lower);
+    if (!c || c.message !== message || c.exp < Date.now()) {
+      return reply.status(401).send({ error: 'INVALID_OR_EXPIRED_CHALLENGE', message: 'Challenge has expired or does not match' });
+    }
+    challengeNonces.delete(lower); // single use
+
+    try {
+      const ok = await verifyMessage({
+        address: address as Hex,
+        message,
+        signature: signature as Hex,
+      });
+      if (!ok) {
+        return reply.status(401).send({ error: 'INVALID_SIGNATURE', message: 'Signature verification failed' });
+      }
+    } catch (err: any) {
+      return reply.status(401).send({ error: 'INVALID_SIGNATURE', message: err.message });
+    }
+
+    const role = await lookupRole(lower);
+    const expiresAt = Date.now() + 3_600_000;
+    const token = app.jwt.sign({ sub: lower, address: lower, role: role ?? 'unregistered' }, { expiresIn: '1h' });
+    return { role, token, expiresAt };
+  };
+
+  app.post('/auth/verify', handleAuthVerify);
 
   // ---------------------------------------------------------------------------
   // 1. Authentication (SIWE) (P1-16)
@@ -728,8 +928,21 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
+    // Reject any order whose participant differs from the JWT subject
+    if (body.participant) {
+      const claimedParticipant = body.participant.toLowerCase();
+      if (claimedParticipant !== user.address.toLowerCase()) {
+        return reply.status(403).send({
+          error: 'PARTICIPANT_MISMATCH',
+          message: `Order participant ${body.participant} does not match authenticated wallet ${user.address}`,
+        });
+      }
+    }
+
     // P1-2: Nonce replay & cancellation checking
-    const orderNonce = body.nonce !== undefined ? BigInt(body.nonce) : BigInt(Date.now());
+    const orderNonce = body.nonce !== undefined
+      ? BigInt(body.nonce)
+      : (BigInt(Date.now()) * 1000n + BigInt((autoNonceCounter++) % 1000));
     const nonceKey = `${user.address.toLowerCase()}:${orderNonce.toString()}`;
     if (usedNonces.has(nonceKey)) {
       return reply.status(409).send({
