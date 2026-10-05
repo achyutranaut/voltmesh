@@ -291,7 +291,7 @@ export function clearMarket(input: ClearingInput): ClearingResult {
         throw new Error('Self-trade invariant violation: matched orders share economic identity');
       }
 
-      const obligationId = `obl-${zoneId}-${intervalIdx}-${curB.orderId.slice(0, 8)}-${curA.orderId.slice(0, 8)}-${obligations.length}`;
+      const obligationId = `obl-${zoneId}-${intervalIdx}-${curB.orderId.slice(0, 4)}-${curA.orderId.slice(0, 4)}-${obligations.length}`;
 
       obligations.push({
         obligationId,

@@ -6,19 +6,32 @@ export const OBLIGATION_PREFIX = '0x01';
 export const STATEMENT_PREFIX = '0x02';
 
 /**
+ * Safely normalizes any string or hex identifier into a strict 32-byte bytes32 hex representation.
+ * - If 32-byte hex (66 chars with '0x'): preserved as-is.
+ * - If hex < 32 bytes: right-padded to 32 bytes.
+ * - If hex > 32 bytes: keccak256 hashed.
+ * - If string <= 32 UTF-8 bytes: right-padded to 32 bytes.
+ * - If string > 32 UTF-8 bytes: keccak256 hashed.
+ */
+export function normalizeToBytes32(val: string): `0x${string}` {
+  if (isHex(val)) {
+    if (val.length === 66) return val as `0x${string}`;
+    if (val.length < 66) return pad(val as `0x${string}`, { size: 32, dir: 'right' });
+    return keccak256(val as `0x${string}`);
+  }
+  const hex = stringToHex(val);
+  if (hex.length <= 66) {
+    return pad(hex, { size: 32, dir: 'right' });
+  }
+  return keccak256(hex);
+}
+
+/**
  * Computes canonical leaf hash for a meter reading.
  * Hash matches Solidity: keccak256(abi.encodePacked(bytes1(0x00), bytes32(deviceId), uint32(zoneId), uint32(intervalIdx), uint64(energyWh), uint8(direction), uint64(counter)))
  */
 export function hashReadingLeaf(payload: MeterReadingPayload): `0x${string}` {
-  // Normalize deviceId to bytes32 hex
-  let deviceIdHex: `0x${string}`;
-  if (isHex(payload.deviceId)) {
-    deviceIdHex = pad(payload.deviceId as `0x${string}`, { size: 32 });
-  } else {
-    // Treat as utf-8 string representation (e.g. UUID)
-    const rawHex = stringToHex(payload.deviceId);
-    deviceIdHex = pad(rawHex, { size: 32 });
-  }
+  const deviceIdHex = normalizeToBytes32(payload.deviceId);
 
   return keccak256(
     encodePacked(
@@ -40,7 +53,7 @@ export function hashReadingLeaf(payload: MeterReadingPayload): `0x${string}` {
  * Computes canonical leaf hash for a delivery obligation.
  */
 export function hashObligationLeaf(obligation: DeliveryObligation): `0x${string}` {
-  const obligationIdHex = pad(stringToHex(obligation.obligationId), { size: 32 });
+  const obligationIdHex = normalizeToBytes32(obligation.obligationId);
   return keccak256(
     encodePacked(
       ['bytes1', 'bytes32', 'address', 'address', 'uint64', 'uint64'],
