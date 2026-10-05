@@ -24,7 +24,27 @@ import {
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
 import { Hash, createPublicClient, http } from 'viem';
 import { OracleNode } from '@energy-dex/oracle-node';
-import { buildDemoEpochReadings } from '@/data/demoEpoch';
+import {
+  buildDemoEpochReadings,
+  DEMO_SELLER_DEVICE_ID,
+  DEMO_SELLER_DEVICE_NAME,
+} from '@/data/demoEpoch';
+
+function formatHash(hash?: string | null, startChars: number = 8, endChars: number = 6): string {
+  if (!hash) return '';
+  if (hash.startsWith('0x') && hash.length > startChars + endChars + 3) {
+    return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
+  }
+  return hash;
+}
+
+function formatDeviceId(deviceId?: string | null): string {
+  if (!deviceId) return '';
+  if (deviceId.toLowerCase() === DEMO_SELLER_DEVICE_ID.toLowerCase()) {
+    return DEMO_SELLER_DEVICE_NAME;
+  }
+  return formatHash(deviceId, 8, 6);
+}
 
 export interface MerkleExplorerProps {
   initialInterval?: number;
@@ -224,7 +244,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
   const handleInspectLeaf = () => {
     if (!onSelectDetail || !selectedProof) return;
     onSelectDetail({
-      title: selectedReading.deviceId,
+      title: formatDeviceId(selectedReading.deviceId),
       subtitle: `Leaf #${selectedLeafIndex} · Interval ${selectedInterval}`,
       category: 'Merkle leaf',
       statusBadge: {
@@ -437,10 +457,32 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
 
           <div className="bg-panel border border-white/[0.07] rounded-lg p-4 space-y-4">
             {/* Root Node */}
-            <div className="p-3 rounded bg-zinc-900/60 border border-white/[0.07] text-center space-y-1">
-              <span className="text-xs text-zinc-500 block">Root (RFC 6962)</span>
-              <div className="font-mono text-xs text-emerald-400 truncate break-all select-all">
-                {epochTree.merkleRoot}
+            <div className="p-3 rounded bg-zinc-900/60 border border-white/[0.07] space-y-1">
+              <div className="flex items-center justify-between text-xs text-zinc-500">
+                <span>Root (RFC 6962)</span>
+                <button
+                  onClick={() => copyToClipboard(epochTree.merkleRoot, 'root-hash')}
+                  className="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 text-[11px] transition-colors cursor-pointer"
+                  title="Copy full root hash"
+                >
+                  {copiedText === 'root-hash' ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-400">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <div
+                className="font-mono text-xs text-emerald-400 select-all font-medium text-center truncate"
+                title={epochTree.merkleRoot}
+              >
+                {formatHash(epochTree.merkleRoot, 16, 14)}
               </div>
             </div>
 
@@ -457,17 +499,17 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
                   <button
                     key={reading.deviceId}
                     onClick={() => setSelectedLeafIndex(idx)}
-                    className={`p-2.5 rounded border text-left transition-colors cursor-pointer ${
+                    className={`p-2.5 rounded border text-left transition-colors cursor-pointer w-full min-w-0 overflow-hidden ${
                       isSelected
                         ? 'bg-zinc-800/90 border-emerald-500'
                         : 'bg-zinc-950/40 border-white/[0.07] hover:bg-zinc-900/40'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-xs pb-1">
-                      <span className="font-mono text-xs text-zinc-200">
-                        {reading.deviceId}
+                    <div className="flex items-center justify-between text-xs pb-1 gap-2 min-w-0">
+                      <span className="font-mono text-xs text-zinc-200 truncate" title={reading.deviceId}>
+                        {formatDeviceId(reading.deviceId)}
                       </span>
-                      <span className="font-mono text-xs text-zinc-500">
+                      <span className="font-mono text-xs text-zinc-500 shrink-0">
                         Leaf #{idx}
                       </span>
                     </div>
@@ -497,9 +539,18 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
           </div>
 
           <div className="bg-panel border border-white/[0.07] rounded-lg p-3.5 space-y-3 text-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.07]">
-              <span className="font-code font-medium text-white">{selectedReading.deviceId}</span>
-              <span className="text-emerald-400 font-medium text-xs flex items-center">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.07] gap-3 min-w-0">
+              <div className="min-w-0 truncate">
+                <span className="font-code font-medium text-white truncate block" title={selectedReading.deviceId}>
+                  {formatDeviceId(selectedReading.deviceId)}
+                </span>
+                {selectedReading.deviceId.startsWith('0x') && (
+                  <span className="font-mono text-[10px] text-zinc-500 block truncate" title={selectedReading.deviceId}>
+                    {formatHash(selectedReading.deviceId, 10, 8)}
+                  </span>
+                )}
+              </div>
+              <span className="text-emerald-400 font-medium text-xs flex items-center shrink-0">
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 Proof valid
               </span>
@@ -507,24 +558,53 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
 
             <div className="space-y-2">
               <div>
-                <span className="text-xs text-zinc-500 block">Leaf hash</span>
-                <div className="mt-0.5 p-1.5 rounded bg-zinc-950 border border-white/[0.07] font-mono text-xs text-emerald-400 break-all select-all">
-                  {selectedProof?.leafHash}
+                <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+                  <span>Leaf hash</span>
+                  {selectedProof?.leafHash && (
+                    <button
+                      onClick={() => copyToClipboard(selectedProof.leafHash, 'leaf-hash')}
+                      className="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 text-[11px] transition-colors cursor-pointer"
+                      title="Copy full leaf hash"
+                    >
+                      {copiedText === 'leaf-hash' ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-400">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <div
+                  className="p-2 rounded bg-zinc-950 border border-white/[0.07] font-mono text-xs text-emerald-400 flex items-center justify-between select-all min-w-0"
+                  title={selectedProof?.leafHash}
+                >
+                  <span className="truncate">
+                    {selectedProof?.leafHash ? formatHash(selectedProof.leafHash, 14, 12) : '—'}
+                  </span>
                 </div>
               </div>
 
               <div>
-                <span className="text-xs text-zinc-500 block">
+                <span className="text-xs text-zinc-500 block mb-1">
                   Sibling path ({selectedProof?.proof.length ?? 0} steps)
                 </span>
-                <div className="space-y-1 mt-1 max-h-36 overflow-y-auto">
+                <div className="space-y-1 max-h-36 overflow-y-auto">
                   {selectedProof?.proof.map((sib: `0x${string}`, sIdx: number) => (
                     <div
                       key={sIdx}
-                      className="p-1 rounded bg-zinc-950 border border-white/[0.07] font-mono text-xs text-zinc-400 break-all flex items-center justify-between"
+                      className="p-1.5 rounded bg-zinc-950 border border-white/[0.07] font-mono text-xs text-zinc-300 flex items-center justify-between gap-2 min-w-0"
+                      title={sib}
                     >
-                      <span className="truncate">{sib}</span>
-                      <span className="text-zinc-600 pl-1 shrink-0 font-sans">Level {sIdx}</span>
+                      <span className="truncate font-mono">
+                        {formatHash(sib, 12, 10)}
+                      </span>
+                      <span className="text-zinc-500 shrink-0 font-sans text-[11px]">Level {sIdx}</span>
                     </div>
                   ))}
                 </div>
