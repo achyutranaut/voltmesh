@@ -23,6 +23,7 @@ import {
   getExplorerTxUrl,
   getExplorerAddressUrl,
 } from '../config/contracts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { assertTestnet, assertNoEth } from '../config/network';
 import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
@@ -1435,12 +1436,57 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (!settlementContract || !address) throw new Error('BatchSettlement contract not available');
 
     const dateEpoch = Math.floor(Date.now() / 86400000);
+
+    // postDailyStatement requires `quorumThreshold` oracle signatures (sorted ascending by signer
+    // address) over keccak256(chainId, contract, dateEpoch, zoneId, root, credits, debits).
+    // On the local devnet the quorum is 1 and the devnet oracle key (0x...0101, address
+    // 0x25A71a07...) holds ORACLE_ROLE via scripts/seed-demo-accounts.ts.
+    const oracleConfig = getContract('EpochOracle', DEFAULT_CHAIN_ID);
+    if (!oracleConfig) throw new Error('EpochOracle contract not available');
+    const quorum = (await getPublicClient().readContract({
+      address: oracleConfig.address,
+      abi: oracleConfig.abi,
+      functionName: 'quorumThreshold',
+    })) as bigint;
+    if (quorum > 1n) {
+      throw new Error(
+        `Settlement requires ${quorum} oracle signatures; the in-browser devnet oracle can only supply 1.`
+      );
+    }
+
+    const statementHash = keccak256(
+      encodePacked(
+        ['uint256', 'address', 'uint32', 'uint32', 'bytes32', 'uint256', 'uint256'],
+        [
+          BigInt(DEFAULT_CHAIN_ID),
+          settlementContract.address,
+          dateEpoch,
+          opts.zoneId,
+          opts.statementRoot,
+          opts.totalCreditsPaise,
+          opts.totalDebitsPaise,
+        ]
+      )
+    );
+    const devnetOracle = privateKeyToAccount(
+      '0x0000000000000000000000000000000000000000000000000000000000000101'
+    );
+    // signMessage with raw bytes applies the EIP-191 prefix, matching toEthSignedMessageHash on-chain
+    const oracleSignature = await devnetOracle.signMessage({ message: { raw: statementHash } });
+
     const { hash } = await executeContractTx({
       description: `Post Daily Settlement Statement for Zone ${opts.zoneId} Slot ${opts.intervalIdx}`,
       address: settlementContract.address,
       abi: settlementContract.abi,
       functionName: 'postDailyStatement',
-      args: [dateEpoch, opts.zoneId, opts.statementRoot, opts.totalCreditsPaise, opts.totalDebitsPaise],
+      args: [
+        dateEpoch,
+        opts.zoneId,
+        opts.statementRoot,
+        opts.totalCreditsPaise,
+        opts.totalDebitsPaise,
+        [oracleSignature],
+      ],
     });
 
     recordActivity({
