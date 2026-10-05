@@ -20,6 +20,7 @@ export interface TerminalShellProps {
   setIsWalletModalOpen: (open: boolean) => void;
   onOpenCommandPalette: () => void;
   onReturnToStory?: () => void;
+  onAddAccount?: () => void;
   children: React.ReactNode;
 }
 
@@ -36,6 +37,7 @@ export const TerminalShell: React.FC<TerminalShellProps> = ({
   setIsWalletModalOpen,
   onOpenCommandPalette,
   onReturnToStory,
+  onAddAccount,
   children,
 }) => {
   return (
@@ -60,6 +62,7 @@ export const TerminalShell: React.FC<TerminalShellProps> = ({
             currentInterval={currentInterval}
             onOpenCommandPalette={onOpenCommandPalette}
             onOpenWalletModal={() => setIsWalletModalOpen(true)}
+            onAddAccount={onAddAccount}
             zoneLabel="Zone 01 · DL-TPDDL-Z1"
           />
 

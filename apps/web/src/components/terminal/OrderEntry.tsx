@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Order, OrderSide } from '@energy-dex/types';
 import { useWallet } from '@/context/WalletContext';
+import { useSession } from '@/auth/SessionContext';
+import { allowedSides, can, ROLES } from '@/auth/permissions';
 import { hexToBytes } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,30 +25,41 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
     address,
     isConnected,
     isCorrectNetwork,
+    chainId,
+    roles,
+    escrowBalances,
+    tokenBalance,
     connectMetaMask,
     signEnergyOrder,
     capabilities,
     simulationMode,
   } = useWallet();
 
+  const { session } = useSession();
+  const role = session?.role;
+  const sidesAllowed = allowedSides(role);
+  const isDisallowedRole = role === 'discom' || role === 'regulator';
+
   const canBuy = capabilities?.canBuy ?? false;
   const canSell = capabilities?.canSell ?? false;
 
-  // Set default side according to capability:
-  // If can only sell, default to SELL. If can buy (or both), default to BUY.
+  // Set default side according to session role / capability:
   const [side, setSide] = useState<OrderSide>(() => {
+    if (sidesAllowed.length === 1) return sidesAllowed[0];
     if (!canBuy && canSell) return OrderSide.SELL;
     return OrderSide.BUY;
   });
 
-  // Ensure side adheres to capability if capabilities change
+  // Ensure side adheres to capability/role if session changes
   useEffect(() => {
-    if (canBuy && !canSell) {
+    if (sidesAllowed.length === 1) {
+      setSide(sidesAllowed[0]);
+    } else if (canBuy && !canSell) {
       setSide(OrderSide.BUY);
     } else if (!canBuy && canSell) {
       setSide(OrderSide.SELL);
     }
-  }, [canBuy, canSell]);
+  }, [role, sidesAllowed.length, canBuy, canSell]);
 
   // User input units: ₹/kWh (e.g. "5.50") and kWh (e.g. "2.00")
   const [priceRupeesInput, setPriceRupeesInput] = useState<string>('5.50');
@@ -168,7 +181,15 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
   };
 
   // 1. Trading Unavailable State (Wallet connected, but unregistered on-chain)
-  if (isConnected && !canBuy && !canSell) {
+  if (isConnected && !canBuy && !canSell && !isDisallowedRole) {
+    const failureReason = !isCorrectNetwork
+      ? `Wallet is connected to network (${chainId}). Required VoltMesh Testnet (Chain ID 31337).`
+      : !roles.isParticipant
+      ? `Address ${address?.slice(0, 8)}...${address?.slice(-6)} is not registered in ParticipantRegistry on chain 31337.`
+      : side === OrderSide.BUY && escrowBalances.free === 0n && tokenBalance === 0n
+      ? 'Buyer requires an active collateral deposit in the Escrow smart contract to place bids.'
+      : 'Account is missing trading permissions in AccessRegistry/ParticipantRegistry.';
+
     return (
       <div className="w-full space-y-3 font-sans">
         <div className="flex items-center justify-between text-xs pb-1 border-b border-white/[0.07]">
@@ -182,9 +203,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
             <div className="space-y-1">
               <h4 className="text-xs font-semibold text-zinc-200">Trading unavailable</h4>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Your wallet is not registered as an active market participant in the on-chain ParticipantRegistry.
-                Under DERC/UPERC regulatory guidelines, only authenticated consumers with verified service connections
-                or prosumers with smart net metering can submit orders.
+                {failureReason}
               </p>
             </div>
           </div>
@@ -194,7 +213,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
               Wallet: <span className="font-code text-zinc-400">{address?.slice(0, 8)}...{address?.slice(-6)}</span>
             </div>
             <div className="text-xs text-zinc-500">
-              To participate, please link your DISCOM consumer number (CA number) with this wallet address.
+              To resolve on local devnet, run <code className="text-cyan-400 font-mono">pnpm tsx scripts/seed-demo-accounts.ts</code>.
             </div>
           </div>
         </div>
@@ -222,19 +241,19 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
         <div>
           <div className="flex items-center justify-between text-xs font-medium text-zinc-400 mb-1.5">
             <span>Order side</span>
-            {canBuy && !canSell && (
-              <span className="text-xs text-bid-400 font-mono">Consumer · Buy only</span>
-            )}
-            {!canBuy && canSell && (
-              <span className="text-xs text-ask-400 font-mono">Generator · Sell only</span>
-            )}
-            {canBuy && canSell && (
-              <span className="text-xs text-zinc-400 font-mono">Prosumer · Bilateral</span>
+            {role && (
+              <span className="text-xs text-zinc-400 font-mono">{ROLES[role].label}</span>
             )}
           </div>
 
-          {canBuy && canSell ? (
-            /* Prosumer: Segmented switch between Buy and Sell */
+          {isDisallowedRole ? (
+            /* Operator / Regulator: Disabled notice */
+            <div className="py-2.5 px-3 bg-zinc-900/60 rounded-lg border border-zinc-800 text-xs flex items-center justify-between">
+              <span className="font-medium text-white">{role === 'discom' ? 'Market Operator' : 'Regulator'}</span>
+              <span className="text-zinc-500 font-mono">Order placement disabled</span>
+            </div>
+          ) : sidesAllowed.length === 2 || (canBuy && canSell && sidesAllowed.length === 0) ? (
+            /* Bilateral prosumer: Segmented switch between Buy and Sell */
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded-lg border border-white/[0.07]">
               <button
                 type="button"
@@ -259,28 +278,20 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
                 Sell energy (Ask)
               </button>
             </div>
-          ) : canBuy ? (
-            /* Pure Consumer: Fixed Buy ticket with explanatory notice */
+          ) : sidesAllowed.includes(OrderSide.BUY) || (canBuy && !canSell) ? (
+            /* Buyer / Consumer only: Fixed Buy ticket (hide side toggle) */
             <div className="space-y-1.5">
               <div className="py-2 px-3 bg-bid-950/40 rounded-lg border border-bid-800 text-xs font-medium text-bid-300 flex items-center justify-between">
                 <span>Buy energy (Bid)</span>
-                <span className="text-xs text-zinc-400">Import from grid</span>
-              </div>
-              <div className="flex items-center space-x-1.5 text-xs text-zinc-500 px-1">
-                <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                <span>Selling requires prosumer net-metering registration and verified generation capacity.</span>
+                <span className="text-xs text-zinc-400">Consumer · Buy only</span>
               </div>
             </div>
           ) : (
-            /* Pure Seller: Fixed Sell ticket */
+            /* Seller / Generator only: Fixed Sell ticket (hide side toggle) */
             <div className="space-y-1.5">
               <div className="py-2 px-3 bg-ask-950/40 rounded-lg border border-ask-800 text-xs font-medium text-ask-300 flex items-center justify-between">
                 <span>Sell energy (Ask)</span>
-                <span className="text-xs text-zinc-400">Export to grid</span>
-              </div>
-              <div className="flex items-center space-x-1.5 text-xs text-zinc-500 px-1">
-                <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                <span>Buying disabled for generation-only account.</span>
+                <span className="text-xs text-zinc-400">Generator · Sell only</span>
               </div>
             </div>
           )}
@@ -415,9 +426,9 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
         ) : (
           <Button
             type="submit"
-            disabled={isSigning || hasOpposingOrder || isPriceOutOfBounds}
+            disabled={isSigning || hasOpposingOrder || isPriceOutOfBounds || isDisallowedRole}
             className={`w-full font-medium text-xs h-9 cursor-pointer transition-colors shadow-xs ${
-              hasOpposingOrder || isPriceOutOfBounds
+              hasOpposingOrder || isPriceOutOfBounds || isDisallowedRole
                 ? 'bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]'
                 : side === OrderSide.BUY
                 ? 'bg-bid-500 hover:bg-bid-400 text-white'
@@ -429,6 +440,8 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
                 <span className="w-2 h-2 rounded-full bg-white animate-ping mr-2" />
                 Signing in wallet...
               </>
+            ) : isDisallowedRole ? (
+              role === 'discom' ? 'Market Operator · Order entry disabled' : 'Regulator · Read-only audit access'
             ) : hasOpposingOrder ? (
               'Blocked by Self-Trade Prevention'
             ) : isPriceOutOfBounds ? (

@@ -110,6 +110,26 @@
         },
         {
           "type": "function",
+          "name": "directGrantsDisabled",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "disableDirectGrants",
+          "inputs": [],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
           "name": "executeRoleGrant",
           "inputs": [
             {
@@ -136,6 +156,68 @@
               "name": "",
               "type": "bytes32",
               "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "getRoleMember",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "index",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "getRoleMemberCount",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "getRoleMembers",
+          "inputs": [
+            {
+              "name": "role",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address[]",
+              "internalType": "address[]"
             }
           ],
           "stateMutability": "view"
@@ -321,6 +403,12 @@
           "inputs": [],
           "outputs": [],
           "stateMutability": "nonpayable"
+        },
+        {
+          "type": "event",
+          "name": "DirectGrantsDisabled",
+          "inputs": [],
+          "anonymous": false
         },
         {
           "type": "event",
@@ -515,6 +603,11 @@
         },
         {
           "type": "error",
+          "name": "DirectGrantDisabled",
+          "inputs": []
+        },
+        {
+          "type": "error",
           "name": "EnforcedPause",
           "inputs": []
         },
@@ -599,6 +692,57 @@
         },
         {
           "type": "function",
+          "name": "getParticipantByWallet",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "tuple",
+              "internalType": "struct ParticipantRegistry.Participant",
+              "components": [
+                {
+                  "name": "participantId",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "zoneId",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "roleType",
+                  "type": "uint8",
+                  "internalType": "enum ParticipantRegistry.RoleType"
+                },
+                {
+                  "name": "bindingHash",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "isSuspended",
+                  "type": "bool",
+                  "internalType": "bool"
+                },
+                {
+                  "name": "registeredAt",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                }
+              ]
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
           "name": "isRegisteredAndActive",
           "inputs": [
             {
@@ -612,6 +756,25 @@
               "name": "",
               "type": "bool",
               "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "participantIdToWallet",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
             }
           ],
           "stateMutability": "view"
@@ -998,6 +1161,72 @@
         },
         {
           "type": "function",
+          "name": "getDevice",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "tuple",
+              "internalType": "struct DeviceRegistry.Device",
+              "components": [
+                {
+                  "name": "signerAddress",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "signerType",
+                  "type": "uint8",
+                  "internalType": "enum DeviceRegistry.SignerType"
+                },
+                {
+                  "name": "sourceType",
+                  "type": "uint8",
+                  "internalType": "enum DeviceRegistry.SourceType"
+                },
+                {
+                  "name": "zoneId",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "capacityWh",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "trustWeight",
+                  "type": "uint8",
+                  "internalType": "uint8"
+                },
+                {
+                  "name": "isRevoked",
+                  "type": "bool",
+                  "internalType": "bool"
+                },
+                {
+                  "name": "participantId",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "registeredAt",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                }
+              ]
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
           "name": "isDeviceValid",
           "inputs": [
             {
@@ -1091,9 +1320,36 @@
               "internalType": "bytes32"
             },
             {
-              "name": "payloadHashA",
-              "type": "bytes32",
-              "internalType": "bytes32"
+              "name": "readingA",
+              "type": "tuple",
+              "internalType": "struct DeviceRegistry.ReadingRecord",
+              "components": [
+                {
+                  "name": "zoneId",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "intervalIdx",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "energyWh",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "direction",
+                  "type": "uint8",
+                  "internalType": "uint8"
+                },
+                {
+                  "name": "counter",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                }
+              ]
             },
             {
               "name": "sigA",
@@ -1101,9 +1357,36 @@
               "internalType": "bytes"
             },
             {
-              "name": "payloadHashB",
-              "type": "bytes32",
-              "internalType": "bytes32"
+              "name": "readingB",
+              "type": "tuple",
+              "internalType": "struct DeviceRegistry.ReadingRecord",
+              "components": [
+                {
+                  "name": "zoneId",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "intervalIdx",
+                  "type": "uint32",
+                  "internalType": "uint32"
+                },
+                {
+                  "name": "energyWh",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                },
+                {
+                  "name": "direction",
+                  "type": "uint8",
+                  "internalType": "uint8"
+                },
+                {
+                  "name": "counter",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                }
+              ]
             },
             {
               "name": "sigB",
@@ -1266,6 +1549,22 @@
         },
         {
           "type": "error",
+          "name": "MismatchedInterval",
+          "inputs": [
+            {
+              "name": "intervalA",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalB",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
           "name": "NotEquivocation",
           "inputs": []
         },
@@ -1294,6 +1593,32 @@
             }
           ],
           "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "INTERVAL_DURATION",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "MAX_EPOCH_LAG",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "stateMutability": "view"
         },
         {
           "type": "function",
@@ -1333,6 +1658,19 @@
         },
         {
           "type": "function",
+          "name": "currentInterval",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
           "name": "epochs",
           "inputs": [
             {
@@ -1368,9 +1706,14 @@
               "internalType": "uint64"
             },
             {
-              "name": "disputed",
-              "type": "bool",
-              "internalType": "bool"
+              "name": "status",
+              "type": "uint8",
+              "internalType": "enum EpochOracle.EpochStatus"
+            },
+            {
+              "name": "challenger",
+              "type": "address",
+              "internalType": "address"
             }
           ],
           "stateMutability": "view"
@@ -1417,11 +1760,35 @@
                   "internalType": "uint64"
                 },
                 {
-                  "name": "disputed",
-                  "type": "bool",
-                  "internalType": "bool"
+                  "name": "status",
+                  "type": "uint8",
+                  "internalType": "enum EpochOracle.EpochStatus"
+                },
+                {
+                  "name": "challenger",
+                  "type": "address",
+                  "internalType": "address"
                 }
               ]
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isFutureInterval",
+          "inputs": [
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
             }
           ],
           "stateMutability": "view"
@@ -1438,6 +1805,34 @@
             }
           ],
           "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "resolveChallenge",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "isValid",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "resolutionDetails",
+              "type": "string",
+              "internalType": "string"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
         },
         {
           "type": "function",
@@ -1523,6 +1918,37 @@
             }
           ],
           "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "EpochChallengeResolved",
+          "inputs": [
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "indexed": true,
+              "internalType": "uint32"
+            },
+            {
+              "name": "status",
+              "type": "uint8",
+              "indexed": false,
+              "internalType": "enum EpochOracle.EpochStatus"
+            },
+            {
+              "name": "resolutionDetails",
+              "type": "string",
+              "indexed": false,
+              "internalType": "string"
+            }
+          ],
+          "anonymous": false
         },
         {
           "type": "event",
@@ -1637,6 +2063,11 @@
         },
         {
           "type": "error",
+          "name": "CallerNotAuditor",
+          "inputs": []
+        },
+        {
+          "type": "error",
           "name": "DuplicateOrUnsortedSigner",
           "inputs": [
             {
@@ -1691,6 +2122,11 @@
         },
         {
           "type": "error",
+          "name": "EpochNotChallenged",
+          "inputs": []
+        },
+        {
+          "type": "error",
           "name": "EpochNotFound",
           "inputs": [
             {
@@ -1700,6 +2136,22 @@
             },
             {
               "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "FutureEpochNotAllowed",
+          "inputs": [
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "currentInterval",
               "type": "uint32",
               "internalType": "uint32"
             }
@@ -1723,12 +2175,54 @@
         },
         {
           "type": "error",
+          "name": "InvalidEpochStatus",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidQuorumThreshold",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "QuorumExceedsOracleCount",
+          "inputs": [
+            {
+              "name": "quorum",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "count",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
           "name": "SignerNotAuthorizedOracle",
           "inputs": [
             {
               "name": "signer",
               "type": "address",
               "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "StaleEpochNotAllowed",
+          "inputs": [
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "currentInterval",
+              "type": "uint32",
+              "internalType": "uint32"
             }
           ]
         },
@@ -2139,6 +2633,19 @@
         },
         {
           "type": "function",
+          "name": "claimExpiredRefund",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
           "name": "deposit",
           "inputs": [
             {
@@ -2194,6 +2701,30 @@
         },
         {
           "type": "function",
+          "name": "isValidTransition",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            },
+            {
+              "name": "to",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
           "name": "lockCollateral",
           "inputs": [
             {
@@ -2205,6 +2736,49 @@
               "name": "amount",
               "type": "uint256",
               "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "lockObligationCollateral",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "buyer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "seller",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
             }
           ],
           "outputs": [],
@@ -2231,6 +2805,70 @@
         },
         {
           "type": "function",
+          "name": "obligationLocks",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "buyer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "seller",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "state",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            },
+            {
+              "name": "createdAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "settledAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
           "name": "paymentToken",
           "inputs": [],
           "outputs": [
@@ -2241,6 +2879,19 @@
             }
           ],
           "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "refundObligation",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
         },
         {
           "type": "function",
@@ -2275,6 +2926,24 @@
         },
         {
           "type": "function",
+          "name": "settleObligation",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "settleAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
           "name": "settlementContract",
           "inputs": [],
           "outputs": [
@@ -2298,6 +2967,24 @@
             }
           ],
           "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "updateObligationState",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "newState",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
         },
         {
           "type": "function",
@@ -2365,6 +3052,136 @@
               "type": "uint256",
               "indexed": false,
               "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ObligationLocked",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "buyer",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "seller",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "indexed": false,
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "indexed": false,
+              "internalType": "uint32"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ObligationRefunded",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "buyer",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ObligationSettled",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "buyer",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "seller",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ObligationStateChanged",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "oldState",
+              "type": "uint8",
+              "indexed": false,
+              "internalType": "enum Escrow.EscrowState"
+            },
+            {
+              "name": "newState",
+              "type": "uint8",
+              "indexed": false,
+              "internalType": "enum Escrow.EscrowState"
             }
           ],
           "anonymous": false
@@ -2470,6 +3287,154 @@
         },
         {
           "type": "error",
+          "name": "InvalidAmount",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidDeadline",
+          "inputs": [
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "currentTime",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidObligationState",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "current",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            },
+            {
+              "name": "required",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidObligationStateTransition",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "current",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            },
+            {
+              "name": "target",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidParticipants",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ObligationAlreadyExists",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ObligationAlreadyTerminated",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "current",
+              "type": "uint8",
+              "internalType": "enum Escrow.EscrowState"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ObligationExpired",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "currentTime",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ObligationNotExpired",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "currentTime",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ObligationNotFound",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
           "name": "ReentrancyGuardReentrantCall",
           "inputs": []
         },
@@ -2487,6 +3452,11 @@
         {
           "type": "error",
           "name": "SystemPaused",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedClaimant",
           "inputs": []
         }
       ]
@@ -2522,6 +3492,32 @@
         },
         {
           "type": "function",
+          "name": "DOMAIN_SEPARATOR",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "ENERGY_ORDER_TYPEHASH",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
           "name": "STATEMENT_PREFIX",
           "inputs": [],
           "outputs": [
@@ -2542,6 +3538,43 @@
               "name": "",
               "type": "address",
               "internalType": "contract AccessRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "cancelOrder",
+          "inputs": [
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "cancelledNonces",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
             }
           ],
           "stateMutability": "view"
@@ -2747,6 +3780,16 @@
               "internalType": "uint256"
             },
             {
+              "name": "totalCollectedDebitsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "totalClaimedCreditsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
               "name": "postedAt",
               "type": "uint64",
               "internalType": "uint64"
@@ -2779,6 +3822,140 @@
             }
           ],
           "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "fundSettlementPool",
+          "inputs": [
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "hashEnergyOrder",
+          "inputs": [
+            {
+              "name": "maker",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "zone",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "interval",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "side",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "quantityWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "pricePaisePerKWh",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isOrderCancelled",
+          "inputs": [
+            {
+              "name": "participant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "lockObligation",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "buyer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "seller",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "zoneId",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "intervalIdx",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
         },
         {
           "type": "function",
@@ -2819,6 +3996,42 @@
             },
             {
               "name": "totalDebitsPaise",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "oracleSignatures",
+              "type": "bytes[]",
+              "internalType": "bytes[]"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "refundObligation",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "settleObligation",
+          "inputs": [
+            {
+              "name": "obligationId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "settleAmount",
               "type": "uint256",
               "internalType": "uint256"
             }
@@ -2902,6 +4115,25 @@
         },
         {
           "type": "event",
+          "name": "OrderCancelled",
+          "inputs": [
+            {
+              "name": "participant",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "indexed": true,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
           "name": "SettlementClaimed",
           "inputs": [
             {
@@ -2938,6 +4170,25 @@
           "anonymous": false
         },
         {
+          "type": "event",
+          "name": "SettlementPoolFunded",
+          "inputs": [
+            {
+              "name": "funder",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
           "type": "error",
           "name": "CallerNotOperator",
           "inputs": []
@@ -2955,6 +4206,76 @@
               "name": "intervalIdx",
               "type": "uint32",
               "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "DuplicateOrUnsortedSigner",
+          "inputs": [
+            {
+              "name": "signer",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignature",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignatureLength",
+          "inputs": [
+            {
+              "name": "length",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ECDSAInvalidSignatureS",
+          "inputs": [
+            {
+              "name": "s",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "EconomicConservationViolation",
+          "inputs": [
+            {
+              "name": "totalDebits",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "totalCredits",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InsufficientOracleSignatures",
+          "inputs": [
+            {
+              "name": "count",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "required",
+              "type": "uint256",
+              "internalType": "uint256"
             }
           ]
         },
@@ -2980,6 +4301,33 @@
           "inputs": [
             {
               "name": "participant",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SafeERC20FailedOperation",
+          "inputs": [
+            {
+              "name": "token",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "SettlementPoolExhausted",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "SignerNotAuthorizedOracle",
+          "inputs": [
+            {
+              "name": "signer",
               "type": "address",
               "internalType": "address"
             }
@@ -3042,6 +4390,11 @@
             },
             {
               "name": "_deviceRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "_participantRegistry",
               "type": "address",
               "internalType": "address"
             },
@@ -3264,6 +4617,19 @@
               "name": "",
               "type": "bool",
               "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "participantRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract ParticipantRegistry"
             }
           ],
           "stateMutability": "view"
@@ -3601,6 +4967,17 @@
         },
         {
           "type": "error",
+          "name": "DeviceOwnerNotFound",
+          "inputs": [
+            {
+              "name": "deviceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
           "name": "ERC1155InsufficientBalance",
           "inputs": [
             {
@@ -3735,7 +5112,28 @@
         },
         {
           "type": "error",
+          "name": "MismatchedSourceType",
+          "inputs": [
+            {
+              "name": "supplied",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "registered",
+              "type": "uint8",
+              "internalType": "uint8"
+            }
+          ]
+        },
+        {
+          "type": "error",
           "name": "SystemPaused",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedClaimant",
           "inputs": []
         }
       ]

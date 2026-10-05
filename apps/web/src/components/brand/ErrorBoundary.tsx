@@ -22,10 +22,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('VoltMesh Runtime Error Boundary Caught:', error, errorInfo);
+    console.error('VoltMesh Runtime Error Boundary Caught:', error);
+    if (error?.stack) {
+      console.error(error.stack);
+    }
+    if (errorInfo?.componentStack) {
+      console.error('Component Stack:', errorInfo.componentStack);
+    }
   }
 
   private handleReset = () => {
+    try {
+      localStorage.removeItem('voltmesh_pipeline_v1');
+    } catch {}
     this.setState({ hasError: false, error: null });
     window.location.href = '/';
   };

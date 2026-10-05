@@ -143,6 +143,29 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
   }, [oracleConfig, currentZoneId, currentInterval]);
 
   useEffect(() => {
+    async function syncInterval() {
+      if (!oracleConfig?.address) return;
+      try {
+        const publicClient = createPublicClient({
+          chain: voltmeshTestnet,
+          transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
+        });
+        const onChainInterval = (await publicClient.readContract({
+          address: oracleConfig.address,
+          abi: oracleConfig.abi,
+          functionName: 'currentInterval',
+        })) as number;
+        if (onChainInterval && Number(onChainInterval) > 0) {
+          setCurrentInterval(Number(onChainInterval));
+        }
+      } catch (err) {
+        console.warn('Failed to query on-chain currentInterval in CanonicalMerkleTree:', err);
+      }
+    }
+    syncInterval();
+  }, [initialInterval, oracleConfig]);
+
+  useEffect(() => {
     checkOnChainStatus();
   }, [checkOnChainStatus]);
 

@@ -12,6 +12,7 @@ import {
 import { DetailDrawerData } from '@/types/ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { safeStringify } from '@/lib/utils';
 
 export interface TerminalInspectorProps {
   data: DetailDrawerData | null;
@@ -251,7 +252,7 @@ export const TerminalInspector: React.FC<TerminalInspectorProps> = ({
             </button>
             {showRawPayload && (
               <pre className="mt-1.5 p-3 bg-black/40 rounded-lg border border-white/[0.07] font-code text-xs text-zinc-300 overflow-x-auto whitespace-pre-wrap max-h-48">
-                {JSON.stringify(data.rawPayload || data.properties, null, 2)}
+                {safeStringify(data.rawPayload || data.properties, 2)}
               </pre>
             )}
           </div>

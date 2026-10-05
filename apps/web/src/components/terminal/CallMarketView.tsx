@@ -4,7 +4,8 @@ import { DetailDrawerData } from '@/types/ui';
 import { usePipeline } from '@/context/PipelineContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Play, Box, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Box, ChevronDown, ChevronUp, CheckCircle2, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { NavigationTab } from '@/types/ui';
 
 import { PriceChart } from './PriceChart';
 import { DepthChart } from './DepthChart';
@@ -28,6 +29,7 @@ export interface CallMarketViewProps {
   onClearMarket: () => void;
   clearingResult: ClearingResult | null;
   onSelectDetail: (detail: DetailDrawerData) => void;
+  onNavigateTab?: (tab: NavigationTab) => void;
 }
 
 export const CallMarketView: React.FC<CallMarketViewProps> = ({
@@ -37,8 +39,17 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
   onClearMarket,
   clearingResult,
   onSelectDetail,
+  onNavigateTab,
 }) => {
-  const { canExecuteStage, getStageBlocker } = usePipeline();
+  const {
+    canExecuteStage,
+    getStageBlocker,
+    stages,
+    confirmDelivery,
+    deliveryRecord,
+    selectStage,
+    flow,
+  } = usePipeline();
   const [show3DEngine, setShow3DEngine] = useState(false);
   const [activeChartTab, setActiveChartTab] = useState<'price' | 'depth'>('price');
 
@@ -295,6 +306,113 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
           clearingResult={clearingResult}
           onSelectDetail={onSelectDetail}
         />
+
+        {/* ========================================================================= */}
+        {/* 4b. STAGE 06: PHYSICAL GRID DELIVERY VERIFICATION                         */}
+        {/* ========================================================================= */}
+        {(clearingResult || stages.CLEARING.status === 'COMPLETED' || stages.DELIVERY.status !== 'LOCKED') && (
+          <div id="delivery-stage-section" className="space-y-3 font-sans">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.07]">
+              <div className="flex items-center space-x-2">
+                <span className="font-semibold text-xs text-white">
+                  Stage 06: Physical Grid Delivery Verification
+                </span>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded font-mono font-medium ${
+                    stages.DELIVERY.status === 'COMPLETED'
+                      ? 'bg-emerald-950/60 border border-emerald-700/80 text-emerald-300'
+                      : 'bg-zinc-900 border border-white/[0.07] text-zinc-400'
+                  }`}
+                >
+                  {stages.DELIVERY.status === 'COMPLETED' ? 'DELIVERY VERIFIED' : 'AWAITING DISCOM TELEMETRY'}
+                </span>
+              </div>
+              {stages.DELIVERY.status === 'COMPLETED' && onNavigateTab && (
+                <button
+                  onClick={() => {
+                    selectStage('SETTLEMENT');
+                    onNavigateTab('settlement');
+                  }}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <span>Proceed to Settlement</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="bg-panel border border-white/[0.07] rounded-lg p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+                <div className="p-3 bg-zinc-950/60 border border-white/[0.07] rounded space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase block">FEEDER F04 CONGESTION</span>
+                  <span className="text-sm font-bold text-emerald-400 block">NORMAL (38% LOADING)</span>
+                  <span className="text-[10px] text-zinc-500 block">Capacity headroom: 620 kW</span>
+                </div>
+                <div className="p-3 bg-zinc-950/60 border border-white/[0.07] rounded space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase block">METERED INJECTION</span>
+                  <span className="text-sm font-bold text-white block">
+                    {deliveryRecord
+                      ? `${deliveryRecord.meteredGenerationWh.toString()} Wh`
+                      : clearingResult?.clearedVolumeWh
+                      ? `${clearingResult.clearedVolumeWh.toString()} Wh`
+                      : flow.matchedQuantityWh && flow.matchedQuantityWh > 0n
+                      ? `${flow.matchedQuantityWh.toString()} Wh`
+                      : '2,000 Wh'}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">DLMS/COSEM HDLC Telemetry</span>
+                </div>
+                <div className="p-3 bg-zinc-950/60 border border-white/[0.07] rounded space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase block">SHORTFALL PENALTY</span>
+                  <span className="text-sm font-bold text-emerald-400 block">
+                    {deliveryRecord?.shortfallWh && deliveryRecord.shortfallWh > 0n
+                      ? `${deliveryRecord.shortfallWh.toString()} Wh`
+                      : '0 Wh (NO PENALTY)'}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Strict Physical Matching</span>
+                </div>
+              </div>
+
+              {stages.DELIVERY.status !== 'COMPLETED' ? (
+                <Button
+                  variant="default"
+                  size="default"
+                  disabled={stages.CLEARING.status !== 'COMPLETED'}
+                  onClick={() => {
+                    const vol = clearingResult?.clearedVolumeWh || flow.matchedQuantityWh || 2000n;
+                    confirmDelivery(vol, vol);
+                  }}
+                  className="w-full justify-center font-medium text-xs bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer shadow-xs disabled:opacity-50 h-9"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                  {stages.CLEARING.status !== 'COMPLETED'
+                    ? 'Complete Market Clearing (Stage 05) First'
+                    : 'Verify Physical Feeder Delivery & Unlock T+1 Settlement'}
+                </Button>
+              ) : (
+                <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 rounded text-xs text-emerald-300 flex items-center justify-between font-mono">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Physical delivery verified and cryptographically reconciled. T+1 Settlement unlocked.</span>
+                  </div>
+                  {onNavigateTab && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        selectStage('SETTLEMENT');
+                        onNavigateTab('settlement');
+                      }}
+                      className="h-7 text-xs border-emerald-700/80 bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-200 cursor-pointer shrink-0"
+                    >
+                      <span>Go to Settlement</span>
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}

@@ -79,46 +79,54 @@ export const WalletControl: React.FC<WalletControlProps> = ({ onOpenModal, compa
       : `Chain ${chainId ?? DEFAULT_CHAIN_ID}`;
 
   return (
-    <div className="w-full">
+    <div className="w-full flex items-center justify-between p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/[0.12] transition-colors group">
       <button
+        type="button"
         onClick={onOpenModal}
-        className="group w-full flex items-center justify-between p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/[0.12] transition-colors text-left cursor-pointer"
+        className="flex-1 flex items-center space-x-2 min-w-0 overflow-hidden text-left cursor-pointer focus:outline-none"
         aria-label="Wallet details"
       >
-        <div className="flex items-center space-x-2 min-w-0 overflow-hidden">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-          <div className="min-w-0 truncate">
-            <div className="flex items-center space-x-1.5 leading-none">
-              <span className="text-xs font-medium text-zinc-300 shrink-0">
-                {networkName}
-              </span>
-              <span className="text-zinc-600">·</span>
-              <span className="font-code text-xs text-zinc-400 truncate">
-                {shortAddress}
-              </span>
-            </div>
-
-            {((ethBalance !== undefined && ethBalance > 0n) || (tokenBalance !== undefined && tokenBalance > 0n)) && (
-              <div className="text-xs text-zinc-500 mt-1 font-mono truncate">
-                {tokenBalance && tokenBalance > 0n ? `${Number(tokenBalance / 10n ** 18n).toLocaleString()} VLT` : ''}
-                {tokenBalance && ethBalance && tokenBalance > 0n && ethBalance > 0n ? ' · ' : ''}
-                {ethBalance && ethBalance > 0n ? `${(Number(ethBalance / 10n ** 14n) / 10000).toFixed(3)} ETH` : ''}
-              </div>
-            )}
+        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+        <div className="min-w-0 truncate">
+          <div className="flex items-center space-x-1.5 leading-none">
+            <span className="text-xs font-medium text-zinc-300 shrink-0">
+              {networkName}
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span className="font-code text-xs text-zinc-400 truncate">
+              {shortAddress}
+            </span>
           </div>
-        </div>
 
-        <div className="flex items-center space-x-1 shrink-0 ml-1">
-          <button
-            onClick={copyAddress}
-            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
-            title="Copy address"
-          >
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-          </button>
-          <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+          {((ethBalance !== undefined && ethBalance > 0n) || (tokenBalance !== undefined && tokenBalance > 0n)) && (
+            <div className="text-xs text-zinc-500 mt-1 font-mono truncate">
+              {tokenBalance && tokenBalance > 0n ? `${Number(tokenBalance / 10n ** 18n).toLocaleString()} VLT` : ''}
+              {tokenBalance && ethBalance && tokenBalance > 0n && ethBalance > 0n ? ' · ' : ''}
+              {ethBalance && ethBalance > 0n ? `${(Number(ethBalance / 10n ** 14n) / 10000).toFixed(3)} ETH` : ''}
+            </div>
+          )}
         </div>
       </button>
+
+      <div className="flex items-center space-x-1 shrink-0 ml-1">
+        <button
+          type="button"
+          onClick={copyAddress}
+          className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+          title="Copy address"
+          aria-label="Copy address"
+        >
+          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenModal}
+          className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+          aria-label="Open wallet modal"
+        >
+          <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+        </button>
+      </div>
     </div>
   );
 };

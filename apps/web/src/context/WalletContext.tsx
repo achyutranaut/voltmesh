@@ -5,8 +5,6 @@ import {
   Hash,
   TransactionReceipt,
   createPublicClient,
-  createWalletClient,
-  custom,
   http,
   formatEther,
   formatUnits,
@@ -27,6 +25,12 @@ import {
 } from '../config/contracts';
 import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
+import { useSession } from '../auth/SessionContext';
+import { can } from '../auth/permissions';
+
+const ALL_CONTRACT_ABIS = Object.values(deploymentArtifacts.contracts).flatMap(
+  (c: any) => c.abi || []
+) as Abi;
 
 // EIP-712 Types & Domain for VoltMesh Energy Orders
 export const EIP712_DOMAIN = {
@@ -223,16 +227,22 @@ export interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [address, setAddress] = useState<Address | null>(null);
+  const { session, signOut } = useSession();
+  const address = session?.address ?? null;
+  const walletClient = session?.walletClient;
+  const isConnected = !!session;
+
   const [participantRoleType, setParticipantRoleType] = useState<number | null>(null);
   const [simulationMode, setSimulationMode] = useState<boolean>(false);
   const [simulationRole, setSimulationRole] = useState<'PROSUMER' | 'CONSUMER'>('PROSUMER');
-  const [chainId, setChainId] = useState<number | null>(null);
+  const [injectedChainId, setInjectedChainId] = useState<number | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [walletInstalled, setWalletInstalled] = useState<boolean>(false);
 
-  // Cryptographic authority: address is strictly the connected user wallet
+  const chainId = session ? (session.kind === 'demo' ? DEFAULT_CHAIN_ID : (injectedChainId ?? DEFAULT_CHAIN_ID)) : (injectedChainId ?? null);
+
+  // Cryptographic authority: address is strictly the connected session wallet
   const effectiveAddress = address;
 
   const switchDemoRole = useCallback((role: 'SELLER' | 'BUYER') => {
@@ -254,7 +264,29 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     isParticipant: false,
   });
 
+  // When session address changes, clear cached balances, activeTx, and onChainActivity
+  useEffect(() => {
+    setEthBalance(0n);
+    setTokenBalance(0n);
+    setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
+    setRoles({ isAdmin: false, isOperator: false, isOracle: false, isRegistrar: false, isParticipant: false });
+    setActiveTx(null);
+    setOnChainActivity([]);
+  }, [session?.address]);
+
   const capabilities: ParticipantCapabilities = React.useMemo(() => {
+    if (session?.role) {
+      return {
+        canBuy: can(session.role, 'order.buy'),
+        canSell: can(session.role, 'order.sell'),
+        canRegisterDevice: can(session.role, 'meter.generate'),
+        canClearMarket: can(session.role, 'market.clear'),
+        canOperate: can(session.role, 'epoch.build') || can(session.role, 'fault.inject'),
+        canIssueCredentials: session.role === 'discom',
+        canAudit: session.role === 'regulator' || session.role === 'discom',
+      };
+    }
+
     if (simulationMode) {
       return {
         canBuy: true,
@@ -326,7 +358,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       canIssueCredentials: false,
       canAudit: false,
     };
-  }, [simulationMode, simulationRole, roles, participantRoleType]);
+  }, [session, simulationMode, simulationRole, roles, participantRoleType]);
 
   const utilityIdentity: UtilityIdentityClaim = React.useMemo(() => {
     const addr = (effectiveAddress ?? '').toLowerCase();
@@ -456,7 +488,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setOnChainActivity((prev) => [newItem, ...prev.slice(0, 49)]);
   }, []);
 
-  // Check Ethereum provider on mount
+  // Check Ethereum provider on mount (chain detection only, no auto-connect)
   useEffect(() => {
     const ethereum = (window as any).ethereum;
     if (ethereum) {
@@ -464,42 +496,17 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // Read current chain
       ethereum.request({ method: 'eth_chainId' }).then((idHex: string) => {
-        setChainId(parseInt(idHex, 16));
+        setInjectedChainId(parseInt(idHex, 16));
       }).catch(() => {});
-
-      // Read existing accounts
-      ethereum.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
-        if (accounts.length > 0) {
-          setAddress(accounts[0] as Address);
-        }
-      }).catch(() => {});
-
-      // Event listeners
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length > 0) {
-          setAddress(accounts[0] as Address);
-          setError(null);
-        } else {
-          setAddress(null);
-        }
-      };
 
       const handleChainChanged = (idHex: string) => {
-        setChainId(parseInt(idHex, 16));
+        setInjectedChainId(parseInt(idHex, 16));
       };
 
-      const handleDisconnect = () => {
-        setAddress(null);
-      };
-
-      ethereum.on?.('accountsChanged', handleAccountsChanged);
       ethereum.on?.('chainChanged', handleChainChanged);
-      ethereum.on?.('disconnect', handleDisconnect);
 
       return () => {
-        ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
         ethereum.removeListener?.('chainChanged', handleChainChanged);
-        ethereum.removeListener?.('disconnect', handleDisconnect);
       };
     }
   }, []);
@@ -660,43 +667,18 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return () => clearInterval(interval);
   }, [refreshBalances]);
 
-  // Connect MetaMask
+  // Connect MetaMask - opens the identity gate
   const connectMetaMask = async () => {
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) {
-      setError('MetaMask is not installed. Please install MetaMask to use VoltMesh.');
-      return;
-    }
-
-    try {
-      setIsConnecting(true);
-      setError(null);
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        setAddress(accounts[0] as Address);
-        const idHex = await ethereum.request({ method: 'eth_chainId' });
-        const netId = parseInt(idHex, 16);
-        setChainId(netId);
-
-        // If connected to wrong network, prompt switch
-        if (netId !== DEFAULT_CHAIN_ID) {
-          await switchNetwork(DEFAULT_CHAIN_ID);
-        }
-      }
-    } catch (err: any) {
-      if (err.code === 4001) {
-        setError('Connection rejected in MetaMask.');
-      } else {
-        setError(err.message || 'Failed to connect MetaMask.');
-      }
-    } finally {
-      setIsConnecting(false);
-    }
+    window.dispatchEvent(new Event('voltmesh:open-gate'));
   };
 
   // Disconnect
   const disconnect = () => {
-    setAddress(null);
+    if (session?.address) {
+      signOut(session.address);
+    } else {
+      signOut();
+    }
     setError(null);
   };
 
@@ -711,7 +693,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: hexChainId }],
       });
-      setChainId(targetChainId);
+      setInjectedChainId(targetChainId);
     } catch (switchError: any) {
       // 4902 indicates chain not added yet to MetaMask
       if (switchError.code === 4902) {
@@ -730,7 +712,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 },
               ],
             });
-            setChainId(targetChainId);
+            setInjectedChainId(targetChainId);
           } catch (addError: any) {
             setError(`Failed to add network: ${addError.message}`);
           }
@@ -745,48 +727,135 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const extractRevertReason = (err: any, abi?: Abi): string => {
     if (!err) return 'Unknown transaction error';
 
-    // 1. Check if Viem already decoded error
-    if (err.errorName) {
-      if (err.args && err.args.length > 0) {
-        return `${err.errorName}(${err.args.join(', ')})`;
+    // Helper to format decoded error
+    const formatDecoded = (decoded: { errorName: string; args?: readonly any[] | any[] }): string => {
+      const { errorName, args } = decoded;
+      if (errorName === 'StaleEpochNotAllowed') {
+        return `Epoch submission rejected: Interval ${args?.[0]} is stale (current on-chain interval is ${args?.[1]}).`;
       }
-      return err.errorName;
+      if (errorName === 'FutureEpochNotAllowed') {
+        return `Epoch submission rejected: Interval ${args?.[0]} is in the future (current on-chain interval is ${args?.[1]}).`;
+      }
+      if (errorName === 'EpochAlreadyFinalized') {
+        return `Epoch for Zone ${args?.[0]} Slot ${args?.[1]} is already finalized on-chain.`;
+      }
+      if (errorName === 'SignerNotAuthorizedOracle') {
+        return `Signer ${args?.[0]} is not an authorized oracle in AccessRegistry.`;
+      }
+      if (errorName === 'InsufficientSignatures') {
+        return `Insufficient oracle signatures: received ${args?.[0]}, required ${args?.[1]}.`;
+      }
+      if (errorName === 'DuplicateOrUnsortedSigner') {
+        return `Duplicate or unsorted oracle signer: ${args?.[0]}.`;
+      }
+      if (errorName === 'EpochNotFound') {
+        return `Epoch for Zone ${args?.[0]} Slot ${args?.[1]} not found on-chain.`;
+      }
+      if (errorName === 'InsufficientBalance') {
+        return `Insufficient balance: available ${args?.[1]}, requested ${args?.[2]}.`;
+      }
+      if (errorName === 'ECDSAInvalidSignature') {
+        return 'Invalid cryptographic ECDSA signature.';
+      }
+      if (errorName === 'SystemPaused') {
+        return 'VoltMesh smart contracts are currently paused by administrative action.';
+      }
+      if (errorName === 'CallerNotAdmin') {
+        return 'Unauthorized: caller does not have Administrator privileges.';
+      }
+      if (errorName === 'CallerNotOperator') {
+        return 'Unauthorized: caller does not have Market Operator privileges.';
+      }
+      if (errorName === 'CallerNotAuditor') {
+        return 'Unauthorized: caller does not have Auditor / Regulator privileges.';
+      }
+      if (errorName === 'CommitmentAlreadyExists') {
+        return `Market clearing commitment already exists for Zone ${args?.[0]} Slot ${args?.[1]}.`;
+      }
+      if (errorName === 'StatementAlreadyPosted') {
+        return `Daily settlement statement already posted for Date ${args?.[0]} Zone ${args?.[1]}.`;
+      }
+      if (errorName === 'LeafAlreadyClaimed') {
+        return 'Settlement leaf has already been claimed.';
+      }
+      if (errorName === 'InvalidMerkleProof') {
+        return 'Invalid cryptographic Merkle proof.';
+      }
+      if (errorName === 'ParticipantNotActive') {
+        return `Participant ${args?.[0]} is suspended or not registered.`;
+      }
+      if (errorName === 'EconomicConservationViolation') {
+        return `Settlement violates economic conservation (debits: ${args?.[0]}, credits: ${args?.[1]}).`;
+      }
+      if (errorName === 'SettlementPoolExhausted') {
+        return 'Settlement liquidity pool has insufficient reserves.';
+      }
+      if (errorName === 'DeviceNotRegisteredOrRevoked') {
+        return `Smart meter device ${args?.[0]} is not registered or has been revoked.`;
+      }
+      if (errorName === 'ExceedsRatedCapacity') {
+        return `Energy volume exceeds smart meter rated capacity.`;
+      }
+      if (errorName === 'MismatchedSourceType') {
+        return 'Energy source type mismatch for certificate generation.';
+      }
+      if (errorName === 'UnauthorizedClaimant') {
+        return 'Only the registered device owner or market operator can claim certificates.';
+      }
+      if (errorName === 'LeafAlreadyMinted') {
+        return 'Energy attribute certificate has already been minted for this reading.';
+      }
+      if (errorName === 'InvalidOracleProof') {
+        return 'Oracle Merkle proof failed verification against on-chain epoch root.';
+      }
+      if (args && args.length > 0) {
+        return `${errorName}(${args.join(', ')})`;
+      }
+      return errorName;
+    };
+
+    // 1. Check if Viem already decoded error on the error object
+    if (err.errorName) {
+      return formatDecoded(err);
+    }
+    if (err.cause?.errorName) {
+      return formatDecoded(err.cause);
     }
 
-    // 2. Check for encoded error data
-    const rawData = err.data || err.cause?.data || err.cause?.cause?.data;
-    if (rawData && abi) {
-      try {
-        const decoded = decodeErrorResult({ abi, data: rawData });
-        if (decoded.errorName === 'EpochAlreadyFinalized') {
-          return `Epoch for Zone ${decoded.args?.[0]} Slot ${decoded.args?.[1]} is already finalized on-chain.`;
-        }
-        if (decoded.errorName === 'SignerNotAuthorizedOracle') {
-          return `Signer ${decoded.args?.[0]} is not an authorized oracle in AccessRegistry.`;
-        }
-        if (decoded.errorName === 'InsufficientSignatures') {
-          return `Insufficient oracle signatures: received ${decoded.args?.[0]}, required ${decoded.args?.[1]}.`;
-        }
-        if (decoded.errorName === 'DuplicateOrUnsortedSigner') {
-          return `Duplicate or unsorted oracle signer: ${decoded.args?.[0]}.`;
-        }
-        if (decoded.errorName === 'EpochNotFinalized') {
-          return `Epoch for Zone ${decoded.args?.[0]} Slot ${decoded.args?.[1]} is not yet finalized on-chain.`;
-        }
-        if (decoded.errorName === 'InsufficientBalance') {
-          return `Insufficient balance: available ${decoded.args?.[1]}, requested ${decoded.args?.[2]}.`;
-        }
-        if (decoded.errorName === 'ECDSAInvalidSignature') {
-          return 'Invalid cryptographic ECDSA signature.';
-        }
-        if (decoded.errorName) {
-          return `${decoded.errorName}(${decoded.args ? decoded.args.join(', ') : ''})`;
-        }
-      } catch {}
+    // 2. Collect candidate raw hex data
+    const rawCandidates: (`0x${string}`)[] = [];
+    const directData = err.data || err.cause?.data || err.cause?.cause?.data;
+    if (typeof directData === 'string' && directData.startsWith('0x')) {
+      rawCandidates.push(directData as `0x${string}`);
     }
 
-    // 3. Match well-known selector signatures
-    const msg = err.shortMessage || err.message || '';
+    const msg = `${err.shortMessage || ''} ${err.message || ''}`;
+    const hexMatches = msg.match(/0x[a-fA-F0-9]{8,}/g);
+    if (hexMatches) {
+      for (const h of hexMatches) {
+        if (!rawCandidates.includes(h as `0x${string}`)) {
+          rawCandidates.push(h as `0x${string}`);
+        }
+      }
+    }
+
+    // 3. Attempt decoding against provided ABI or all contract ABIs
+    const abisToTry = abi ? [abi, ALL_CONTRACT_ABIS] : [ALL_CONTRACT_ABIS];
+    for (const rawData of rawCandidates) {
+      for (const targetAbi of abisToTry) {
+        try {
+          const decoded = decodeErrorResult({ abi: targetAbi, data: rawData });
+          if (decoded?.errorName) {
+            return formatDecoded(decoded);
+          }
+        } catch {}
+      }
+    }
+
+    // 4. Match well-known selector signatures
+    if (msg.includes('0xcbcda9e9')) {
+      return 'Epoch submission rejected: Interval is stale (StaleEpochNotAllowed: submitted interval is older than maximum lag).';
+    }
     if (msg.includes('0xe43937da')) {
       return 'Epoch is already finalized on-chain for this Zone and Slot (EpochAlreadyFinalized).';
     }
@@ -845,18 +914,17 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     args?: any[];
     value?: bigint;
   }): Promise<{ hash: Hash; receipt: TransactionReceipt }> => {
-    const ethereum = (window as any).ethereum;
-    if (!ethereum || !address) {
+    if (!address || !walletClient) {
       const errRecord: TransactionRecord = {
         hash: '0x' as Hash,
         description: opts.description,
         status: 'WALLET_DISCONNECTED',
         timestamp: Date.now(),
-        error: 'MetaMask wallet is not connected. Please connect wallet first.',
+        error: 'Wallet is not connected. Please verify identity in the gate.',
       };
       setActiveTx(errRecord);
       setTxHistory((prev) => [errRecord, ...prev.slice(0, 19)]);
-      throw new Error('MetaMask wallet is not connected.');
+      throw new Error('Wallet is not connected.');
     }
 
     if (chainId !== DEFAULT_CHAIN_ID) {
@@ -972,13 +1040,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Apply safe 20% buffer on estimated gas limit so MetaMask receives explicit, valid gas parameters
     const gasLimit = (estimatedGas * 120n) / 100n;
 
-    // 6. Request transaction in MetaMask
-    const walletClient = createWalletClient({
-      account: address,
-      chain: voltmeshTestnet,
-      transport: custom(ethereum),
-    });
-
+    // 6. Request transaction
     const pendingRecord: TransactionRecord = {
       hash: '0x' as Hash,
       description: opts.description,
@@ -988,7 +1050,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setActiveTx(pendingRecord);
 
     try {
-      const txHash = await walletClient.writeContract({
+      const txHash = await (walletClient as any).writeContract({
+        account: address,
         address: opts.address,
         abi: opts.abi,
         functionName: opts.functionName,
@@ -1045,25 +1108,19 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     description: string,
     action: (walletClient: any, publicClient: any) => Promise<Hash>
   ): Promise<{ hash: Hash; receipt: TransactionReceipt }> => {
-    const ethereum = (window as any).ethereum;
-    if (!ethereum || !address) {
+    if (!address || !walletClient) {
       const errRecord: TransactionRecord = {
         hash: '0x' as Hash,
         description,
         status: 'WALLET_DISCONNECTED',
         timestamp: Date.now(),
-        error: 'MetaMask wallet is not connected.',
+        error: 'Wallet is not connected.',
       };
       setActiveTx(errRecord);
-      throw new Error('MetaMask wallet is not connected.');
+      throw new Error('Wallet is not connected.');
     }
 
     const publicClient = getPublicClient();
-    const walletClient = createWalletClient({
-      account: address,
-      chain: voltmeshTestnet,
-      transport: custom(ethereum),
-    });
 
     const pendingRecord: TransactionRecord = {
       hash: '0x' as Hash,
@@ -1126,16 +1183,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     nonce?: bigint;
     expiry?: number;
   }): Promise<{ signature: Hash; nonce: bigint; expiry: number; maker: Address }> => {
-    const ethereum = (window as any).ethereum;
-    if (!ethereum || !address) {
-      throw new Error('MetaMask wallet must be connected to sign energy orders.');
+    if (!address || !walletClient) {
+      throw new Error('Wallet must be connected to sign energy orders.');
     }
-
-    const walletClient = createWalletClient({
-      account: address,
-      chain: voltmeshTestnet,
-      transport: custom(ethereum),
-    });
 
     const nonce = order.nonce ?? BigInt(Date.now());
     const expiry = order.expiry ?? Math.floor(Date.now() / 1000) + 3600;
@@ -1159,7 +1209,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
 
     try {
-      const signature = await walletClient.signTypedData({
+      const signature = await (walletClient as any).signTypedData({
+        account: address,
         domain: EIP712_DOMAIN,
         types: EIP712_TYPES,
         primaryType: 'EnergyOrder',
@@ -1511,7 +1562,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setActiveTx(null);
   };
 
-  const isConnected = !!address;
   const isCorrectNetwork = chainId === DEFAULT_CHAIN_ID;
 
   return (

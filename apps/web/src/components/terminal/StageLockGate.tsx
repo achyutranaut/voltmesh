@@ -9,6 +9,8 @@ export interface StageLockGateProps {
   blocker: StageDetail;
   reason: string;
   onNavigateToStage: (stageId: PipelineStageId) => void;
+  onQuickResolve?: () => void;
+  quickResolveLabel?: string;
 }
 
 export const StageLockGate: React.FC<StageLockGateProps> = ({
@@ -16,6 +18,8 @@ export const StageLockGate: React.FC<StageLockGateProps> = ({
   blocker,
   reason,
   onNavigateToStage,
+  onQuickResolve,
+  quickResolveLabel,
 }) => {
   const currentConfig = STAGE_CONFIG[stageId];
   const targetIdx = PIPELINE_ORDER.indexOf(stageId);
@@ -59,15 +63,32 @@ export const StageLockGate: React.FC<StageLockGateProps> = ({
           <span className="text-xs text-zinc-500">
             Required: {blocker.num} {blocker.title}
           </span>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => onNavigateToStage(blocker.id)}
-            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium text-xs cursor-pointer shadow-xs"
-          >
-            <span>Resolve at {blocker.shortLabel}</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {onQuickResolve && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onQuickResolve}
+                className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium text-xs cursor-pointer shadow-xs"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                <span>{quickResolveLabel || 'Resolve Immediately'}</span>
+              </Button>
+            )}
+            <Button
+              variant={onQuickResolve ? 'outline' : 'default'}
+              size="sm"
+              onClick={() => onNavigateToStage(blocker.id)}
+              className={
+                onQuickResolve
+                  ? 'border-white/[0.1] bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 font-medium text-xs cursor-pointer shadow-xs'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium text-xs cursor-pointer shadow-xs'
+              }
+            >
+              <span>Navigate to {blocker.shortLabel}</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+            </Button>
+          </div>
         </div>
       </div>
 

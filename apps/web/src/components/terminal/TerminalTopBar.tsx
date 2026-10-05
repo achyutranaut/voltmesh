@@ -3,12 +3,14 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Command, Wallet } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 import { TerminalNavTab } from './TerminalSidebar';
+import { SessionSwitcher } from '../auth/AccessGate';
 
 export interface TerminalTopBarProps {
   activeTab: TerminalNavTab;
   currentInterval: number;
   onOpenCommandPalette: () => void;
   onOpenWalletModal: () => void;
+  onAddAccount?: () => void;
   zoneLabel?: string;
 }
 
@@ -17,6 +19,7 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
   currentInterval,
   onOpenCommandPalette,
   onOpenWalletModal,
+  onAddAccount,
   zoneLabel = 'Zone A',
 }) => {
   const { address, isConnected, chainId } = useWallet();
@@ -121,9 +124,12 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
           <span className="hidden sm:inline font-mono text-xs">⌘K</span>
         </button>
 
+        {/* Verified Identities Session Switcher */}
+        <SessionSwitcher onAddAccount={onAddAccount ?? (() => window.dispatchEvent(new Event('voltmesh:open-gate')))} />
+
         {/* Wallet Address / Status */}
         <button
-          onClick={onOpenWalletModal}
+          onClick={isConnected ? onOpenWalletModal : (onAddAccount ?? (() => window.dispatchEvent(new Event('voltmesh:open-gate'))))}
           className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs font-sans transition-colors cursor-pointer ${
             isConnected
               ? 'bg-white/[0.04] border-white/[0.08] hover:border-white/[0.15] text-zinc-300 hover:text-white'

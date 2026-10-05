@@ -4,10 +4,14 @@ import { SourceType, AttestationEnvelope, Order, OrderSide, ClearingResult } fro
 import { EpochBuilder } from '@energy-dex/epoch-builder';
 import { clearMarket } from '@energy-dex/clearing';
 import { verifyEd25519 } from '@energy-dex/attestation';
-import { keccak256, encodePacked, pad, stringToHex } from 'viem';
+import { keccak256, encodePacked, pad, stringToHex, createPublicClient, http } from 'viem';
+import { DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from './config/contracts';
 
 import { NavigationTab, PipelineStage, DetailDrawerData } from './types/ui';
 import { usePipeline } from './context/PipelineContext';
+import { useSession } from './auth/SessionContext';
+import { AccessGate, SessionSwitcher } from './components/auth/AccessGate';
+import { firstAllowedTab, checkOrder, can, canView } from './auth/permissions';
 
 // Storytelling Landing Sections (12 Chapters)
 import { StoryNavbar } from './components/landing/StoryNavbar';
@@ -43,8 +47,48 @@ import {
 } from './components/terminal';
 
 export default function App() {
-  // Global Mode: 'story' (12-chapter landing) vs 'terminal' (institutional trading console)
-  const [viewMode, setViewMode] = useState<'story' | 'terminal'>('story');
+  const { session } = useSession();
+
+  // Initialize view mode from URL hash
+  const [viewMode, setViewMode] = useState<'story' | 'gate' | 'terminal'>(() => {
+    if (typeof window === 'undefined') return 'story';
+    const hash = window.location.hash;
+    if (hash === '#terminal' || hash === '#merkle' || hash === '#tree') {
+      return 'terminal';
+    }
+    if (hash === '#gate') {
+      return 'gate';
+    }
+    return 'story';
+  });
+
+  const navigateToMode = React.useCallback((mode: 'story' | 'gate' | 'terminal', updateHistory = true) => {
+    setViewMode(mode);
+    if (!updateHistory || typeof window === 'undefined') return;
+    const currentHash = window.location.hash;
+    if (mode === 'terminal') {
+      if (currentHash !== '#terminal' && currentHash !== '#merkle' && currentHash !== '#tree') {
+        window.history.pushState(null, '', '#terminal');
+      }
+    } else if (mode === 'gate') {
+      if (currentHash !== '#gate') {
+        window.history.pushState(null, '', '#gate');
+      }
+    } else if (mode === 'story') {
+      if (currentHash === '#terminal' || currentHash === '#gate') {
+        window.history.pushState(null, '', '#story');
+      }
+    }
+  }, []);
+
+  // One entry point for entering the terminal
+  const enterTerminal = React.useCallback(() => {
+    if (session) {
+      navigateToMode('terminal');
+    } else {
+      navigateToMode('gate');
+    }
+  }, [session, navigateToMode]);
 
   const [activeTab, setActiveTab] = useState<NavigationTab>('market');
   const [currentStage, setCurrentStage] = useState<PipelineStage>('AUCTION');
@@ -52,15 +96,66 @@ export default function App() {
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [detailDrawerData, setDetailDrawerData] = useState<DetailDrawerData | null>(null);
 
+  // Safety net: also covers the #merkle and #tree hash routes and expired sessions.
+  useEffect(() => {
+    if (viewMode === 'terminal' && !session) navigateToMode('gate');
+  }, [viewMode, session, navigateToMode]);
+
+  // Keep the active tab inside what the role may see.
+  useEffect(() => {
+    if (session && !session.role) return;
+    if (session && !canView(session.role, activeTab)) setActiveTab(firstAllowedTab(session.role));
+  }, [session, activeTab]);
+
+  // Open gate listener
+  useEffect(() => {
+    const handleOpenGate = () => navigateToMode('gate');
+    window.addEventListener('voltmesh:open-gate', handleOpenGate);
+    return () => window.removeEventListener('voltmesh:open-gate', handleOpenGate);
+  }, [navigateToMode]);
+
   const {
     recordMeterReading,
     verifyAttestation,
     executeClearing,
     canExecuteStage,
+    syncActiveInterval,
   } = usePipeline();
 
-  // Interval & Simulation State
-  const [currentInterval, setCurrentInterval] = useState<number>(48);
+  // Interval & Simulation State: Monotonic 15-minute interval matching EpochOracle.sol
+  const initialMonotonicInterval = Math.floor(Date.now() / 1000 / 900);
+  const [currentInterval, setCurrentInterval] = useState<number>(initialMonotonicInterval);
+
+  useEffect(() => {
+    async function syncOnChainInterval() {
+      try {
+        const oracleConfig = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.contracts.EpochOracle;
+        if (!oracleConfig?.address) return;
+        const publicClient = createPublicClient({
+          chain: voltmeshTestnet,
+          transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
+        });
+        const onChainInterval = (await publicClient.readContract({
+          address: oracleConfig.address,
+          abi: oracleConfig.abi,
+          functionName: 'currentInterval',
+        })) as number;
+
+        if (onChainInterval && Number(onChainInterval) > 0) {
+          const validInterval = Number(onChainInterval);
+          setCurrentInterval(validInterval);
+          syncActiveInterval(validInterval);
+          setOrders((prev) =>
+            prev.map((o) => ({ ...o, intervalIdx: validInterval }))
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to sync on-chain interval in App:', err);
+      }
+    }
+    syncOnChainInterval();
+  }, []);
+
   const [ratedCapacity, setRatedCapacity] = useState<number>(5000);
   const [activeFault, setActiveFault] = useState<SimulatedFault>(SimulatedFault.NONE);
   const [latestEnvelope, setLatestEnvelope] = useState<AttestationEnvelope | null>(null);
@@ -73,7 +168,7 @@ export default function App() {
       orderId: 'b-01',
       participant: '0x2222222222222222222222222222222222222222',
       zoneId: 1,
-      intervalIdx: 48,
+      intervalIdx: initialMonotonicInterval,
       side: OrderSide.BUY,
       quantityWh: 2000n,
       pricePaisePerKWh: 550n,
@@ -86,7 +181,7 @@ export default function App() {
       orderId: 'b-02',
       participant: '0x4444444444444444444444444444444444444444',
       zoneId: 1,
-      intervalIdx: 48,
+      intervalIdx: initialMonotonicInterval,
       side: OrderSide.BUY,
       quantityWh: 1500n,
       pricePaisePerKWh: 480n,
@@ -99,7 +194,7 @@ export default function App() {
       orderId: 's-01',
       participant: '0x1111111111111111111111111111111111111111',
       zoneId: 1,
-      intervalIdx: 48,
+      intervalIdx: initialMonotonicInterval,
       side: OrderSide.SELL,
       quantityWh: 2000n,
       pricePaisePerKWh: 350n,
@@ -112,7 +207,7 @@ export default function App() {
       orderId: 's-02',
       participant: '0x5555555555555555555555555555555555555555',
       zoneId: 1,
-      intervalIdx: 48,
+      intervalIdx: initialMonotonicInterval,
       side: OrderSide.SELL,
       quantityWh: 1000n,
       pricePaisePerKWh: 400n,
@@ -134,6 +229,7 @@ export default function App() {
 
   // 1. Generate Meter Reading
   const handleGenerateReading = () => {
+    if (!can(session?.role, 'meter.generate')) return;
     const sim = new MeterSimulator({
       deviceId: 'meter-delhi-solar-001',
       zoneId: 1,
@@ -161,6 +257,7 @@ export default function App() {
 
   // 2. Clear Call Market
   const handleClearMarket = () => {
+    if (!can(session?.role, 'market.clear')) return;
     const now = Math.floor(Date.now() / 1000);
     const result = clearMarket({
       zoneId: 1,
@@ -180,6 +277,7 @@ export default function App() {
 
   // 3. Build Epoch Merkle Tree
   const handleBuildEpoch = () => {
+    if (!can(session?.role, 'epoch.build')) return;
     const readings = [
       {
         deviceId: 'meter-delhi-solar-001',
@@ -208,6 +306,7 @@ export default function App() {
 
   // 4. Claim Certificate
   const handleClaimCertificate = () => {
+    if (!can(session?.role, 'cert.claim')) return;
     if (!epochData || !epochData.proof) return;
     const deviceId = 'meter-delhi-solar-001';
     const deviceIdHex = pad(stringToHex(deviceId), { size: 32 });
@@ -228,6 +327,7 @@ export default function App() {
 
   // 5. Retire Certificate
   const handleRetireCertificate = (certNullifier: string) => {
+    if (!can(session?.role, 'cert.retire')) return;
     if (!retiredNullifiers.includes(certNullifier)) {
       setRetiredNullifiers((prev) => [...prev, certNullifier]);
       setClaimedCerts((prev) =>
@@ -238,6 +338,7 @@ export default function App() {
 
   // 6. Inject Fault Handler
   const handleInjectFault = (faultName: string) => {
+    if (!can(session?.role, 'fault.inject')) return;
     let fault = SimulatedFault.NONE;
     if (faultName === 'EQUIVOCATION') fault = SimulatedFault.EQUIVOCATION;
     else if (faultName === 'REPLAY_COUNTER') fault = SimulatedFault.REPLAY_COUNTER;
@@ -278,11 +379,27 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // URL Hash Navigation Listener (handles /#engine, /#merkle, /#tree)
+  // URL Hash & History Navigation Listener (handles /#terminal, /#gate, /#engine, /#merkle, /#tree, etc.)
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
-      if (hash === '#engine') {
+      if (hash === '#terminal') {
+        if (session) {
+          setViewMode('terminal');
+        } else {
+          setViewMode('gate');
+        }
+      } else if (hash === '#gate') {
+        setViewMode('gate');
+      } else if (hash === '#merkle' || hash === '#tree') {
+        if (session) {
+          setViewMode('terminal');
+        } else {
+          setViewMode('gate');
+        }
+        setActiveTab('merkle');
+        setCurrentStage('EPOCH');
+      } else if (hash === '#engine') {
         setViewMode('story');
         requestAnimationFrame(() => {
           setTimeout(() => {
@@ -292,37 +409,46 @@ export default function App() {
             }
           }, 80);
         });
-      } else if (hash === '#merkle' || hash === '#tree') {
-        setViewMode('terminal');
-        setActiveTab('merkle');
-        setCurrentStage('EPOCH');
+      } else if (hash === '#story' || hash === '' || hash.startsWith('#')) {
+        setViewMode('story');
       }
     };
 
     handleHash();
     window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
-  }, []);
+    window.addEventListener('popstate', handleHash);
+    return () => {
+      window.removeEventListener('hashchange', handleHash);
+      window.removeEventListener('popstate', handleHash);
+    };
+  }, [session]);
 
   return (
     <div className="min-h-screen bg-[#050607] text-zinc-200 flex flex-col font-sans selection:bg-emerald-900 selection:text-white relative">
       {/* Background Ambient Fluid Energy Canvas */}
       <FluidEnergyCanvas />
 
-      {viewMode === 'story' ? (
+      {viewMode === 'gate' ? (
+        <div className="relative z-10 flex flex-col min-h-screen">
+          <AccessGate
+            onEnter={() => navigateToMode('terminal')}
+            onBack={() => navigateToMode('story')}
+          />
+        </div>
+      ) : viewMode === 'story' ? (
         /* ========================================================================= */
         /* MODE 1: 12-CHAPTER STORYTELLING ENERGY INFRASTRUCTURE LANDING              */
         /* ========================================================================= */
         <div className="relative z-10 flex flex-col">
           {/* Top Story Header Navbar */}
           <StoryNavbar
-            onEnterTerminal={() => setViewMode('terminal')}
+            onEnterTerminal={enterTerminal}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           />
 
           <main className="flex-1">
             {/* 01 HERO */}
-            <HeroSection onEnterTerminal={() => setViewMode('terminal')} />
+            <HeroSection onEnterTerminal={enterTerminal} />
 
             {/* 02 ECOSYSTEM */}
             <EcosystemSection />
@@ -355,7 +481,7 @@ export default function App() {
             <ScaleSection />
 
             {/* 12 CTA & SPECS */}
-            <FooterCtaSection onEnterTerminal={() => setViewMode('terminal')} />
+            <FooterCtaSection onEnterTerminal={enterTerminal} />
           </main>
         </div>
       ) : (
@@ -380,17 +506,23 @@ export default function App() {
             isWalletModalOpen={isWalletModalOpen}
             setIsWalletModalOpen={setIsWalletModalOpen}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-            onReturnToStory={() => setViewMode('story')}
+            onReturnToStory={() => navigateToMode('story')}
+            onAddAccount={() => navigateToMode('gate')}
           >
             {/* Active Workspace View */}
             {activeTab === 'market' && (
               <CallMarketView
                 currentInterval={currentInterval}
                 orders={orders}
-                onAddOrder={(newOrder) => setOrders([...orders, newOrder])}
+                onAddOrder={(newOrder) => {
+                  const err = session && checkOrder(session.role, session.address, newOrder.side, currentInterval, orders);
+                  if (err) return alert(err);
+                  setOrders([...orders, { ...newOrder, participant: session ? session.address : newOrder.participant }]);
+                }}
                 onClearMarket={handleClearMarket}
                 clearingResult={clearingResult}
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
+                onNavigateTab={(tab) => setActiveTab(tab)}
               />
             )}
 
@@ -481,7 +613,7 @@ export default function App() {
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={(tab) => {
           setActiveTab(tab);
-          setViewMode('terminal');
+          enterTerminal();
         }}
         onClearMarket={handleClearMarket}
         onGenerateReading={handleGenerateReading}

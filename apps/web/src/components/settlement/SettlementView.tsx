@@ -59,6 +59,9 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     getStageBlocker,
     executeSettlement,
     selectStage,
+    confirmDelivery,
+    deliveryRecord,
+    flow,
   } = usePipeline();
 
   const [depositAmount, setDepositAmount] = useState<string>('50');
@@ -104,6 +107,15 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
             onNavigateTab(STAGE_CONFIG[stId].tab);
           }
         }}
+        onQuickResolve={
+          blockerInfo.blocker.id === 'DELIVERY' && stages.CLEARING.status === 'COMPLETED'
+            ? () => {
+                const vol = clearingResult?.clearedVolumeWh || flow.matchedQuantityWh || 2000n;
+                confirmDelivery(vol, vol);
+              }
+            : undefined
+        }
+        quickResolveLabel="Verify Feeder Delivery Now"
       />
     );
   }
@@ -433,10 +445,23 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xs bg-zinc-950 border border-zinc-800/80 space-y-0.5">
+          <div className="p-2.5 rounded-xs bg-zinc-950 border border-zinc-800/80 space-y-1">
             <span className="text-[10px] text-zinc-500 uppercase">DELIVERY PREREQUISITE</span>
-            <div className={stages.DELIVERY.status === 'COMPLETED' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-              {stages.DELIVERY.status === 'COMPLETED' ? '06 Delivery Completed ✓' : 'Awaiting 06 Delivery'}
+            <div className="flex items-center justify-between">
+              <div className={stages.DELIVERY.status === 'COMPLETED' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                {stages.DELIVERY.status === 'COMPLETED' ? '06 Delivery Completed ✓' : 'Awaiting 06 Delivery'}
+              </div>
+              {stages.DELIVERY.status !== 'COMPLETED' && stages.CLEARING.status === 'COMPLETED' && (
+                <button
+                  onClick={() => {
+                    const vol = clearingResult?.clearedVolumeWh || flow.matchedQuantityWh || 2000n;
+                    confirmDelivery(vol, vol);
+                  }}
+                  className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium text-[10px] cursor-pointer"
+                >
+                  Verify Now
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -521,20 +546,32 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div className="p-3 rounded-xs bg-zinc-950 border border-zinc-800/80 space-y-1">
             <span className="text-[10px] text-zinc-500 uppercase">CONTRACTED P2P VOLUME</span>
-            <div className="text-white font-bold text-sm">2,000 Wh</div>
-            <span className="text-[10px] text-zinc-500 font-sans">Interval 48 bilateral obligation</span>
+            <div className="text-white font-bold text-sm">
+              {deliveryRecord ? `${deliveryRecord.obligationsWh.toString()} Wh` : clearingResult?.clearedVolumeWh ? `${clearingResult.clearedVolumeWh.toString()} Wh` : '2,000 Wh'}
+            </div>
+            <span className="text-[10px] text-zinc-500 font-sans">Interval {currentInterval} bilateral obligation</span>
           </div>
 
           <div className="p-3 rounded-xs bg-zinc-950 border border-zinc-800/80 space-y-1">
             <span className="text-[10px] text-zinc-500 uppercase">VERIFIED GRID INJECTION</span>
-            <div className="text-emerald-400 font-bold text-sm">2,000 Wh</div>
+            <div className="text-emerald-400 font-bold text-sm">
+              {deliveryRecord ? `${deliveryRecord.meteredGenerationWh.toString()} Wh` : '2,000 Wh'}
+            </div>
             <span className="text-[10px] text-zinc-500 font-sans">Prosumer net-meter injection</span>
           </div>
 
           <div className="p-3 rounded-xs bg-zinc-950 border border-zinc-800/80 space-y-1">
             <span className="text-[10px] text-zinc-500 uppercase">SELLER SHORTFALL DEVIATION</span>
-            <div className="text-zinc-200 font-bold text-sm">0 Wh (0%)</div>
-            <span className="text-[10px] text-emerald-500 font-sans">No shortfall penalty incurred</span>
+            <div className="text-zinc-200 font-bold text-sm">
+              {deliveryRecord?.shortfallWh && deliveryRecord.shortfallWh > 0n
+                ? `${deliveryRecord.shortfallWh.toString()} Wh`
+                : '0 Wh (0%)'}
+            </div>
+            <span className="text-[10px] text-emerald-500 font-sans">
+              {deliveryRecord?.shortfallWh && deliveryRecord.shortfallWh > 0n
+                ? 'Shortfall penalty applied'
+                : 'No shortfall penalty incurred'}
+            </span>
           </div>
 
           <div className="p-3 rounded-xs bg-zinc-950 border border-zinc-800/80 space-y-1">

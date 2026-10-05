@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, ShieldCheck, ShieldAlert, Binary, FileText } from 'lucide-react';
 import { DetailDrawerData } from '../../types/ui';
+import { safeStringify } from '@/lib/utils';
 
 interface DetailDrawerProps {
   data: DetailDrawerData | null;
@@ -271,7 +272,7 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ data, onClose }) => 
                   JSON / Hex Canonical Data
                 </span>
                 <button
-                  onClick={() => copyToClipboard(JSON.stringify(data.rawPayload, null, 2), 'raw')}
+                  onClick={() => copyToClipboard(safeStringify(data.rawPayload, 2), 'raw')}
                   className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 font-sans"
                 >
                   {copiedKey === 'raw' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -279,7 +280,7 @@ export const DetailDrawer: React.FC<DetailDrawerProps> = ({ data, onClose }) => 
                 </button>
               </div>
               <pre className="p-3 bg-zinc-950 border border-white/[0.07] rounded-sm font-sans text-[11px] text-zinc-300 overflow-x-auto leading-relaxed">
-                {JSON.stringify(data.rawPayload || data, (_, v) => typeof v === 'bigint' ? v.toString() + 'n' : v, 2)}
+                {safeStringify(data.rawPayload || data, 2)}
               </pre>
             </div>
           )}
