@@ -371,4 +371,13 @@ contract BatchSettlement {
         escrow.deposit(amount);
         emit SettlementPoolFunded(msg.sender, amount);
     }
+
+    /// @dev Reject direct native ETH deposits to prevent loss of funds
+    receive() external payable {
+        revert("Native ETH transfers not supported; settlement uses ERC-20");
+    }
+
+    fallback() external payable {
+        revert("Native ETH transfers not supported");
+    }
 }

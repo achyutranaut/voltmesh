@@ -5,13 +5,14 @@ import { useWallet } from '../../context/WalletContext';
 interface RetireCertModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRetired?: () => void;
   cert: { tokenId: string; energyWh: string; deviceId: string } | null;
 }
 
-export const RetireCertModal: React.FC<RetireCertModalProps> = ({ isOpen, onClose, cert }) => {
+export const RetireCertModal: React.FC<RetireCertModalProps> = ({ isOpen, onClose, onRetired, cert }) => {
   const { retireCertificateOnChain, isConnected, connectMetaMask } = useWallet();
-  const [beneficiary, setBeneficiary] = useState<string>('VoltMesh Corporate Net-Zero Scope 2');
-  const [purpose, setPurpose] = useState<string>('Annual Sustainability Reporting (GRI/CDP)');
+  const [beneficiary, setBeneficiary] = useState<string>('');
+  const [purpose, setPurpose] = useState<string>('');
   const [amountInput, setAmountInput] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -34,7 +35,13 @@ export const RetireCertModal: React.FC<RetireCertModalProps> = ({ isOpen, onClos
       return;
     }
 
-    const amount = BigInt(amountInput.trim() || cert.energyWh);
+    const trimmedInput = amountInput.trim() || cert.energyWh;
+    if (!/^\d+$/.test(trimmedInput)) {
+      setError('Amount must be a positive whole integer.');
+      return;
+    }
+
+    const amount = BigInt(trimmedInput);
     if (amount <= 0n || amount > maxAmount) {
       setError(`Amount must be between 1 and ${cert.energyWh} Wh.`);
       return;
@@ -48,7 +55,11 @@ export const RetireCertModal: React.FC<RetireCertModalProps> = ({ isOpen, onClos
         beneficiary.trim(),
         purpose.trim()
       );
-      onClose();
+      if (onRetired) {
+        onRetired();
+      } else {
+        onClose();
+      }
     } catch (err: any) {
       setError(err.message || 'Retirement failed.');
     } finally {

@@ -346,4 +346,13 @@ contract Escrow is ReentrancyGuard {
     function getFreeBalance(address account) external view returns (uint256) {
         return balances[account] - lockedBalances[account];
     }
+
+    /// @dev Reject direct native ETH deposits to prevent loss of funds
+    receive() external payable {
+        revert("Native ETH transfers not supported; use ERC-20 deposit");
+    }
+
+    fallback() external payable {
+        revert("Native ETH transfers not supported");
+    }
 }

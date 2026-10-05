@@ -34,7 +34,13 @@ export const TransferCertModal: React.FC<TransferCertModalProps> = ({ isOpen, on
       return;
     }
 
-    const amount = BigInt(amountInput.trim() || cert.energyWh);
+    const trimmedInput = amountInput.trim() || cert.energyWh;
+    if (!/^\d+$/.test(trimmedInput)) {
+      setError('Amount must be a positive whole integer.');
+      return;
+    }
+
+    const amount = BigInt(trimmedInput);
     if (amount <= 0n || amount > maxAmount) {
       setError(`Amount must be between 1 and ${cert.energyWh} Wh.`);
       return;

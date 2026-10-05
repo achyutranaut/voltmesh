@@ -24,6 +24,11 @@ contract DeployScript is Script {
         address certificateRegistry,
         address retirementRegistry
     ) {
+        require(
+            block.chainid == 31337 || block.chainid == 11155111,
+            "Deployments restricted strictly to testnets (Anvil 31337 or Sepolia 11155111)"
+        );
+
         uint256 deployerPrivateKey;
         if (block.chainid != 31337) {
             // Revert immediately if PRIVATE_KEY is absent on non-local networks

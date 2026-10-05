@@ -23,6 +23,7 @@ import {
   getExplorerTxUrl,
   getExplorerAddressUrl,
 } from '../config/contracts';
+import { assertTestnet, assertNoEth } from '../config/network';
 import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
 import { useSession } from '../auth/SessionContext';
@@ -914,6 +915,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     args?: any[];
     value?: bigint;
   }): Promise<{ hash: Hash; receipt: TransactionReceipt }> => {
+    assertTestnet(chainId);
+    assertNoEth(opts.value);
+
     if (!address || !walletClient) {
       const errRecord: TransactionRecord = {
         hash: '0x' as Hash,
@@ -1108,6 +1112,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     description: string,
     action: (walletClient: any, publicClient: any) => Promise<Hash>
   ): Promise<{ hash: Hash; receipt: TransactionReceipt }> => {
+    assertTestnet(chainId);
+
     if (!address || !walletClient) {
       const errRecord: TransactionRecord = {
         hash: '0x' as Hash,

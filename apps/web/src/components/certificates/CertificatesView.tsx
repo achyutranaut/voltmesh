@@ -12,6 +12,7 @@ import {
   Wallet,
   Clock,
   Zap,
+  AlertCircle,
 } from 'lucide-react';
 import { DetailDrawerData, NavigationTab } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
@@ -74,6 +75,11 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
     selectStage,
   } = usePipeline();
 
+  const [selectedTransferCert, setSelectedTransferCert] = useState<CertificateItem | null>(null);
+  const [selectedRetireCert, setSelectedRetireCert] = useState<CertificateItem | null>(null);
+  const [isMintingCert, setIsMintingCert] = useState<boolean>(false);
+  const [mintError, setMintError] = useState<string | null>(null);
+
   // Route lock gate check
   const blockerInfo = getStageBlocker('CERTIFICATE');
   if (!canEnterStage('CERTIFICATE') && blockerInfo) {
@@ -92,17 +98,14 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
     );
   }
 
-  const [selectedTransferCert, setSelectedTransferCert] = useState<CertificateItem | null>(null);
-  const [selectedRetireCert, setSelectedRetireCert] = useState<CertificateItem | null>(null);
-  const [isMintingCert, setIsMintingCert] = useState<boolean>(false);
-
   const certConfig = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.contracts.CertificateRegistry;
   const retConfig = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.contracts.RetirementRegistry;
 
   // Real Minting Handler on CertificateRegistry.sol
   const handleClaimGacOnChain = async () => {
+    setMintError(null);
     if (!epochData || !epochData.proof) {
-      onClaimCertificate();
+      setMintError('No generation proof available for current epoch. Verify delivery in Stage 06 first.');
       return;
     }
 
@@ -124,12 +127,11 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       );
       if (tx) {
         await claimCertificate(`GAC-${currentInterval}`, tx);
+        onClaimCertificate();
       }
-      onClaimCertificate();
     } catch (err: any) {
       console.error('Failed to claim certificate on-chain:', err);
-      // Fallback local sync
-      onClaimCertificate();
+      setMintError(err.message || 'On-chain certificate claim failed.');
     } finally {
       setIsMintingCert(false);
     }
@@ -207,6 +209,21 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           </Button>
         </div>
       </div>
+
+      {mintError && (
+        <div className="p-3 bg-rose-950/40 border border-rose-900/60 rounded text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{mintError}</span>
+          </div>
+          <button
+            onClick={() => setMintError(null)}
+            className="text-rose-400 hover:text-rose-200 text-xs px-2 py-0.5 rounded bg-rose-900/40 hover:bg-rose-900/60 transition-colors cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* 2. SUMMARY STRIP */}
       <div className="grid grid-cols-2 lg:grid-cols-4 border border-zinc-800/80 bg-[#0B0D0F] rounded-sm divide-y lg:divide-y-0 lg:divide-x divide-zinc-800/80">
@@ -400,7 +417,8 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       {selectedRetireCert && (
         <RetireCertModal
           isOpen={true}
-          onClose={() => {
+          onClose={() => setSelectedRetireCert(null)}
+          onRetired={() => {
             if (selectedRetireCert) {
               onRetireCertificate(selectedRetireCert.nullifier);
             }
