@@ -201,6 +201,7 @@ export interface WalletContextType {
   executeSettlementBatchOnChain: (opts: {
     zoneId: number;
     intervalIdx: number;
+    dateEpoch?: number;
     statementRoot: Hash;
     totalCreditsPaise: bigint;
     totalDebitsPaise: bigint;
@@ -823,11 +824,35 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (err.cause?.errorName) {
       return formatDecoded(err.cause);
     }
+    if (err.cause?.data?.errorName) {
+      return formatDecoded(err.cause.data);
+    }
+    if (err.data?.errorName) {
+      return formatDecoded(err.data);
+    }
+    if (typeof err.walk === 'function') {
+      const walkedWithNamedError = err.walk((e: any) => Boolean(e?.data?.errorName || e?.errorName));
+      if (walkedWithNamedError) {
+        if (walkedWithNamedError.data?.errorName) {
+          return formatDecoded(walkedWithNamedError.data);
+        }
+        if (walkedWithNamedError.errorName) {
+          return formatDecoded(walkedWithNamedError);
+        }
+      }
+    }
 
     // 2. Collect candidate raw hex data
     const rawCandidates: (`0x${string}`)[] = [];
-    const directData = err.data || err.cause?.data || err.cause?.cause?.data;
-    if (typeof directData === 'string' && directData.startsWith('0x')) {
+    const directData =
+      typeof err.data === 'string' && err.data.startsWith('0x')
+        ? err.data
+        : typeof err.cause?.data === 'string' && err.cause.data.startsWith('0x')
+        ? err.cause.data
+        : typeof err.cause?.cause?.data === 'string' && err.cause.cause.data.startsWith('0x')
+        ? err.cause.cause.data
+        : null;
+    if (directData) {
       rawCandidates.push(directData as `0x${string}`);
     }
 
@@ -1428,6 +1453,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const executeSettlementBatchOnChain = async (opts: {
     zoneId: number;
     intervalIdx: number;
+    dateEpoch?: number;
     statementRoot: Hash;
     totalCreditsPaise: bigint;
     totalDebitsPaise: bigint;
@@ -1435,7 +1461,36 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const settlementContract = getContract('BatchSettlement', DEFAULT_CHAIN_ID);
     if (!settlementContract || !address) throw new Error('BatchSettlement contract not available');
 
-    const dateEpoch = Math.floor(Date.now() / 86400000);
+    const publicClient = getPublicClient();
+    let dateEpoch = opts.dateEpoch ?? Math.floor(Date.now() / 86400000);
+
+    // If today's statement is already posted on-chain (e.g. repeated demo intervals or tests),
+    // find the next unused epoch ID so settlement succeeds without reverting on StatementAlreadyPosted
+    try {
+      const existing = (await publicClient.readContract({
+        address: settlementContract.address,
+        abi: settlementContract.abi,
+        functionName: 'dailyStatements',
+        args: [dateEpoch, opts.zoneId],
+      })) as any;
+
+      if (existing && (existing[7] > 0n || existing.postedAt > 0n)) {
+        while (true) {
+          dateEpoch++;
+          const check = (await publicClient.readContract({
+            address: settlementContract.address,
+            abi: settlementContract.abi,
+            functionName: 'dailyStatements',
+            args: [dateEpoch, opts.zoneId],
+          })) as any;
+          if (!check || (check[7] === 0n && (check.postedAt === 0n || check.postedAt === undefined))) {
+            break;
+          }
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Could not check existing dailyStatements:', checkErr);
+    }
 
     // postDailyStatement requires `quorumThreshold` oracle signatures (sorted ascending by signer
     // address) over keccak256(chainId, contract, dateEpoch, zoneId, root, credits, debits).
