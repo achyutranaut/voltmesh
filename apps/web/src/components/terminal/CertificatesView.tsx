@@ -39,13 +39,18 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   onSelectDetail,
   onNavigateTab,
 }) => {
-  const { isConnected, address, claimCertificateOnChain } = useWallet();
-  const { session } = useSession();
+  const { isConnected, address, claimCertificateOnChain, roles } = useWallet();
+  const { session, sessions, switchTo } = useSession();
   const { flow, canEnterStage, getStageBlocker, selectStage, claimCertificate } = usePipeline();
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
 
-  const canClaim = can(session?.role, 'cert.claim');
+  const DEMO_SELLER_ADDRESS = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
+  const isDeviceOwner = address?.toLowerCase() === DEMO_SELLER_ADDRESS.toLowerCase();
+  const isOperator = roles?.isOperator ?? false;
+  const isAuthorizedClaimant = isDeviceOwner || isOperator;
+  const canClaim = can(session?.role, 'cert.claim') || isOperator;
+  const sellerSession = sessions.find((s) => s.address.toLowerCase() === DEMO_SELLER_ADDRESS.toLowerCase());
 
   // Claims the seller's meter reading from the epoch that is already committed on-chain.
   const handleClaim = async () => {
@@ -149,9 +154,13 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           <Button
             variant="default"
             size="sm"
-            disabled={isClaiming || !isConnected || !canClaim || !flow.epochRoot}
+            disabled={isClaiming || !isConnected || !canClaim || !isAuthorizedClaimant || !flow.epochRoot}
             onClick={handleClaim}
-            className="text-xs h-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer shadow-xs"
+            className={`text-xs h-8 font-medium shadow-xs ${
+              !isAuthorizedClaimant || !flow.epochRoot
+                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/[0.07]'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer'
+            }`}
           >
             <Plus className="w-3.5 h-3.5 mr-1.5" />
             {isClaiming ? 'Claiming on-chain...' : 'Claim GAC from verified Merkle proof'}
@@ -165,8 +174,25 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           <span>{claimError}</span>
         </div>
       )}
-      {!canClaim && isConnected && (
-        <div className="text-xs text-zinc-500">Only the Seller role can claim GAC certificates.</div>
+      {!isAuthorizedClaimant && isConnected && (
+        <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-800/60 text-amber-300 text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              Connected wallet ({address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}) is not the registered owner of this solar meter. Switch to Seller (0x3C44...93BC) or Market Operator to claim.
+            </span>
+          </div>
+          {sellerSession && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => switchTo(sellerSession.address)}
+              className="text-xs h-6 border-amber-700 bg-amber-950/60 hover:bg-amber-900/60 text-amber-200 cursor-pointer ml-3 shrink-0"
+            >
+              Switch to Seller
+            </Button>
+          )}
+        </div>
       )}
 
       {/* 2. Explicit Regulatory & Standard Notice */}
