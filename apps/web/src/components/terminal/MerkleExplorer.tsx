@@ -22,8 +22,8 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
-import { Hash, createPublicClient, http } from 'viem';
 import { OracleNode } from '@energy-dex/oracle-node';
+import { Hash, Hex, createPublicClient, http } from 'viem';
 import {
   buildDemoEpochReadings,
   DEMO_SELLER_DEVICE_ID,
@@ -206,18 +206,49 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
         throw new Error('EpochOracle contract address not configured');
       }
 
-      const oracleNode = new OracleNode({
-        operatorId: 'DISCOM_NODE',
-        privateKey: '0x0000000000000000000000000000000000000000000000000000000000000101',
-        oracleContractAddress: oracleConfig.address,
-        chainId: chainId ?? DEFAULT_CHAIN_ID,
-      });
+      let oracleSig: Hash | undefined;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      try {
+        const res = await fetch(`${apiUrl}/api/v1/oracle/sign-epoch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chainId: chainId ?? DEFAULT_CHAIN_ID,
+            oracleContractAddress: oracleConfig.address,
+            zoneId: initialZoneId,
+            intervalIdx: selectedInterval,
+            merkleRoot: epochTree.merkleRoot,
+            leafCount: sampleReadings.length,
+            totalWh: '11950',
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          oracleSig = data.signature;
+        }
+      } catch {
+        // Fallback if standalone offline
+      }
 
-      const { signature } = await oracleNode.validateAndSignEpoch(
-        initialZoneId,
-        selectedInterval,
-        sampleReadings
-      );
+      if (!oracleSig) {
+        const devKey = import.meta.env.VITE_DEV_ORACLE_KEY as Hex | undefined;
+        if (devKey) {
+          const oracleNode = new OracleNode({
+            operatorId: 'DISCOM_NODE',
+            privateKey: devKey,
+            oracleContractAddress: oracleConfig.address,
+            chainId: chainId ?? DEFAULT_CHAIN_ID,
+          });
+          const { signature } = await oracleNode.validateAndSignEpoch(
+            initialZoneId,
+            selectedInterval,
+            sampleReadings
+          );
+          oracleSig = signature.signature as Hash;
+        } else {
+          throw new Error('Oracle signature service required. Oracle private key is not exposed in web bundle.');
+        }
+      }
 
       const tx = await commitEpochOnChain(
         initialZoneId,
@@ -225,7 +256,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
         epochTree.merkleRoot,
         sampleReadings.length,
         11950n,
-        [signature.signature as Hash]
+        [oracleSig]
       );
       setCommitTxHash(tx);
       setIsOnChainCommitted(true);

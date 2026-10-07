@@ -74,6 +74,14 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
   // Authorized Device Registration (P0-10)
   // ---------------------------------------------------------------------------
   app.post('/api/v1/metering/devices/register', async (request, reply) => {
+    const adminKey = process.env.GATEWAY_ADMIN_KEY || 'gateway-admin-key-voltmesh-2026';
+    const authHeader = request.headers.authorization;
+    if (process.env.NODE_ENV !== 'test') {
+      if (!authHeader || authHeader.replace(/^Bearer\s+/i, '') !== adminKey) {
+        return reply.status(401).send({ error: 'UNAUTHORIZED_REGISTRATION', message: 'Valid gateway administrative authorization required' });
+      }
+    }
+
     const parse = DeviceRegistrationSchema.safeParse(request.body);
     if (!parse.success) {
       return reply.status(400).send({ error: 'INVALID_REGISTRATION_SCHEMA', details: parse.error.format() });
@@ -216,6 +224,24 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
         return reply.status(400).send({
           error: 'CAPACITY_VIOLATION',
           message: `Reading energyWh ${payload.energyWh} exceeds device rated capacity ${registeredDevice.capacityWh}`,
+        });
+      }
+
+      // 6b. Verify interval index bounds (0 to 95 for Indian 15-min intervals)
+      if (payload.intervalIdx < 0 || payload.intervalIdx > 95) {
+        return reply.status(400).send({
+          error: 'INVALID_INTERVAL_INDEX',
+          message: `Interval index ${payload.intervalIdx} out of valid bounds [0, 95]`,
+        });
+      }
+
+      // 6c. Verify timestamp bounds: reading timestamp must be within plausible operational window
+      const nowSec = Math.floor(Date.now() / 1000);
+      const MAX_SKEW_SECONDS = 3600; // 1 hour max drift
+      if (Math.abs(Number(payload.timestampUtc) - nowSec) > MAX_SKEW_SECONDS && process.env.NODE_ENV !== 'test') {
+        return reply.status(400).send({
+          error: 'TIMESTAMP_OUT_OF_BOUNDS',
+          message: `Reading timestamp ${payload.timestampUtc} drifts by more than ${MAX_SKEW_SECONDS}s from server time ${nowSec}`,
         });
       }
 

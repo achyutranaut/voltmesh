@@ -3,6 +3,7 @@ import {
   Address,
   Abi,
   Hash,
+  Hex,
   TransactionReceipt,
   createPublicClient,
   http,
@@ -243,7 +244,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [error, setError] = useState<string | null>(null);
   const [walletInstalled, setWalletInstalled] = useState<boolean>(false);
 
-  const chainId = session ? (session.kind === 'demo' ? DEFAULT_CHAIN_ID : (injectedChainId ?? DEFAULT_CHAIN_ID)) : (injectedChainId ?? null);
+  const chainId = session ? (session.kind === 'demo' ? DEFAULT_CHAIN_ID : (injectedChainId ?? null)) : (injectedChainId ?? null);
 
   // Cryptographic authority: address is strictly the connected session wallet
   const effectiveAddress = address;
@@ -1528,11 +1529,39 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         ]
       )
     );
-    const devnetOracle = privateKeyToAccount(
-      '0x0000000000000000000000000000000000000000000000000000000000000101'
-    );
-    // signMessage with raw bytes applies the EIP-191 prefix, matching toEthSignedMessageHash on-chain
-    const oracleSignature = await devnetOracle.signMessage({ message: { raw: statementHash } });
+    let oracleSignature: Hex | undefined;
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/oracle/sign-statement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chainId: DEFAULT_CHAIN_ID,
+          settlementContractAddress: settlementContract.address,
+          dateEpoch,
+          zoneId: opts.zoneId,
+          statementRoot: opts.statementRoot,
+          totalCreditsPaise: opts.totalCreditsPaise.toString(),
+          totalDebitsPaise: opts.totalDebitsPaise.toString(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        oracleSignature = data.signature;
+      }
+    } catch {
+      // Fallback if standalone offline
+    }
+
+    if (!oracleSignature) {
+      const devKey = import.meta.env.VITE_DEV_ORACLE_KEY as Hex | undefined;
+      if (devKey) {
+        const devnetOracle = privateKeyToAccount(devKey);
+        oracleSignature = await devnetOracle.signMessage({ message: { raw: statementHash } });
+      } else {
+        throw new Error('Oracle signature required from backend service. Private oracle key is not exposed in web bundle.');
+      }
+    }
 
     const { hash } = await executeContractTx({
       description: `Post Daily Settlement Statement for Zone ${opts.zoneId} Slot ${opts.intervalIdx}`,

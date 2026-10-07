@@ -70,6 +70,13 @@ contract DeployScript is Script {
             discomOperator = vm.envAddress("OPERATOR_ADDRESS");
             oracleSigner = vm.envAddress("ORACLE_ADDRESS");
             auditor = vm.envAddress("AUDITOR_ADDRESS");
+
+            // Explicitly prevent using well-known Anvil test addresses on public testnets
+            address anvil0 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+            require(deployer != anvil0, "Cannot use default Anvil account #0 as deployer on public testnet");
+            require(discomOperator != 0x90F79bf6EB2c4f870365E785982E1f101E93b906, "Cannot use default Anvil operator on public testnet");
+            require(oracleSigner != 0x25A71a07cecf1753ee65b00E0a3AAEf7e0F51c0F, "Cannot use public devnet oracle key on public testnet");
+            require(auditor != 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65, "Cannot use default Anvil auditor on public testnet");
         }
 
         access.grantRole(access.OPERATOR_ROLE(), discomOperator);

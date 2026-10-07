@@ -22,7 +22,6 @@ contract EscrowHandler is Test {
         actors.push(address(0x333));
 
         for (uint256 i = 0; i < actors.length; i++) {
-            token.mint(actors[i], 1_000_000);
             vm.prank(actors[i]);
             token.approve(address(escrow), type(uint256).max);
         }
@@ -57,6 +56,9 @@ contract EscrowInvariantTest is Test {
     function setUp() public {
         access = new AccessRegistry(address(this));
         token = new MockERC20("Settlement Token", "sINR");
+        token.mint(address(0x111), 1_000_000);
+        token.mint(address(0x222), 1_000_000);
+        token.mint(address(0x333), 1_000_000);
         escrow = new Escrow(address(token), address(access));
         handler = new EscrowHandler(escrow, token);
 

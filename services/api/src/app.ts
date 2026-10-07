@@ -3,7 +3,8 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, toHex, createPublicClient, http } from 'viem';
+import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, encodePacked, toHex, createPublicClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import {
   Participant,
@@ -72,6 +73,8 @@ export interface ApiServerOptions {
   sandboxMode?: boolean;
   chainId?: number;
   settlementContractAddress?: Address;
+  allowDevKeys?: boolean;
+  oraclePrivateKey?: Hex;
 }
 
 // Zod Validation Schemas (P1-11)
@@ -264,14 +267,18 @@ export function deriveCapabilities(
 
 export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance {
   const isProduction = process.env.NODE_ENV === 'production';
-  const isSandboxMode = options.sandboxMode ?? (!isProduction || process.env.SANDBOX_MODE === 'true');
+  const allowDevKeys = options.allowDevKeys ?? (process.env.ALLOW_DEV_KEYS === 'true' || process.env.NODE_ENV === 'test');
+  const isSandboxMode = options.sandboxMode ?? (!isProduction && allowDevKeys && process.env.SANDBOX_MODE !== 'false');
   const defaultSecret = 'dex-super-secret-key-32-chars-long!';
-  const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? (isProduction ? '' : defaultSecret);
 
-  // P1-17: JWT secret check in production
-  if (isProduction && (!jwtSecret || jwtSecret === defaultSecret || jwtSecret.length < 32)) {
-    throw new Error('FATAL: Hardcoded or default JWT_SECRET is strictly forbidden in production (min 32 chars).');
+  // P1-17: Strict mode - hardcoded/default JWT secret strictly forbidden in production or without explicit allowDevKeys
+  if ((isProduction || !allowDevKeys) && (!process.env.JWT_SECRET || process.env.JWT_SECRET === defaultSecret || process.env.JWT_SECRET.length < 32)) {
+    if (isProduction || process.env.NODE_ENV !== 'test') {
+      throw new Error('FATAL: Hardcoded or default JWT_SECRET is strictly forbidden unless ALLOW_DEV_KEYS=true is explicitly set (min 32 chars).');
+    }
   }
+
+  const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? (allowDevKeys ? defaultSecret : crypto.randomBytes(32).toString('hex'));
 
   const app = Fastify({ logger: false });
   app.setErrorHandler((error: any, request, reply) => {
@@ -281,6 +288,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
   const matcher = options.matcher ?? new BatchMatcher();
   const chainId = options.chainId ?? (process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : 31337);
+  if (chainId === 1) {
+    throw new Error('FATAL: Connecting or deploying to Ethereum Mainnet (chain ID 1) is strictly forbidden.');
+  }
   const settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address ?? '0x0000000000000000000000000000000000000000');
 
   // P1-17: Restrict CORS origin in production
@@ -291,14 +301,14 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     app.register(cors, { origin: true });
   }
 
-  app.register(jwt, { secret: jwtSecret || defaultSecret });
+  app.register(jwt, { secret: jwtSecret });
 
   const meterAdapter = options.meterAdapter ?? new SimulatorMeterAdapter();
   const billingAdapter = options.billingAdapter ?? new SimulatorBillingAdapter();
   const utilityIdentityProvider = options.utilityIdentityProvider ?? new SimulatorUtilityIdentityProvider();
 
-  // Governance Registry & Audit Logger
-  const governance = options.governanceRegistry ?? new GovernanceRegistry(!isProduction);
+  // Governance Registry & Audit Logger: only seed dev members if allowDevKeys is explicitly true
+  const governance = options.governanceRegistry ?? new GovernanceRegistry(allowDevKeys);
   const auditLogger = options.auditLogger ?? new AuditLogger();
   (app as any).governance = governance;
   (app as any).governanceRegistry = governance;
@@ -306,8 +316,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   // P0-8: Server-side RBAC Role Registry
   const roleRegistry = new Map<string, UserRole>(options.userRoles ?? []);
-  // Gate hardcoded test operator strictly on non-production environments
-  if (!isProduction && !roleRegistry.has('0x1234567890123456789012345678901234567890')) {
+  // Gate hardcoded test operator strictly on environments with explicit dev keys enabled
+  if (allowDevKeys && !roleRegistry.has('0x1234567890123456789012345678901234567890')) {
     roleRegistry.set('0x1234567890123456789012345678901234567890', 'OPERATOR');
   }
 
@@ -839,9 +849,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     if (!validated) return;
     const body = validated;
 
-    // Extract nonce from SIWE message or explicit field
-    const nonceMatch = body.message.match(/Nonce:\s*([a-zA-Z0-9]+)/i);
-    const nonce = nonceMatch ? nonceMatch[1] : body.nonce;
+    // Strict nonce extraction from SIWE message text ONLY
+    const nonceMatch = body.message.match(/Nonce:\s*([a-zA-Z0-9_-]+)/i);
+    const nonce = nonceMatch ? nonceMatch[1] : (body.nonce && allowDevKeys ? body.nonce : undefined);
 
     if (!nonce) {
       return reply.status(400).send({ error: 'Missing nonce in SIWE message' });
@@ -876,13 +886,31 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         signature: body.signature as Hex,
       });
 
-      // P1-16: Validate that message address matches recovered address
-      const addrMatch = body.message.match(/(0x[a-fA-F0-9]{40})/);
-      if (addrMatch && addrMatch[1].toLowerCase() !== recoveredAddress.toLowerCase()) {
+      // Strict address verification in message body
+      const addrMatch = body.message.match(/(0x[a-fA-F0-9]{40})/i);
+      if (!addrMatch) {
+        return reply.status(400).send({
+          error: 'SIWE_ADDRESS_MISSING',
+          message: 'Ethereum address must be present in SIWE message',
+        });
+      }
+      if (addrMatch[1].toLowerCase() !== recoveredAddress.toLowerCase()) {
         return reply.status(401).send({
           error: 'SIWE_ADDRESS_MISMATCH',
           message: `Message address ${addrMatch[1]} does not match recovered signer address ${recoveredAddress}`,
         });
+      }
+
+      // Chain ID check if present in message
+      const chainMatch = body.message.match(/Chain ID:\s*(\d+)/i) || body.message.match(/Chain:\s*(\d+)/i);
+      if (chainMatch) {
+        const msgChainId = Number(chainMatch[1]);
+        if (msgChainId !== 31337 && msgChainId !== 11155111 && msgChainId !== chainId) {
+          return reply.status(401).send({
+            error: 'SIWE_CHAIN_MISMATCH',
+            message: `Chain ID ${msgChainId} does not match active chain ${chainId}`,
+          });
+        }
       }
 
       const lowerAddr = recoveredAddress.toLowerCase();
@@ -909,6 +937,87 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     } catch (err: any) {
       return reply.status(400).send({ error: `Signature recovery failed: ${err.message}` });
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Server-Authoritative Identity Profile (P0-8 / FIX 6)
+  // ---------------------------------------------------------------------------
+  app.get('/api/v1/auth/me', { preHandler: [authenticate] }, async (request, reply) => {
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const lower = user.address.toLowerCase();
+    const assignedRole = roleRegistry.get(lower) ?? (user.role || 'PARTICIPANT');
+    const participant = participants.get(lower);
+    const vc = verifiableCredentials.get(lower);
+    const userDevices = Array.from(devices.values()).filter(
+      (d) => d.participantId === participant?.participantId
+    );
+    const capabilities = deriveCapabilities(lower, assignedRole, participant, vc, userDevices);
+    return reply.send({
+      address: lower,
+      role: assignedRole,
+      capabilities,
+      participant,
+      status: 'AUTHENTICATED',
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Oracle Node Signing Service (Moves private keys securely to backend)
+  // ---------------------------------------------------------------------------
+  const defaultOracleKey = options.oraclePrivateKey ?? (process.env.ORACLE_PRIVATE_KEY as Hex) ?? (allowDevKeys ? '0x0000000000000000000000000000000000000000000000000000000000000101' as Hex : undefined);
+
+  app.post('/api/v1/oracle/sign-statement', async (request, reply) => {
+    if (!defaultOracleKey) {
+      return reply.status(503).send({ error: 'ORACLE_KEY_NOT_CONFIGURED', message: 'Oracle signing key is not configured on this server' });
+    }
+    const body = request.body as any;
+    if (!body?.settlementContractAddress || body.zoneId === undefined || !body.statementRoot) {
+      return reply.status(400).send({ error: 'INVALID_REQUEST', message: 'Missing required statement parameters' });
+    }
+    const statementHash = keccak256(
+      encodePacked(
+        ['uint256', 'address', 'uint32', 'uint32', 'bytes32', 'uint256', 'uint256'],
+        [
+          BigInt(body.chainId || chainId),
+          body.settlementContractAddress as Address,
+          Number(body.dateEpoch),
+          Number(body.zoneId),
+          body.statementRoot as Hex,
+          BigInt(body.totalCreditsPaise || '0'),
+          BigInt(body.totalDebitsPaise || '0'),
+        ]
+      )
+    );
+    const account = privateKeyToAccount(defaultOracleKey);
+    const signature = await account.signMessage({ message: { raw: statementHash } });
+    return reply.send({ signature, signerAddress: account.address, statementHash });
+  });
+
+  app.post('/api/v1/oracle/sign-epoch', async (request, reply) => {
+    if (!defaultOracleKey) {
+      return reply.status(503).send({ error: 'ORACLE_KEY_NOT_CONFIGURED', message: 'Oracle signing key is not configured on this server' });
+    }
+    const body = request.body as any;
+    if (!body?.oracleContractAddress || body.zoneId === undefined || !body.merkleRoot) {
+      return reply.status(400).send({ error: 'INVALID_REQUEST', message: 'Missing required epoch parameters' });
+    }
+    const messageHash = keccak256(
+      encodePacked(
+        ['uint256', 'address', 'uint32', 'uint32', 'bytes32', 'uint32', 'uint64'],
+        [
+          BigInt(body.chainId || chainId),
+          body.oracleContractAddress as Address,
+          Number(body.zoneId),
+          Number(body.intervalIdx),
+          body.merkleRoot as Hex,
+          Number(body.leafCount || 0),
+          BigInt(body.totalWh || '0'),
+        ]
+      )
+    );
+    const account = privateKeyToAccount(defaultOracleKey);
+    const signature = await account.signMessage({ message: { raw: messageHash } });
+    return reply.send({ signature, signerAddress: account.address, messageHash });
   });
 
   // ---------------------------------------------------------------------------
@@ -1178,7 +1287,17 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       return reply.status(400).send({ error: 'ORDER_ALREADY_EXPIRED', message: 'Order expiry timestamp is in the past' });
     }
 
-    // Phase 9: Market Gate Closure - strictly derived from authoritative MarketSession
+    // Phase 9: Emergency Market Suspension & Gate Closure DERIVED from MarketSession
+    const suspendedSession = Array.from(marketSessions.values()).find(
+      (s) => s.zoneId === body.zoneId && s.state === 'SUSPENDED' && (s.intervals.includes(body.intervalIdx) || s.intervals.length === 0)
+    );
+    if (suspendedSession || governance.isMarketSuspended(`zone:${body.zoneId}`)) {
+      return reply.status(403).send({
+        error: 'MARKET_SUSPENDED',
+        message: `Trading in Zone ${body.zoneId} is under emergency suspension by regulators. Order entry rejected.`,
+      });
+    }
+
     const sessionForInterval = Array.from(marketSessions.values()).find(
       (s) => s.zoneId === body.zoneId && (s.state === 'OPEN' || s.state === 'GATE_CLOSED') && (s.intervals.includes(body.intervalIdx) || !isProduction)
     );
@@ -1492,7 +1611,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     const nowSeconds = Math.floor(Date.now() / 1000);
     const todayEpoch = getIndianMarketDateEpoch();
     const session = Array.from(marketSessions.values()).find(
-      (s) => s.zoneId === zId && (s.state === 'OPEN' || s.state === 'GATE_CLOSED') && s.intervals.includes(iIdx)
+      (s) => s.zoneId === zId && (s.intervals.includes(iIdx) || s.intervals.length === 0)
     );
 
     // Part 8: Complete canClearMarket verification
@@ -2059,43 +2178,87 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     if (!validated) return;
     const body = validated;
 
-    if (!participants.has(user.address.toLowerCase())) {
+    const lower = user.address.toLowerCase();
+    let participant = participants.get(lower);
+    const vc = verifiableCredentials.get(lower);
+
+    // If not registered but holds a valid solar VC or in sandbox mode, establish participant record
+    if (!participant && (vc?.claims?.solarCapacityKw || isSandboxMode)) {
       const participantId = deriveParticipantId(user.address);
-      const newParticipant: Participant = {
+      const isProsumer = (vc?.claims?.solarCapacityKw && vc.claims.solarCapacityKw > 0) || isSandboxMode;
+      participant = {
         participantId,
-        walletAddress: user.address.toLowerCase(),
+        walletAddress: lower,
         zoneId: 1,
-        discomAccountNumber: 'AUTO-' + user.address.slice(2, 10),
-        identityBindingHash: `0x${Buffer.from(user.address.toLowerCase()).toString('hex')}`.padEnd(66, '0'),
-        roleType: ParticipantRole.PROSUMER,
+        discomAccountNumber: vc?.claims?.consumerNumber || ('AUTO-' + user.address.slice(2, 10)),
+        identityBindingHash: `0x${Buffer.from(lower).toString('hex')}`.padEnd(66, '0'),
+        roleType: isProsumer ? ParticipantRole.PROSUMER : ParticipantRole.CONSUMER,
         kycStatus: KYCStatus.VERIFIED,
         createdAt: Date.now(),
       };
-      participants.set(user.address.toLowerCase(), newParticipant);
+      participants.set(lower, participant);
+    }
+
+    // Require registered PROSUMER (or OPERATOR)
+    if (!participant) {
+      return reply.status(403).send({
+        error: 'PARTICIPANT_NOT_REGISTERED',
+        message: 'Must register as an authorized PROSUMER participant before declaring generation positions',
+      });
+    }
+
+    if (participant.roleType !== ParticipantRole.PROSUMER && (participant.roleType as string) !== 'PROSUMER') {
+      return reply.status(403).send({
+        error: 'PROSUMER_ROLE_REQUIRED',
+        message: `Current participant role is ${participant.roleType}; only verified PROSUMER participants can declare generation capacity`,
+      });
     }
 
     const todayEpoch = getIndianMarketDateEpoch();
-    const posKey = `${user.address.toLowerCase()}:${body.intervalIdx}:${todayEpoch}`;
+    const posKey = `${lower}:${body.intervalIdx}:${todayEpoch}`;
 
     const declaredWh = BigInt(body.declaredAvailableWh);
-    const userDevices = Array.from(devices.values()).filter((d) => d.participantId === (participants.get(user.address)?.participantId ?? ''));
-    const defaultInverterW = declaredWh * 4n > 10000n ? declaredWh * 4n : 10000n;
-    const ratedCap = body.installedSolarCapacityW
-      ? BigInt(body.installedSolarCapacityW)
-      : (userDevices.length > 0 ? userDevices[0].ratedCapacityW : defaultInverterW);
+    const userDevices = Array.from(devices.values()).filter((d) => d.participantId === participant.participantId && !d.isRevoked);
+    const maxDeviceW = userDevices.reduce((max, d) => (d.ratedCapacityW > max ? d.ratedCapacityW : max), 0n);
+    const vcKw = vc?.claims?.solarCapacityKw ? BigInt(vc.claims.solarCapacityKw) * 1000n : 0n;
+    const authorizedCap = maxDeviceW > 0n ? maxDeviceW : (vcKw > 0n ? vcKw : 0n);
+
+    if (authorizedCap > 0n && body.installedSolarCapacityW && BigInt(body.installedSolarCapacityW) > authorizedCap) {
+      return reply.status(400).send({
+        error: 'CAPACITY_EXCEEDS_AUTHORIZED',
+        message: `Declared installed capacity (${body.installedSolarCapacityW} W) exceeds verified capacity (${authorizedCap} W)`,
+      });
+    }
+
+    const ratedCap = authorizedCap > 0n
+      ? authorizedCap
+      : (body.installedSolarCapacityW ? BigInt(body.installedSolarCapacityW) : (declaredWh * 4n > 10000n ? declaredWh * 4n : 10000n));
     const limit = calculateAvailableOfferLimit(ratedCap, declaredWh, declaredWh);
 
+    const existingPosition = energyPositions.get(posKey);
+    const existingCommitted = existingPosition?.committedWh ?? 0n;
+    const existingReserved = existingPosition?.reservedWh ?? 0n;
+    const existingDelivered = existingPosition?.deliveredWh ?? 0n;
+    const existingSettled = existingPosition?.settledWh ?? 0n;
+
+    if (limit < existingReserved + existingCommitted) {
+      return reply.status(400).send({
+        error: 'CAPACITY_BELOW_RESERVED',
+        message: `Declared available energy (${limit} Wh) cannot be less than already committed/reserved amount (${existingReserved + existingCommitted} Wh)`,
+      });
+    }
+
     const position: EnergyPosition = {
-      participant: user.address.toLowerCase(),
+      participant: lower,
       intervalIdx: body.intervalIdx,
       dateEpoch: todayEpoch,
       installedSolarCapacityW: ratedCap,
       forecastGenerationWh: limit,
       declaredAvailableWh: limit,
-      committedWh: 0n,
-      reservedWh: 0n,
-      deliveredWh: 0n,
-      settledWh: 0n,
+      committedWh: existingCommitted,
+      reservedWh: existingReserved,
+      deliveredWh: existingDelivered,
+      settledWh: existingSettled,
       source: 'METER',
       timestamp: Math.floor(Date.now() / 1000),
     };
@@ -3048,17 +3211,18 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       case 14:
       case '14':
       case 'ORACLE_EQUIVOCATION': {
-        // ATTACK 4 / 14: Oracle Equivocation
-        governance.suspendOracle('0x90f79bf6eb2c4f870365e785982e1f101e93b906');
+        // ATTACK 4 / 14: Oracle Equivocation on simulated rogue oracle node
+        const simOracleNode = '0x000000000000000000000000000000000000d00d';
+        governance.suspendOracle(simOracleNode);
         const event = auditLogger.recordSecurityEvent({
           category: 'ORACLE',
           severity: 'CRITICAL',
           action: 'QUARANTINE',
           attackType: 'ORACLE_EQUIVOCATION',
-          actorWallet: '0x90f79bf6eb2c4f870365e785982e1f101e93b906',
+          actorWallet: simOracleNode,
           target: 'oracle-node-02',
           result: 'QUARANTINED',
-          reason: 'Oracle equivocation detected: Conflicting root signatures submitted for Zone 1 Interval 48. Oracle quarantined.',
+          reason: 'Oracle equivocation detected: Conflicting root signatures submitted for Zone 1 Interval 48. Simulated oracle quarantined.',
           ruleId: 'RULE-ORACLE-001',
           quorumImpact: 'QUORUM_DEGRADED',
           settlementImpact: 'PREVENTS_CONFLICTING_SETTLEMENT',

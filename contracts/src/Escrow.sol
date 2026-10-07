@@ -326,16 +326,9 @@ contract Escrow is ReentrancyGuard {
         if (from == address(0) || to == address(0) || from == to) {
             revert InvalidParticipants();
         }
-        if (amount > balances[from]) {
-            revert InsufficientFreeBalance(amount, balances[from]);
-        }
-
-        // If 'from' has locked balances, release strictly without silent clamping
-        if (lockedBalances[from] > 0) {
-            if (amount > lockedBalances[from]) {
-                revert InsufficientLockedBalance(amount, lockedBalances[from]);
-            }
-            lockedBalances[from] -= amount;
+        uint256 free = balances[from] - lockedBalances[from];
+        if (amount > free) {
+            revert InsufficientFreeBalance(amount, free);
         }
 
         balances[from] -= amount;

@@ -215,7 +215,14 @@ export class SimulatorUtilityIdentityProvider implements UtilityIdentityProvider
   }
 
   public async verifyConsumer(consumerNumber: string): Promise<UtilityIdentity | null> {
-    return this.registeredConsumers.get(consumerNumber) ?? null;
+    const direct = this.registeredConsumers.get(consumerNumber);
+    if (direct) return direct;
+    for (const id of this.registeredConsumers.values()) {
+      if (id.caNumber === consumerNumber) {
+        return id;
+      }
+    }
+    return null;
   }
 
   public async verifyMeter(meterSerialNumber: string): Promise<boolean> {

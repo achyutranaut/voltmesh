@@ -332,8 +332,43 @@ contract BatchSettlement {
         return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
     }
 
+    bytes32 public constant OBLIGATION_TYPEHASH = keccak256(
+        "Obligation(bytes32 obligationId,address buyer,address seller,uint256 amount,uint32 zoneId,uint32 intervalIdx,uint64 deadline)"
+    );
+
+    error UnauthorizedObligationSigner(address expected, address recovered);
+    error SignaturesRequired();
+
+    /**
+     * @notice Computes EIP-712 obligation hash for bilateral delivery commitments.
+     */
+    function hashObligation(
+        bytes32 obligationId,
+        address buyer,
+        address seller,
+        uint256 amount,
+        uint32 zoneId,
+        uint32 intervalIdx,
+        uint64 deadline
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                OBLIGATION_TYPEHASH,
+                obligationId,
+                buyer,
+                seller,
+                amount,
+                zoneId,
+                intervalIdx,
+                deadline
+            )
+        );
+        return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+    }
+
     /**
      * @notice Locks collateral in Escrow for a cleared bilateral delivery obligation.
+     * Strictly requires cryptographic authorization signatures from both buyer and seller.
      */
     function lockObligation(
         bytes32 obligationId,
@@ -342,12 +377,38 @@ contract BatchSettlement {
         uint256 amount,
         uint32 zoneId,
         uint32 intervalIdx,
-        uint64 deadline
-    ) external onlyOperator whenNotPaused {
+        uint64 deadline,
+        bytes calldata buyerSig,
+        bytes calldata sellerSig
+    ) public onlyOperator whenNotPaused {
         if (buyer == address(0) || seller == address(0) || buyer == seller) {
             revert InvalidParticipants();
         }
+        bytes32 oblHash = hashObligation(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
+        address recoveredBuyer = oblHash.recover(buyerSig);
+        if (recoveredBuyer != buyer) {
+            revert UnauthorizedObligationSigner(buyer, recoveredBuyer);
+        }
+        address recoveredSeller = oblHash.recover(sellerSig);
+        if (recoveredSeller != seller) {
+            revert UnauthorizedObligationSigner(seller, recoveredSeller);
+        }
         escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
+    }
+
+    /**
+     * @dev Deprecated unauthenticated lockObligation is disabled to prevent operator unauthorized drainage.
+     */
+    function lockObligation(
+        bytes32,
+        address,
+        address,
+        uint256,
+        uint32,
+        uint32,
+        uint64
+    ) external pure {
+        revert SignaturesRequired();
     }
 
     /**

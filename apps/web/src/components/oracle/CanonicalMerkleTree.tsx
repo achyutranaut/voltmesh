@@ -29,7 +29,7 @@ import { DetailDrawerData } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
-import { Hash, createPublicClient, http } from 'viem';
+import { Hash, Hex, createPublicClient, http } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -331,18 +331,49 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
         return;
       }
 
-      const oracleNode = new OracleNode({
-        operatorId: 'DISCOM_NODE',
-        privateKey: '0x0000000000000000000000000000000000000000000000000000000000000101',
-        oracleContractAddress: oracleConfig.address,
-        chainId: chainId ?? DEFAULT_CHAIN_ID,
-      });
+      let oracleSig: Hash | undefined;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      try {
+        const res = await fetch(`${apiUrl}/api/v1/oracle/sign-epoch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chainId: chainId ?? DEFAULT_CHAIN_ID,
+            oracleContractAddress: oracleConfig.address,
+            zoneId: currentZoneId,
+            intervalIdx: currentInterval,
+            merkleRoot: epoch.merkleRoot,
+            leafCount: epoch.leafCount,
+            totalWh: epoch.totalWh.toString(),
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          oracleSig = data.signature;
+        }
+      } catch {
+        // Fallback to dev key if available
+      }
 
-      const { signature } = await oracleNode.validateAndSignEpoch(
-        currentZoneId,
-        currentInterval,
-        epoch.readings
-      );
+      if (!oracleSig) {
+        const devKey = import.meta.env.VITE_DEV_ORACLE_KEY as Hex | undefined;
+        if (devKey) {
+          const oracleNode = new OracleNode({
+            operatorId: 'DISCOM_NODE',
+            privateKey: devKey,
+            oracleContractAddress: oracleConfig.address,
+            chainId: chainId ?? DEFAULT_CHAIN_ID,
+          });
+          const { signature } = await oracleNode.validateAndSignEpoch(
+            currentZoneId,
+            currentInterval,
+            epoch.readings
+          );
+          oracleSig = signature.signature as Hash;
+        } else {
+          throw new Error('Oracle signature service required. Oracle private key is not exposed in web bundle.');
+        }
+      }
 
       const tx = await commitEpochOnChain(
         currentZoneId,
@@ -350,7 +381,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
         epoch.merkleRoot,
         epoch.leafCount,
         epoch.totalWh,
-        [signature.signature as Hash]
+        [oracleSig]
       );
 
       setOnChainTxHash(tx);
