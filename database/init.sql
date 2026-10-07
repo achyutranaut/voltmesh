@@ -164,3 +164,57 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_zone_interval ON meter_telemetry(zone_i
 INSERT INTO zones (zone_code, discom_name, substation_identifier, price_floor_paise_kwh, price_cap_paise_kwh, transformer_capacity_kva, capacity_limit_wh)
 VALUES ('DL-TPDDL-Z1', 'Tata Power DDL', 'SS-ROHINI-SEC3', 250, 1150, 500.0, 125000000)
 ON CONFLICT (zone_code) DO NOTHING;
+
+-- 10. Governance Members Table (Authoritative Privileged Role Registry)
+CREATE TABLE IF NOT EXISTS governance_members (
+    governance_member_id VARCHAR(64) PRIMARY KEY,
+    organization_id VARCHAR(64) NOT NULL,
+    wallet_address CHAR(42) UNIQUE NOT NULL,
+    role VARCHAR(32) NOT NULL CHECK (role IN ('REGULATOR', 'MARKET_OPERATOR', 'AUDITOR', 'ADMIN', 'ORACLE_OPERATOR', 'EMERGENCY_GUARDIAN')),
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED', 'EXPIRED')),
+    jurisdiction VARCHAR(64) NOT NULL DEFAULT 'GRID-ALL',
+    issued_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    credential_ref VARCHAR(128) NOT NULL,
+    created_by CHAR(42) NOT NULL,
+    approved_by CHAR(42) NOT NULL,
+    revoked_at BIGINT,
+    revocation_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gov_members_wallet ON governance_members(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_gov_members_role ON governance_members(role);
+CREATE INDEX IF NOT EXISTS idx_gov_members_status ON governance_members(status);
+
+-- 11. Security Events Table (Real-time Tamper-Evident Security Log)
+CREATE TABLE IF NOT EXISTS security_events (
+    event_id VARCHAR(64) PRIMARY KEY,
+    timestamp BIGINT NOT NULL,
+    category VARCHAR(32) NOT NULL CHECK (category IN ('ORACLE', 'METER', 'CERTIFICATE', 'ORDER', 'AUTHENTICATION', 'AUTHORIZATION', 'CONFLICT_OF_INTEREST')),
+    severity VARCHAR(16) NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+    action VARCHAR(64) NOT NULL,
+    actor_wallet VARCHAR(64) NOT NULL,
+    actor_identity VARCHAR(64),
+    organization_id VARCHAR(64),
+    role VARCHAR(32),
+    target VARCHAR(64),
+    target_wallet VARCHAR(64),
+    market_id VARCHAR(64),
+    zone_id INT,
+    device_id VARCHAR(64),
+    result VARCHAR(16) NOT NULL CHECK (result IN ('SUCCESS', 'BLOCKED', 'FAILED')),
+    reason TEXT,
+    rule_id VARCHAR(32),
+    attack_type VARCHAR(64),
+    mitigation TEXT,
+    quorum_impact VARCHAR(64),
+    settlement_impact VARCHAR(64),
+    transaction_hash VARCHAR(66),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_security_events_time ON security_events(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_security_events_actor ON security_events(actor_wallet);
+CREATE INDEX IF NOT EXISTS idx_security_events_severity ON security_events(severity);
+CREATE INDEX IF NOT EXISTS idx_security_events_category ON security_events(category);
+

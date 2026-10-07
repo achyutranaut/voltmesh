@@ -57,6 +57,19 @@ interface StoredSession {
 const SESSIONS_STORAGE_KEY = 'voltmesh_sessions';
 const ACTIVE_ADDRESS_STORAGE_KEY = 'voltmesh_active_address';
 
+function parseJwtRole(token?: string): Role | null {
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    if (payload.role && payload.role !== 'unregistered') {
+      return payload.role as Role;
+    }
+  } catch {}
+  return null;
+}
+
 function rehydrateSession(stored: StoredSession): Session | null {
   try {
     if (stored.expiresAt <= Date.now()) return null;
@@ -92,6 +105,16 @@ function rehydrateSession(stored: StoredSession): Session | null {
     }
 
     if (stored.kind === 'injected') {
+      let role = stored.role;
+      // Validate role against cryptographically verified JWT token if present
+      if (stored.token) {
+        const tokenRole = parseJwtRole(stored.token);
+        if (tokenRole && tokenRole !== stored.role) {
+          console.warn(`Role mismatch in sessionStorage: stored=${stored.role}, token=${tokenRole}. Enforcing token role.`);
+          role = tokenRole;
+        }
+      }
+
       const eth = typeof window !== 'undefined' ? (window as any).ethereum : null;
       const walletClient = createWalletClient({
         account: stored.address,
@@ -100,7 +123,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
       });
       return {
         address: stored.address,
-        role: stored.role,
+        role,
         kind: 'injected',
         walletClient,
         expiresAt: stored.expiresAt,
@@ -358,9 +381,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   // Only for a real wallet that has no role yet, and only in demo builds.
+  // Privileged roles (discom, regulator) require on-chain admin assignment and cannot be self-assigned in UI.
   const registerAs = useCallback(
     (role: Role) => {
       if (!DEMO_MODE || !pending) return;
+      const allowPrivileged = import.meta.env.VITE_ALLOW_PRIVILEGED_SELF_ASSIGN === 'true';
+      if ((role === 'discom' || role === 'regulator') && !allowPrivileged) {
+        setStatus('error');
+        setError('Privileged roles (Market Operator / Regulator) require on-chain authorization by the admin.');
+        return;
+      }
       addSession({ ...pending, role });
     },
     [pending, addSession],

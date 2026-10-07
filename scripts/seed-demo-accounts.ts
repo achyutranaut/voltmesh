@@ -58,7 +58,7 @@ const DEMO_ACCOUNTS: DemoConfig[] = [
     name: 'DISCOM / Market Operator (Account #3)',
     key: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
     roleType: 2, // DISCOM
-    accessRoles: ['OPERATOR_ROLE', 'ORACLE_ROLE'],
+    accessRoles: ['OPERATOR_ROLE'],
   },
   {
     name: 'Regulator / Auditor (Account #4)',

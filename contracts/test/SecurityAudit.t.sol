@@ -173,7 +173,7 @@ contract SecurityAuditTest is Test {
         assertEq(certificates.balanceOf(attacker, tokenId), 0);
     }
 
-    function test_VULN_SC_01_OperatorRelayerMintsToOwner() public {
+    function test_VULN_SC_01_OperatorCannotClaimForOwner() public {
         uint64 counter = 2;
         uint32 intervalIdx = 101;
         vm.warp(intervalIdx * 900 + 10);
@@ -210,9 +210,10 @@ contract SecurityAuditTest is Test {
 
         bytes32[] memory emptyProof = new bytes32[](0);
 
-        // Operator relayer calls claim on behalf of prosumer
+        // Operator relayer cannot claim on behalf of prosumer; strictly owner-only
         vm.prank(operator);
-        uint256 tokenId = certificates.claimCertificate(
+        vm.expectRevert(CertificateRegistry.UnauthorizedClaimant.selector);
+        certificates.claimCertificate(
             TEST_ZONE_ID,
             intervalIdx,
             deviceId,
@@ -221,10 +222,6 @@ contract SecurityAuditTest is Test {
             counter,
             emptyProof
         );
-
-        // Verifies token was minted to prosumer, NOT to operator
-        assertEq(certificates.balanceOf(prosumer, tokenId), TEST_ENERGY_WH);
-        assertEq(certificates.balanceOf(operator, tokenId), 0);
     }
 
     // -------------------------------------------------------------------------
@@ -431,7 +428,29 @@ contract SecurityAuditTest is Test {
 
         bytes32[] memory emptyProof = new bytes32[](0);
 
-        // Prosumer claims settlement
+        // Prosumer attempting to claim before debits are collected reverts with SettlementPoolExhausted
+        vm.prank(prosumer);
+        vm.expectRevert(BatchSettlement.SettlementPoolExhausted.selector);
+        settlement.claimSettlement(
+            dateEpoch,
+            zoneId,
+            netAmount,
+            deliveredWh,
+            0,
+            0,
+            leafIndex,
+            emptyProof
+        );
+
+        // Operator explicitly funds statement shortfall
+        vm.prank(admin);
+        token.transfer(operator, 5000);
+        vm.startPrank(operator);
+        token.approve(address(settlement), 5000);
+        settlement.fundStatementShortfall(dateEpoch, zoneId, 5000);
+        vm.stopPrank();
+
+        // Prosumer claims settlement successfully now that statement debits are backed
         vm.prank(prosumer);
         settlement.claimSettlement(
             dateEpoch,
@@ -446,7 +465,7 @@ contract SecurityAuditTest is Test {
 
         // Prosumer's balance in escrow increased by 5000
         assertEq(escrow.balances(prosumer), 5000);
-        // Settlement contract's pool balance reduced by 5000
-        assertEq(escrow.balances(address(settlement)), poolAmount - 5000);
+        // Settlement contract's pool balance: initial poolAmount + 5000 shortfall - 5000 claimed = poolAmount
+        assertEq(escrow.balances(address(settlement)), poolAmount);
     }
 }

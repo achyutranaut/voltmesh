@@ -101,6 +101,8 @@ contract BatchSettlement {
     error SignerNotAuthorizedOracle(address signer);
     error EconomicConservationViolation(uint256 totalDebits, uint256 totalCredits);
     error SettlementPoolExhausted();
+    error InvalidParticipants();
+    error InvalidAmount();
     error SystemPaused();
 
     modifier onlyOperator() {
@@ -268,7 +270,10 @@ contract BatchSettlement {
         if (netAmountPaise > 0) {
             uint256 creditAmount = uint256(netAmountPaise);
             stmt.totalClaimedCreditsPaise += creditAmount;
-            if (stmt.totalClaimedCreditsPaise > stmt.totalDebitsPaise) {
+            if (
+                stmt.totalClaimedCreditsPaise > stmt.totalCollectedDebitsPaise ||
+                creditAmount > escrow.getFreeBalance(address(this))
+            ) {
                 revert SettlementPoolExhausted();
             }
             // Funds released from escrow settlement pool to participant
@@ -339,6 +344,9 @@ contract BatchSettlement {
         uint32 intervalIdx,
         uint64 deadline
     ) external onlyOperator whenNotPaused {
+        if (buyer == address(0) || seller == address(0) || buyer == seller) {
+            revert InvalidParticipants();
+        }
         escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
     }
 
@@ -362,9 +370,38 @@ contract BatchSettlement {
     }
 
     /**
+     * @notice Updates the state of an obligation adhering to the formal Escrow state machine.
+     */
+    function updateObligationState(
+        bytes32 obligationId,
+        Escrow.EscrowState newState
+    ) external onlyOperator whenNotPaused {
+        escrow.updateObligationState(obligationId, newState);
+    }
+
+    /**
      * @notice Deposits funds directly into Escrow under the settlement contract's balance.
      */
     function fundSettlementPool(uint256 amount) external whenNotPaused {
+        IERC20 token = escrow.paymentToken();
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        token.forceApprove(address(escrow), amount);
+        escrow.deposit(amount);
+        emit SettlementPoolFunded(msg.sender, amount);
+    }
+
+    /**
+     * @notice Allows authorized operator/DISCOM to cover a shortfall for a specific daily statement.
+     */
+    function fundStatementShortfall(
+        uint32 dateEpoch,
+        uint32 zoneId,
+        uint256 amount
+    ) external onlyOperator whenNotPaused {
+        DailyStatement storage stmt = dailyStatements[dateEpoch][zoneId];
+        if (stmt.postedAt == 0) revert StatementNotFound(dateEpoch, zoneId);
+        if (amount == 0) revert InvalidAmount();
+        stmt.totalCollectedDebitsPaise += amount;
         IERC20 token = escrow.paymentToken();
         token.safeTransferFrom(msg.sender, address(this), amount);
         token.forceApprove(address(escrow), amount);

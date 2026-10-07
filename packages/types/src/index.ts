@@ -637,3 +637,141 @@ export function getAbsoluteIntervalId(dateEpoch: number, intervalIdx: number): n
   return dateEpoch * 96 + intervalIdx;
 }
 
+// ---------------------------------------------------------------------------
+// 15. Governance, Role Isolation & Auditability (V2.0 Specification)
+// ---------------------------------------------------------------------------
+
+export type GovernanceRole =
+  | 'REGULATOR'
+  | 'MARKET_OPERATOR'
+  | 'AUDITOR'
+  | 'ORACLE_OPERATOR'
+  | 'ADMIN'
+  | 'EMERGENCY_GUARDIAN';
+
+export type GovernanceStatus =
+  | 'PENDING'
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'REVOKED'
+  | 'EXPIRED';
+
+export interface GovernanceMember {
+  governanceMemberId: string;
+  organizationId: string;
+  walletAddress: string;
+  role: GovernanceRole;
+  status: GovernanceStatus;
+  jurisdiction: string;          // e.g. 'ZONE-01', 'DELHI-NCT', 'GRID-ALL'
+  issuedAt: number;              // Seconds
+  expiresAt: number;             // Seconds
+  credentialRef: string;
+  createdBy: string;
+  approvedBy: string;
+  revokedAt?: number;
+  revocationReason?: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  timestamp: number;             // Unix timestamp seconds
+  actorWallet: string;
+  actorIdentity?: string;
+  organizationId: string;
+  role: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  marketId?: string;
+  zoneId?: number;
+  targetWallet?: string;
+  requestId?: string;
+  ipMetadata?: string;
+  reason: string;
+  status: 'SUCCESS' | 'BLOCKED' | 'FAILED';
+  failureCode?: string;
+  transactionHash?: string;
+  blockNumber?: number;
+  metadata?: Record<string, any>;
+  prevEventHash: string;
+  eventHash: string;
+}
+
+export type SecurityEventCategory =
+  | 'AUTH'
+  | 'METER'
+  | 'ORACLE'
+  | 'QUORUM'
+  | 'ORDER'
+  | 'SETTLEMENT'
+  | 'CERTIFICATE'
+  | 'API'
+  | 'CONTRACT'
+  | 'AVAILABILITY'
+  | 'AUTHORIZATION'
+  | 'CONFLICT_OF_INTEREST'
+  | 'INTEGRITY'
+  | 'SUSPICIOUS_ACTIVITY'
+  | 'EMERGENCY';
+
+export type SecurityEventSeverity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export type SecurityEventAction =
+  | 'ALLOW'
+  | 'WARN'
+  | 'REJECT'
+  | 'QUARANTINE'
+  | 'FREEZE'
+  | 'REQUIRE_REVIEW';
+
+export interface SecurityEvent {
+  id: string;
+  timestamp: number;             // Unix timestamp seconds
+  category: SecurityEventCategory;
+  severity: SecurityEventSeverity;
+  action: SecurityEventAction | string;
+  actor?: string;
+  actorWallet?: string;
+  deviceId?: string;
+  wallet?: string;
+  zone?: number;
+  interval?: number;
+  attackType?: string;
+  evidence?: string;
+  detectedBy?: string;
+  role?: string;
+  target?: string;
+  result?: 'SUCCESS' | 'BLOCKED' | 'FAILED' | 'REJECTED' | 'QUARANTINED';
+  reason?: string;
+  ruleId?: string;
+  status?: string;
+  quorumImpact?: 'NO_QUORUM_IMPACT' | 'POSSIBLE_QUORUM_IMPACT' | 'DIRECT_QUORUM_IMPACT' | 'SYSTEM_WIDE_FINALITY_FAILURE' | 'QUORUM_DEGRADED' | 'QUORUM_COLLUSION_RISK' | 'FINALITY_BLOCKED' | string;
+  settlementImpact?: 'NO_SETTLEMENT_IMPACT' | 'SETTLEMENT_HALTED' | 'SETTLEMENT_PROTECTED' | 'DIRECT_SETTLEMENT_IMPACT' | 'PREVENTS_FALSE_SETTLEMENT' | 'PREVENTS_CONFLICTING_SETTLEMENT' | 'SETTLEMENT_BLOCKED_PENDING_QUORUM' | 'DOUBLE_SPEND_PREVENTED' | 'WASH_TRADING_PREVENTED' | 'OVERCOMMITTING_PREVENTED' | 'DOUBLE_ISSUANCE_PREVENTED' | 'PRICE_MANIPULATION_PREVENTED' | 'ESCROW_INVARIANT_PRESERVED' | string;
+  metadata?: Record<string, any>;
+  transactionHash?: string;
+}
+
+export interface SecuritySystemMetrics {
+  governanceStatus: 'ACTIVE' | 'DEGRADED' | 'PAUSED';
+  marketOperatorStatus: 'AUTHORIZED' | 'UNAUTHORIZED' | 'SUSPENDED';
+  oracleQuorumHealth: string;    // e.g. "3 / 4"
+  totalSecurityEvents: number;
+  criticalEventsCount: number;
+  highEventsCount: number;
+  blockedActionsCount: number;
+  suspendedIdentitiesCount: number;
+  conflictsDetectedCount: number;
+  systemIntegrity?: 'HEALTHY' | 'DEGRADED' | 'HALTED';
+  registeredDevicesCount?: number;
+  activeDevicesCount?: number;
+  revokedDevicesCount?: number;
+  equivocationsCount?: number;
+  suspiciousOrdersCount?: number;
+  pendingChallengesCount?: number;
+  settlementIntegrity?: 'VALID' | 'DISPUTED' | 'HALTED';
+  certificateIntegrity?: 'VALID' | 'DISPUTED';
+  totalBlockedActions?: number;
+  conflictEventsCount?: number;
+  hashChainValid?: boolean;
+}
+

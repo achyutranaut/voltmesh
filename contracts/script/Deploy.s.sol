@@ -51,10 +51,30 @@ contract DeployScript is Script {
         AccessRegistry access = new AccessRegistry(deployer);
         accessRegistry = address(access);
 
-        // Grant core operational roles directly
+        // Grant core operational roles directly to dedicated separate accounts
         access.grantRole(access.REGISTRAR_ROLE(), deployer);
-        access.grantRole(access.OPERATOR_ROLE(), deployer);
-        access.grantRole(access.ORACLE_ROLE(), deployer);
+
+        address discomOperator;
+        address oracleSigner;
+        address auditor;
+
+        if (block.chainid == 31337) {
+            // Anvil local testnet:
+            // Account #3: DISCOM Market Operator
+            discomOperator = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
+            // Dedicated Oracle Node (public devnet key 0x...0101)
+            oracleSigner = 0x25A71a07cecf1753ee65b00E0a3AAEf7e0F51c0F;
+            // Account #4: Regulator / Auditor
+            auditor = 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65;
+        } else {
+            discomOperator = vm.envAddress("OPERATOR_ADDRESS");
+            oracleSigner = vm.envAddress("ORACLE_ADDRESS");
+            auditor = vm.envAddress("AUDITOR_ADDRESS");
+        }
+
+        access.grantRole(access.OPERATOR_ROLE(), discomOperator);
+        access.grantRole(access.ORACLE_ROLE(), oracleSigner);
+        access.grantRole(access.AUDITOR_ROLE(), auditor);
 
         // 2. Participant Registry
         ParticipantRegistry participants = new ParticipantRegistry(address(access));
@@ -136,6 +156,9 @@ contract DeployScript is Script {
         token.mint(deployer, guaranteeFund);
         token.approve(address(settlement), guaranteeFund);
         settlement.fundSettlementPool(guaranteeFund);
+
+        // Permanently lock direct grants so all future grants require timelock delay
+        access.disableDirectGrants();
 
         vm.stopBroadcast();
 

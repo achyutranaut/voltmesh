@@ -41,6 +41,12 @@ contract CertificateRegistry is ERC1155 {
     error DeviceNotRegisteredOrRevoked(bytes32 deviceId);
     error ExceedsRatedCapacity(bytes32 deviceId, uint64 energyWh);
     error MismatchedSourceType(uint8 supplied, uint8 registered);
+    error NonRenewableSourceType(uint8 sourceType);
+    error MismatchedZoneId(uint32 providedZoneId, uint32 deviceZoneId);
+    error InactiveOrSuspendedParticipant(address participant);
+    error ParticipantNotProsumer(address participant);
+    error AlreadyInitialized();
+    error InvalidAddress();
     error SystemPaused();
 
     modifier onlyRetirement() {
@@ -70,6 +76,12 @@ contract CertificateRegistry is ERC1155 {
         if (!accessRegistry.hasRole(accessRegistry.DEFAULT_ADMIN_ROLE(), msg.sender)) {
             revert CallerNotAdmin();
         }
+        if (retirementRegistry != address(0)) {
+            revert AlreadyInitialized();
+        }
+        if (_retirementRegistry == address(0)) {
+            revert InvalidAddress();
+        }
         retirementRegistry = _retirementRegistry;
         emit RetirementRegistryUpdated(_retirementRegistry);
     }
@@ -94,16 +106,39 @@ contract CertificateRegistry is ERC1155 {
         }
 
         DeviceRegistry.Device memory dev = deviceRegistry.getDevice(deviceId);
+
+        // Green certificates (GACs) strictly restricted to renewable sources (SOLAR_PV, WIND)
+        if (dev.sourceType != DeviceRegistry.SourceType.SOLAR_PV && dev.sourceType != DeviceRegistry.SourceType.WIND) {
+            revert NonRenewableSourceType(uint8(dev.sourceType));
+        }
+
         if (sourceType != uint8(dev.sourceType)) {
             revert MismatchedSourceType(sourceType, uint8(dev.sourceType));
         }
+
+        // Zone must match registered device location
+        if (zoneId != dev.zoneId) {
+            revert MismatchedZoneId(zoneId, dev.zoneId);
+        }
+
         address deviceOwner = participantRegistry.participantIdToWallet(dev.participantId);
         if (deviceOwner == address(0)) {
             revert DeviceOwnerNotFound(deviceId);
         }
 
-        // Only the device owner or an approved operator can trigger claiming
-        if (msg.sender != deviceOwner && !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender)) {
+        // Participant must be actively registered and not suspended
+        if (!participantRegistry.isRegisteredAndActive(deviceOwner)) {
+            revert InactiveOrSuspendedParticipant(deviceOwner);
+        }
+
+        // Device owner must be registered as PROSUMER
+        ParticipantRegistry.Participant memory part = participantRegistry.getParticipantByWallet(deviceOwner);
+        if (part.roleType != ParticipantRegistry.RoleType.PROSUMER) {
+            revert ParticipantNotProsumer(deviceOwner);
+        }
+
+        // Strictly only the device owner can trigger claiming
+        if (msg.sender != deviceOwner) {
             revert UnauthorizedClaimant();
         }
 
@@ -143,4 +178,23 @@ contract CertificateRegistry is ERC1155 {
     ) external onlyRetirement {
         _burn(account, tokenId, amountWh);
     }
+
+    /**
+     * @notice Enforces that certificate transfers can only be made to registered, active participants.
+     */
+    function _update(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory values
+    ) internal virtual override {
+        // If transferring to an account (not burning to address(0)), recipient must be registered and active
+        if (to != address(0) && to != retirementRegistry) {
+            if (!participantRegistry.isRegisteredAndActive(to)) {
+                revert InactiveOrSuspendedParticipant(to);
+            }
+        }
+        super._update(from, to, ids, values);
+    }
 }
+

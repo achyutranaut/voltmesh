@@ -83,6 +83,7 @@ contract Escrow is ReentrancyGuard {
     error UnauthorizedClaimant();
     error InvalidParticipants();
     error InvalidAmount();
+    error AlreadyInitialized();
     error SystemPaused();
 
     modifier onlySettlement() {
@@ -103,6 +104,9 @@ contract Escrow is ReentrancyGuard {
     function setSettlementContract(address _settlement) external {
         if (!accessRegistry.hasRole(accessRegistry.DEFAULT_ADMIN_ROLE(), msg.sender)) {
             revert CallerNotAdmin();
+        }
+        if (settlementContract != address(0)) {
+            revert AlreadyInitialized();
         }
         settlementContract = _settlement;
         emit SettlementContractUpdated(_settlement);
@@ -193,13 +197,10 @@ contract Escrow is ReentrancyGuard {
     function isValidTransition(EscrowState from, EscrowState to) public pure returns (bool) {
         if (from == EscrowState.LOCKED) {
             return to == EscrowState.DELIVERY_VERIFIED ||
-                   to == EscrowState.SETTLEMENT_READY ||
-                   to == EscrowState.SETTLED ||
                    to == EscrowState.REFUNDED;
         }
         if (from == EscrowState.DELIVERY_VERIFIED) {
             return to == EscrowState.SETTLEMENT_READY ||
-                   to == EscrowState.SETTLED ||
                    to == EscrowState.REFUNDED;
         }
         if (from == EscrowState.SETTLEMENT_READY) {
@@ -226,7 +227,7 @@ contract Escrow is ReentrancyGuard {
     function settleObligation(bytes32 obligationId, uint256 settleAmount) external onlySettlement nonReentrant whenNotPaused {
         ObligationLock storage obl = obligationLocks[obligationId];
         if (obl.state == EscrowState.NONE) revert ObligationNotFound(obligationId);
-        if (obl.state == EscrowState.SETTLED || obl.state == EscrowState.REFUNDED) {
+        if (!isValidTransition(obl.state, EscrowState.SETTLED)) {
             revert InvalidObligationState(obligationId, obl.state, EscrowState.SETTLEMENT_READY);
         }
         if (block.timestamp > obl.deadline) {

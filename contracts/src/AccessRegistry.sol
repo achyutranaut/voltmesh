@@ -66,6 +66,15 @@ contract AccessRegistry is AccessControlEnumerable, Pausable {
         emit RoleProposalExecuted(proposalId, proposal.role, proposal.account);
     }
 
+    function cancelProposal(bytes32 proposalId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        RoleProposal storage proposal = proposals[proposalId];
+        if (proposal.executeAfter == 0) revert ProposalDoesNotExist();
+        if (proposal.executed) revert ProposalAlreadyExecuted();
+
+        delete proposals[proposalId];
+        emit RoleProposalCancelled(proposalId);
+    }
+
     bool public directGrantsDisabled;
 
     event DirectGrantsDisabled();

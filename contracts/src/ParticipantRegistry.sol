@@ -39,6 +39,7 @@ contract ParticipantRegistry {
     error CallerNotRegistrar();
     error ParticipantAlreadyRegistered(address wallet);
     error BindingHashAlreadyBound(bytes32 bindingHash, address existingWallet);
+    error ParticipantIdAlreadyBound(bytes32 participantId, address existingWallet);
     error ParticipantNotFound(address wallet);
     error ParticipantIsSuspended(address wallet);
     error SystemPaused();
@@ -71,6 +72,9 @@ contract ParticipantRegistry {
         }
         if (bindingHashToWallet[bindingHash] != address(0)) {
             revert BindingHashAlreadyBound(bindingHash, bindingHashToWallet[bindingHash]);
+        }
+        if (participantIdToWallet[participantId] != address(0)) {
+            revert ParticipantIdAlreadyBound(participantId, participantIdToWallet[participantId]);
         }
 
         participants[wallet] = Participant({

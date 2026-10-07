@@ -3,6 +3,7 @@ import {
   TrendingUp,
   Zap,
   Shield,
+  ShieldCheck,
   GitBranch,
   Layers,
   Award,
@@ -38,7 +39,9 @@ export type TerminalNavTab =
   | 'certificates'
   | 'operations'
   | 'contracts'
-  | 'activity';
+  | 'activity'
+  | 'governance'
+  | 'security';
 
 export interface TerminalSidebarProps {
   activeTab: TerminalNavTab;
@@ -293,6 +296,63 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                     >
                       <History className={`w-4 h-4 shrink-0 ${activeTab === 'activity' ? 'text-white' : 'text-zinc-400'}`} />
                       <span className="text-xs">Activity</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Governance & Security Monitoring */}
+        {isAllowed('governance') && (
+          <SidebarSeparator className="bg-white/[0.06]" />
+        )}
+
+        {isAllowed('governance') && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium text-emerald-400 px-2 tracking-wide flex items-center gap-1.5">
+              <Shield className="w-3 h-3 text-emerald-400" />
+              <span>Governance & Security</span>
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={activeTab === 'governance'}
+                    onClick={() => onTabChange('governance')}
+                    tooltip="Role Governance"
+                    className={
+                      activeTab === 'governance'
+                        ? 'bg-emerald-500/15 text-emerald-300 font-medium border border-emerald-500/25'
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
+                    }
+                  >
+                    <Shield className={`w-4 h-4 shrink-0 ${activeTab === 'governance' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                    <span className="text-xs">Role Governance</span>
+                    <span className="ml-auto text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                      SECURED
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                {isAllowed('security') && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={activeTab === 'security'}
+                      onClick={() => onTabChange('security')}
+                      tooltip="Security & Trust Center"
+                      className={
+                        activeTab === 'security'
+                          ? 'bg-emerald-500/15 text-emerald-300 font-medium border border-emerald-500/25'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
+                      }
+                    >
+                      <ShieldCheck className={`w-4 h-4 shrink-0 ${activeTab === 'security' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                      <span className="text-xs">Security Lab</span>
+                      <span className="ml-auto text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                        12 DRILLS
+                      </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}

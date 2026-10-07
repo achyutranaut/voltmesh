@@ -10,11 +10,13 @@ export interface ValidationResult {
 
 export interface ValidationOptions {
   getRegisteredKey?: (deviceId: string) => Uint8Array | undefined;
+  trustedPublicKey?: Uint8Array;
 }
 
 export class AttestationValidator {
   /**
    * Verifies an attestation envelope cryptographically and structurally.
+   * Resolves trusted signer key against the registered device identity.
    */
   public static validate(envelope: AttestationEnvelope, options?: ValidationOptions): ValidationResult {
     if (envelope.version !== 1) {
@@ -29,16 +31,6 @@ export class AttestationValidator {
       return { valid: false, error: 'Missing envelope signature' };
     }
 
-    if (!envelope.publicKey || envelope.publicKey.length === 0) {
-      return { valid: false, error: 'Missing signer public key' };
-    }
-
-    // Cryptographic signature check (Ed25519)
-    const isSigValid = verifyEd25519(envelope.signature, envelope.rawPayloadBytes, envelope.publicKey);
-    if (!isSigValid) {
-      return { valid: false, error: 'Cryptographic signature verification failed' };
-    }
-
     let payload: MeterReadingPayload;
     try {
       payload = deserializePayload(envelope.rawPayloadBytes);
@@ -50,12 +42,21 @@ export class AttestationValidator {
       return { valid: false, error: 'Invalid or missing deviceId' };
     }
 
-    if (options?.getRegisteredKey) {
-      const registeredKey = options.getRegisteredKey(payload.deviceId);
-      if (registeredKey) {
+    // Determine canonical trusted public key from device registry
+    let trustedKey: Uint8Array | undefined = options?.trustedPublicKey;
+    if (!trustedKey && options?.getRegisteredKey) {
+      trustedKey = options.getRegisteredKey(payload.deviceId);
+      if (!trustedKey) {
+        return { valid: false, error: `Device not found in registry: ${payload.deviceId}` };
+      }
+    }
+
+    // If trusted key is retrieved, envelope key must match it
+    if (trustedKey) {
+      if (envelope.publicKey && envelope.publicKey.length > 0) {
         const matches =
-          registeredKey.length === envelope.publicKey.length &&
-          registeredKey.every((byte, idx) => byte === envelope.publicKey[idx]);
+          trustedKey.length === envelope.publicKey.length &&
+          trustedKey.every((byte, idx) => byte === envelope.publicKey[idx]);
         if (!matches) {
           return {
             valid: false,
@@ -63,6 +64,17 @@ export class AttestationValidator {
           };
         }
       }
+    } else {
+      if (!envelope.publicKey || envelope.publicKey.length === 0) {
+        return { valid: false, error: 'Missing signer public key' };
+      }
+    }
+
+    // Cryptographic signature check (Ed25519) strictly against trusted registered key
+    const keyToVerify = trustedKey ?? envelope.publicKey;
+    const isSigValid = verifyEd25519(envelope.signature, envelope.rawPayloadBytes, keyToVerify);
+    if (!isSigValid) {
+      return { valid: false, error: 'Cryptographic signature verification failed' };
     }
 
     if (payload.energyWh < 0n) {

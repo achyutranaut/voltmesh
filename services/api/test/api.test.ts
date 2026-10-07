@@ -134,11 +134,12 @@ describe('Modular Monolith API Server', () => {
       },
     });
 
-    // 5. Trigger Clearing for interval 100
+    // 5. Trigger Clearing for interval 100 (authorized Market Operator)
+    const opToken = app.jwt.sign({ address: '0x90f79bf6eb2c4f870365e785982e1f101e93b906', role: 'OPERATOR' });
     const clearRes = await app.inject({
       method: 'POST',
       url: '/api/v1/markets/zones/1/clear/100',
-      headers: { authorization: `Bearer ${authToken}` },
+      headers: { authorization: `Bearer ${opToken}` },
     });
     expect(clearRes.statusCode).toBe(200);
     const clearBody = JSON.parse(clearRes.payload);

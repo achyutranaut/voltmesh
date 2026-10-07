@@ -215,4 +215,216 @@ contract CertificatesTest is Test {
             emptyProof
         );
     }
+
+    function test_Certificates_NonRenewableSourceTypeReverts() public {
+        bytes32 storageDevId = keccak256("device-battery-storage-01");
+        vm.startPrank(admin);
+        devices.registerDevice(
+            storageDevId,
+            prosumer,
+            DeviceRegistry.SignerType.DEVICE_SE,
+            DeviceRegistry.SourceType.STORAGE,
+            TEST_ZONE_ID,
+            5000,
+            100,
+            keccak256("part-cafe")
+        );
+        vm.stopPrank();
+
+        bytes32[] memory emptyProof = new bytes32[](0);
+        vm.prank(prosumer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CertificateRegistry.NonRenewableSourceType.selector,
+                uint8(DeviceRegistry.SourceType.STORAGE)
+            )
+        );
+        certificates.claimCertificate(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            storageDevId,
+            TEST_ENERGY_WH,
+            uint8(DeviceRegistry.SourceType.STORAGE),
+            1,
+            emptyProof
+        );
+    }
+
+    function test_Certificates_MismatchedZoneReverts() public {
+        bytes32[] memory emptyProof = new bytes32[](0);
+        vm.prank(prosumer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CertificateRegistry.MismatchedZoneId.selector,
+                TEST_ZONE_ID + 1,
+                TEST_ZONE_ID
+            )
+        );
+        certificates.claimCertificate(
+            TEST_ZONE_ID + 1,
+            TEST_INTERVAL_IDX,
+            deviceId,
+            TEST_ENERGY_WH,
+            TEST_SOURCE_TYPE,
+            1,
+            emptyProof
+        );
+    }
+
+    function test_Certificates_SuspendedParticipantReverts() public {
+        vm.prank(admin);
+        participants.suspendParticipant(prosumer);
+
+        bytes32[] memory emptyProof = new bytes32[](0);
+        vm.prank(prosumer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CertificateRegistry.InactiveOrSuspendedParticipant.selector,
+                prosumer
+            )
+        );
+        certificates.claimCertificate(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            deviceId,
+            TEST_ENERGY_WH,
+            TEST_SOURCE_TYPE,
+            1,
+            emptyProof
+        );
+    }
+
+    function test_Certificates_ConsumerRoleReverts() public {
+        address consumer = address(0xC001);
+        bytes32 consumerPartId = keccak256("part-consumer-01");
+        bytes32 consumerDevId = keccak256("device-consumer-solar");
+
+        vm.startPrank(admin);
+        participants.registerParticipant(
+            consumer,
+            consumerPartId,
+            TEST_ZONE_ID,
+            ParticipantRegistry.RoleType.CONSUMER,
+            keccak256("binding-consumer-01")
+        );
+        devices.registerDevice(
+            consumerDevId,
+            consumer,
+            DeviceRegistry.SignerType.DEVICE_SE,
+            DeviceRegistry.SourceType.SOLAR_PV,
+            TEST_ZONE_ID,
+            5000,
+            100,
+            consumerPartId
+        );
+        vm.stopPrank();
+
+        bytes32[] memory emptyProof = new bytes32[](0);
+        vm.prank(consumer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CertificateRegistry.ParticipantNotProsumer.selector,
+                consumer
+            )
+        );
+        certificates.claimCertificate(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            consumerDevId,
+            TEST_ENERGY_WH,
+            TEST_SOURCE_TYPE,
+            1,
+            emptyProof
+        );
+    }
+
+    function test_Certificates_SetRetirementRegistrySetOnce() public {
+        vm.prank(admin);
+        vm.expectRevert(CertificateRegistry.AlreadyInitialized.selector);
+        certificates.setRetirementRegistry(address(0x123));
+    }
+
+    // P0-7: Certificate transfer protection (CERT-04)
+    function test_Certificates_DirectTransfer_InactiveRecipientReverts() public {
+        uint64 counter = 1;
+        bytes32 leafHash = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                TEST_ZONE_ID,
+                TEST_INTERVAL_IDX,
+                TEST_ENERGY_WH,
+                uint8(0),
+                counter
+            )
+        );
+        _finalizeTestEpoch(leafHash);
+
+        bytes32[] memory emptyProof = new bytes32[](0);
+        vm.prank(prosumer);
+        uint256 tokenId = certificates.claimCertificate(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            deviceId,
+            TEST_ENERGY_WH,
+            TEST_SOURCE_TYPE,
+            counter,
+            emptyProof
+        );
+
+        address unregisteredRecipient = address(0xDEADBEEF);
+        vm.prank(prosumer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CertificateRegistry.InactiveOrSuspendedParticipant.selector,
+                unregisteredRecipient
+            )
+        );
+        certificates.safeTransferFrom(prosumer, unregisteredRecipient, tokenId, 500, "");
+    }
+
+    function test_Certificates_DirectTransfer_SuccessToActiveParticipant() public {
+        uint64 counter = 1;
+        bytes32 leafHash = keccak256(
+            abi.encodePacked(
+                bytes1(0x00),
+                deviceId,
+                TEST_ZONE_ID,
+                TEST_INTERVAL_IDX,
+                TEST_ENERGY_WH,
+                uint8(0),
+                counter
+            )
+        );
+        _finalizeTestEpoch(leafHash);
+
+        bytes32[] memory emptyProof = new bytes32[](0);
+        vm.prank(prosumer);
+        uint256 tokenId = certificates.claimCertificate(
+            TEST_ZONE_ID,
+            TEST_INTERVAL_IDX,
+            deviceId,
+            TEST_ENERGY_WH,
+            TEST_SOURCE_TYPE,
+            counter,
+            emptyProof
+        );
+
+        address buyer = address(0xB0B);
+        vm.startPrank(admin);
+        participants.registerParticipant(
+            buyer,
+            keccak256("part-buyer"),
+            TEST_ZONE_ID,
+            ParticipantRegistry.RoleType.CONSUMER,
+            keccak256("discom-buyer")
+        );
+        vm.stopPrank();
+
+        vm.prank(prosumer);
+        certificates.safeTransferFrom(prosumer, buyer, tokenId, 500, "");
+
+        assertEq(certificates.balanceOf(buyer, tokenId), 500);
+        assertEq(certificates.balanceOf(prosumer, tokenId), TEST_ENERGY_WH - 500);
+    }
 }

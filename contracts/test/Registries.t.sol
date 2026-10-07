@@ -152,4 +152,55 @@ contract RegistriesTest is Test {
         // Device must now be revoked
         assertFalse(devices.isDeviceValid(deviceId));
     }
+
+    function test_AccessRegistry_CancelProposal() public {
+        address newOperator = address(0x999);
+        vm.startPrank(admin);
+        bytes32 propId = access.proposeRoleGrant(access.OPERATOR_ROLE(), newOperator);
+
+        // Admin cancels the proposal
+        access.cancelProposal(propId);
+
+        // Cannot cancel again (proposal deleted)
+        vm.expectRevert(AccessRegistry.ProposalDoesNotExist.selector);
+        access.cancelProposal(propId);
+
+        // Cannot execute cancelled proposal
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.expectRevert(AccessRegistry.ProposalDoesNotExist.selector);
+        access.executeRoleGrant(propId);
+        vm.stopPrank();
+    }
+
+    function test_ParticipantRegistry_DuplicateParticipantIdReverts() public {
+        bytes32 partId = keccak256("part-unique-1");
+        bytes32 bindingHash1 = keccak256("discom-acc-001");
+        bytes32 bindingHash2 = keccak256("discom-acc-002");
+
+        vm.prank(registrar);
+        participants.registerParticipant(
+            prosumer,
+            partId,
+            1,
+            ParticipantRegistry.RoleType.PROSUMER,
+            bindingHash1
+        );
+
+        address other = address(0x9999);
+        vm.prank(registrar);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ParticipantRegistry.ParticipantIdAlreadyBound.selector,
+                partId,
+                prosumer
+            )
+        );
+        participants.registerParticipant(
+            other,
+            partId,
+            1,
+            ParticipantRegistry.RoleType.PROSUMER,
+            bindingHash2
+        );
+    }
 }

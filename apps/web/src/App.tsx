@@ -44,6 +44,8 @@ import {
   OperationsView,
   ContractRegistry,
   ActivityStream,
+  GovernanceView,
+  SecurityView,
 } from './components/terminal';
 
 export default function App() {
@@ -586,6 +588,19 @@ export default function App() {
 
             {activeTab === 'activity' && (
               <ActivityStream
+                onSelectDetail={(detail) => setDetailDrawerData(detail)}
+              />
+            )}
+
+            {activeTab === 'governance' && (
+              <GovernanceView
+                onSelectDetail={(detail) => setDetailDrawerData(detail)}
+              />
+            )}
+
+            {activeTab === 'security' && (
+              <SecurityView
+                currentInterval={currentInterval}
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
               />
             )}

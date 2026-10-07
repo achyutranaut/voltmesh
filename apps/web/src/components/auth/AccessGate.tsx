@@ -127,10 +127,10 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onEnter, onBack }) => {
                 {DEMO_MODE ? (
                   <>
                     <p className="text-[#a1a1aa] font-sans text-xs">
-                      Signature verified. In demo builds you can pick a role for this wallet:
+                      Signature verified. In demo builds you can register this wallet as a participant:
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      {(Object.keys(ROLES) as Role[]).map((r) => (
+                      {(['buyer', 'seller'] as Role[]).map((r) => (
                         <button
                           key={r}
                           onClick={() => s.registerAs(r)}
@@ -140,6 +140,9 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onEnter, onBack }) => {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[11px] text-zinc-500 font-sans mt-1">
+                      Operator and Regulator roles must be authorized on-chain by the admin.
+                    </p>
                   </>
                 ) : (
                   <p className="text-[#a1a1aa] font-sans text-xs">

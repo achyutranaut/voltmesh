@@ -7,7 +7,9 @@ export type NavigationTab =
   | 'certificates' 
   | 'operations'
   | 'contracts'
-  | 'activity';
+  | 'activity'
+  | 'governance'
+  | 'security';
 
 export type PipelineStage =
   | 'METER'

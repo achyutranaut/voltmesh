@@ -1464,32 +1464,37 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const publicClient = getPublicClient();
     let dateEpoch = opts.dateEpoch ?? Math.floor(Date.now() / 86400000);
 
-    // If today's statement is already posted on-chain (e.g. repeated demo intervals or tests),
-    // find the next unused epoch ID so settlement succeeds without reverting on StatementAlreadyPosted
-    try {
-      const existing = (await publicClient.readContract({
-        address: settlementContract.address,
-        abi: settlementContract.abi,
-        functionName: 'dailyStatements',
-        args: [dateEpoch, opts.zoneId],
-      })) as any;
+    // If caller did not provide an explicit dateEpoch, and today's statement is already posted
+    // (e.g. repeated local demo runs on the same calendar day), search up to 5 days ahead with bounded RPC checks.
+    if (opts.dateEpoch === undefined) {
+      try {
+        const existing = (await publicClient.readContract({
+          address: settlementContract.address,
+          abi: settlementContract.abi,
+          functionName: 'dailyStatements',
+          args: [dateEpoch, opts.zoneId],
+        })) as any;
 
-      if (existing && (existing[7] > 0n || existing.postedAt > 0n)) {
-        while (true) {
-          dateEpoch++;
-          const check = (await publicClient.readContract({
-            address: settlementContract.address,
-            abi: settlementContract.abi,
-            functionName: 'dailyStatements',
-            args: [dateEpoch, opts.zoneId],
-          })) as any;
-          if (!check || (check[7] === 0n && (check.postedAt === 0n || check.postedAt === undefined))) {
-            break;
+        if (existing && (existing[7] > 0n || existing.postedAt > 0n)) {
+          let attempts = 0;
+          while (attempts < 5) {
+            attempts++;
+            dateEpoch++;
+            const check = (await publicClient.readContract({
+              address: settlementContract.address,
+              abi: settlementContract.abi,
+              functionName: 'dailyStatements',
+              args: [dateEpoch, opts.zoneId],
+            })) as any;
+            if (!check || (check[7] === 0n && (check.postedAt === 0n || check.postedAt === undefined))) {
+              console.info(`Using next available demo settlement epoch for zone ${opts.zoneId}: ${dateEpoch}`);
+              break;
+            }
           }
         }
+      } catch (checkErr) {
+        console.warn('Could not check existing dailyStatements:', checkErr);
       }
-    } catch (checkErr) {
-      console.warn('Could not check existing dailyStatements:', checkErr);
     }
 
     // postDailyStatement requires `quorumThreshold` oracle signatures (sorted ascending by signer

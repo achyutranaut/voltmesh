@@ -121,17 +121,28 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     const body = parseResult.data;
 
     try {
-      const rawPayloadBytes = typeof body.rawPayloadBytes === 'string'
-        ? Buffer.from(body.rawPayloadBytes.replace(/^0x/, ''), 'hex')
-        : new Uint8Array(body.rawPayloadBytes);
+      let rawPayloadBytes: Uint8Array;
+      let signature: Uint8Array;
+      let publicKey: Uint8Array;
 
-      const signature = typeof body.signature === 'string'
-        ? Buffer.from(body.signature.replace(/^0x/, ''), 'hex')
-        : new Uint8Array(body.signature);
+      try {
+        rawPayloadBytes = typeof body.rawPayloadBytes === 'string'
+          ? Buffer.from(body.rawPayloadBytes.replace(/^0x/, ''), 'hex')
+          : new Uint8Array(body.rawPayloadBytes);
 
-      const publicKey = typeof body.publicKey === 'string'
-        ? Buffer.from(body.publicKey.replace(/^0x/, ''), 'hex')
-        : new Uint8Array(body.publicKey);
+        signature = typeof body.signature === 'string'
+          ? Buffer.from(body.signature.replace(/^0x/, ''), 'hex')
+          : new Uint8Array(body.signature);
+
+        publicKey = typeof body.publicKey === 'string'
+          ? Buffer.from(body.publicKey.replace(/^0x/, ''), 'hex')
+          : new Uint8Array(body.publicKey);
+      } catch (parseErr: any) {
+        return reply.status(400).send({
+          error: 'MALFORMED_ATTESTATION_DATA',
+          message: parseErr.message,
+        });
+      }
 
       const envelope: AttestationEnvelope = {
         version: body.version ?? 1,
@@ -142,9 +153,23 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
         publicKey: new Uint8Array(publicKey),
       };
 
-      // 1. Cryptographic and structural validation
-      const validation = AttestationValidator.validate(envelope);
+      // 1. Cryptographic and structural validation against canonical device registry
+      const validation = AttestationValidator.validate(envelope, {
+        getRegisteredKey: (deviceId: string) => deviceRegistry.get(deviceId)?.publicKey,
+      });
       if (!validation.valid || !validation.payload) {
+        if (validation.error?.includes('Device not found in registry')) {
+          return reply.status(403).send({
+            error: 'UNKNOWN_DEVICE',
+            message: `Device ${body.payload?.deviceId || 'unknown'} is not registered in the authorized device registry`,
+          });
+        }
+        if (validation.error?.includes('does not match registered key')) {
+          return reply.status(401).send({
+            error: 'INVALID_SIGNER_KEY',
+            message: validation.error,
+          });
+        }
         return reply.status(400).send({ error: validation.error });
       }
 
@@ -241,7 +266,7 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
         counter: payload.counter.toString(),
       });
     } catch (err: any) {
-      return reply.status(500).send({ error: `Internal ingestion error: ${err.message}` });
+      return reply.status(400).send({ error: `Attestation processing error: ${err.message}` });
     }
   });
 

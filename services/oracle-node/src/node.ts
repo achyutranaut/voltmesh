@@ -173,3 +173,77 @@ export class QuorumAggregator {
     return verifiedSigners.slice(0, quorumThreshold).map((s) => s.signature);
   }
 }
+
+export interface OracleEquivocationReport {
+  operatorId: string;
+  signerAddress: Address;
+  zoneId: number;
+  intervalIdx: number;
+  rootA: Hex;
+  rootB: Hex;
+  signatureA: Hex;
+  signatureB: Hex;
+  detectedAt: number;
+}
+
+export class OracleEquivocationDetector {
+  private signedRoots = new Map<string, { root: Hex; signature: Hex; operatorId: string }>();
+  private quarantinedOracles = new Set<string>();
+  private equivocationReports: OracleEquivocationReport[] = [];
+
+  /**
+   * Checks whether a new signature conflicts with a previously registered root for the same interval.
+   * If conflicting, the oracle is immediately quarantined to prevent quorum contamination.
+   */
+  public registerSignature(
+    signerAddress: Address,
+    operatorId: string,
+    zoneId: number,
+    intervalIdx: number,
+    merkleRoot: Hex,
+    signature: Hex
+  ): { isEquivocation: boolean; report?: OracleEquivocationReport; isQuarantined: boolean } {
+    const norm = signerAddress.toLowerCase();
+    if (this.quarantinedOracles.has(norm)) {
+      return { isEquivocation: true, isQuarantined: true };
+    }
+
+    const key = `${norm}:${zoneId}:${intervalIdx}`;
+    const existing = this.signedRoots.get(key);
+
+    if (existing) {
+      if (existing.root.toLowerCase() !== merkleRoot.toLowerCase()) {
+        this.quarantinedOracles.add(norm);
+        const report: OracleEquivocationReport = {
+          operatorId,
+          signerAddress,
+          zoneId,
+          intervalIdx,
+          rootA: existing.root,
+          rootB: merkleRoot,
+          signatureA: existing.signature,
+          signatureB: signature,
+          detectedAt: Math.floor(Date.now() / 1000),
+        };
+        this.equivocationReports.push(report);
+        return { isEquivocation: true, report, isQuarantined: true };
+      }
+      return { isEquivocation: false, isQuarantined: false };
+    }
+
+    this.signedRoots.set(key, { root: merkleRoot, signature, operatorId });
+    return { isEquivocation: false, isQuarantined: false };
+  }
+
+  public isOracleQuarantined(signerAddress: Address): boolean {
+    return this.quarantinedOracles.has(signerAddress.toLowerCase());
+  }
+
+  public getQuarantinedCount(): number {
+    return this.quarantinedOracles.size;
+  }
+
+  public getReports(): OracleEquivocationReport[] {
+    return [...this.equivocationReports];
+  }
+}

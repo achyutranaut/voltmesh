@@ -4,7 +4,7 @@ export type Role = 'seller' | 'buyer' | 'discom' | 'regulator';
 
 export type TabId =
   | 'market' | 'energy' | 'oracle' | 'merkle' | 'settlement'
-  | 'certificates' | 'operations' | 'contracts' | 'activity';
+  | 'certificates' | 'operations' | 'contracts' | 'activity' | 'governance' | 'security';
 
 export type Action =
   | 'order.sell' | 'order.buy' | 'escrow.deposit'
@@ -20,7 +20,7 @@ interface RoleInfo {
 
 const ALL_TABS: TabId[] = [
   'market', 'energy', 'oracle', 'merkle', 'settlement',
-  'certificates', 'operations', 'contracts', 'activity',
+  'certificates', 'operations', 'contracts', 'activity', 'governance', 'security',
 ];
 
 // Adjust this table to match docs/AUTHORIZATION_MATRIX.md.
@@ -28,13 +28,13 @@ export const ROLES: Record<Role, RoleInfo> = {
   seller: {
     label: 'Seller (prosumer)',
     summary: 'Sells generated energy and claims certificates for it.',
-    tabs: ['market', 'energy', 'merkle', 'settlement', 'certificates', 'activity'],
+    tabs: ['market', 'energy', 'merkle', 'settlement', 'certificates', 'activity', 'governance', 'security'],
     actions: ['order.sell', 'escrow.deposit', 'meter.generate', 'cert.claim', 'cert.transfer', 'cert.retire'],
   },
   buyer: {
     label: 'Buyer (consumer)',
     summary: 'Places buy bids, funds escrow, and retires certificates.',
-    tabs: ['market', 'merkle', 'settlement', 'certificates', 'activity'],
+    tabs: ['market', 'merkle', 'settlement', 'certificates', 'activity', 'governance', 'security'],
     actions: ['order.buy', 'escrow.deposit', 'cert.transfer', 'cert.retire'],
   },
   discom: {

@@ -42,6 +42,8 @@ export * from './CertificateTable';
 export * from './OperationsView';
 export * from './ContractRegistry';
 export * from './ActivityStream';
+export * from './GovernanceView';
+export * from './SecurityView';
 
 // Aliases for backward compatibility
 export { TerminalShell as TradingTerminalLayout } from './TerminalShell';

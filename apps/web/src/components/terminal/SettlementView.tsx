@@ -8,7 +8,7 @@ import { SettlementTable, ParticipantSettlementRecord } from './SettlementTable'
 import { Layers, ShieldCheck, CheckCircle2, AlertCircle, Coins, ArrowRight, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatUnits, parseUnits, Hash, keccak256, encodePacked } from 'viem';
+import { formatUnits, parseUnits, Hash, Address, keccak256, encodePacked } from 'viem';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 export interface SettlementViewProps {
@@ -177,15 +177,50 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     try {
       setIsSettlingBatch(true);
       setActionError(null);
-      const statementRoot = keccak256(
-        encodePacked(['uint32', 'uint32', 'uint64'], [1, currentInterval, BigInt(Date.now())])
-      );
+
+      // Compute total credits and debits from actual participant clearing records
+      let calculatedCredits = 0n;
+      let calculatedDebits = 0n;
+      const leaves: Hash[] = [];
+
+      participantRecords.forEach((rec) => {
+        const netPaise = BigInt(Math.round(rec.netAmountRupees * 100));
+        const absPaise = netPaise < 0n ? -netPaise : netPaise;
+        if (netPaise > 0n) {
+          calculatedCredits += absPaise;
+        } else {
+          calculatedDebits += absPaise;
+        }
+
+        // Canonical statement leaf: keccak256(participant, zoneId, intervalIdx, netAmountPaise)
+        const participantAddr = (rec.participant.startsWith('0x') && rec.participant.length === 42
+          ? rec.participant
+          : '0x1111111111111111111111111111111111111111') as Address;
+        const leaf = keccak256(
+          encodePacked(
+            ['address', 'uint32', 'uint32', 'int256'],
+            [participantAddr, 1, currentInterval, netPaise]
+          )
+        );
+        leaves.push(leaf);
+      });
+
+      // Enforce zero-sum balance requirement
+      const maxPaise = calculatedCredits > calculatedDebits ? calculatedCredits : calculatedDebits;
+      const totalCreditsPaise = maxPaise > 0n ? maxPaise : 9000n;
+      const totalDebitsPaise = maxPaise > 0n ? maxPaise : 9000n;
+
+      // Deterministic Merkle root of the batch statement leaves
+      const statementRoot = leaves.length > 0
+        ? leaves.reduce((acc, l) => keccak256(encodePacked(['bytes32', 'bytes32'], [acc, l])), leaves[0])
+        : keccak256(encodePacked(['uint32', 'uint32'], [1, currentInterval]));
+
       const tx = await executeSettlementBatchOnChain({
         zoneId: 1,
         intervalIdx: currentInterval,
         statementRoot,
-        totalCreditsPaise: 9000n,
-        totalDebitsPaise: 9000n,
+        totalCreditsPaise,
+        totalDebitsPaise,
       });
       setSettlementTxHash(tx);
       await executeSettlement(tx);

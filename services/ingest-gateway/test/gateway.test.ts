@@ -3,6 +3,7 @@ import { buildApp } from '../src/app.js';
 import { MemoryReadingStorage } from '../src/storage.js';
 import { MeterSimulator, SimulatedFault } from '@energy-dex/meter-sim';
 import { SourceType, AttestationEnvelope } from '@energy-dex/types';
+import { AttestationValidator } from '../src/validator.js';
 
 describe('Ingest Gateway Service (P0-10 Trust Root)', () => {
   let app: any;
@@ -174,6 +175,32 @@ describe('Ingest Gateway Service (P0-10 Trust Root)', () => {
     expect(res.statusCode).toBe(401);
     const body = JSON.parse(res.payload);
     expect(body.error).toBe('INVALID_SIGNER_KEY');
+  });
+
+  // METER-01: Fix meter signer trust - attacker cannot substitute envelope.publicKey
+  it('METER-01: AttestationValidator rejects reading signed by attackerKey even when attackerKey is in envelope', () => {
+    const attackerSim = new MeterSimulator({
+      deviceId: sim.deviceId,
+      zoneId: 1,
+      sourceType: SourceType.SOLAR_PV,
+      ratedCapacityW: 5000n,
+    });
+    const attackerEnvelope = attackerSim.emitReading(48) as AttestationEnvelope;
+
+    // Direct validator call with registry lookup
+    const result = AttestationValidator.validate(attackerEnvelope, {
+      getRegisteredKey: (id) => (id === sim.deviceId ? sim.getPublicKey() : undefined),
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('does not match registered key');
+
+    // Valid reading with registered key passes
+    const validEnvelope = sim.emitReading(49) as AttestationEnvelope;
+    const validResult = AttestationValidator.validate(validEnvelope, {
+      getRegisteredKey: (id) => (id === sim.deviceId ? sim.getPublicKey() : undefined),
+    });
+    expect(validResult.valid).toBe(true);
+    expect(validResult.payload?.deviceId).toBe(sim.deviceId);
   });
 
   // P0-10: Zone mismatch must return 400 Bad Request

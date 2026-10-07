@@ -145,19 +145,19 @@ contract SettlementAndEscrowTest is Test {
 
         bytes32 statementRoot = leafHash;
 
-        // Deposit settlement funds to settlement contract in escrow
-        vm.prank(admin);
-        token.transfer(address(settlement), 10_000);
-        vm.startPrank(address(settlement));
-        token.approve(address(escrow), 10_000);
-        escrow.deposit(10_000);
-        vm.stopPrank();
-
         bytes[] memory sigs = _signStatement(dateEpoch, zoneId, statementRoot, 5000, 5000);
 
         // Operator posts daily statement with oracle quorum signatures
         vm.prank(operator);
         settlement.postDailyStatement(dateEpoch, zoneId, statementRoot, 5000, 5000, sigs);
+
+        // Operator funds statement shortfall so collected debits cover the claims
+        vm.prank(admin);
+        token.transfer(operator, 5000);
+        vm.startPrank(operator);
+        token.approve(address(settlement), 5000);
+        settlement.fundStatementShortfall(dateEpoch, zoneId, 5000);
+        vm.stopPrank();
 
         // Prosumer claims settlement
         bytes32[] memory emptyProof = new bytes32[](0);
@@ -238,8 +238,11 @@ contract SettlementAndEscrowTest is Test {
 
         // Settle obligation: full delivered amount
         uint256 sellerBefore = escrow.balances(seller);
-        vm.prank(operator);
+        vm.startPrank(operator);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
         settlement.settleObligation(obligationId, tradeAmount);
+        vm.stopPrank();
 
         assertEq(escrow.balances(seller), sellerBefore + tradeAmount);
         assertEq(escrow.balances(buyer), 10_000);
@@ -302,6 +305,17 @@ contract SettlementAndEscrowTest is Test {
         vm.expectRevert();
         escrow.updateObligationState(obligationId, Escrow.EscrowState.NONE);
 
+        // 2b. LOCKED cannot jump directly to SETTLED without delivery verification (Attack 19)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.InvalidObligationStateTransition.selector,
+                obligationId,
+                Escrow.EscrowState.LOCKED,
+                Escrow.EscrowState.SETTLED
+            )
+        );
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.SETTLED);
+
         // 3. Transition to DELIVERY_VERIFIED
         escrow.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
 
@@ -316,7 +330,19 @@ contract SettlementAndEscrowTest is Test {
         );
         escrow.updateObligationState(obligationId, Escrow.EscrowState.LOCKED);
 
-        // 5. Transition to SETTLED
+        // 4b. DELIVERY_VERIFIED cannot jump directly to SETTLED without SETTLEMENT_READY
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Escrow.InvalidObligationStateTransition.selector,
+                obligationId,
+                Escrow.EscrowState.DELIVERY_VERIFIED,
+                Escrow.EscrowState.SETTLED
+            )
+        );
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.SETTLED);
+
+        // 5. Transition to SETTLEMENT_READY, then SETTLED
+        escrow.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
         escrow.updateObligationState(obligationId, Escrow.EscrowState.SETTLED);
 
         // 6. Terminal state SETTLED cannot transition anywhere
@@ -361,12 +387,17 @@ contract SettlementAndEscrowTest is Test {
         vm.prank(operator);
         settlement.lockObligation(obligationId, buyer, seller, 5000, 1, 48, deadline);
 
+        // Advance lifecycle: DELIVERY_VERIFIED -> SETTLEMENT_READY
+        vm.startPrank(operator);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
+
         // Attempting to settle more than the obligation amount must revert InvalidAmount
-        vm.prank(operator);
         vm.expectRevert(Escrow.InvalidAmount.selector);
         settlement.settleObligation(obligationId, 6000);
+        vm.stopPrank();
 
-        // State remains strictly LOCKED and balances remain untouched
+        // State remains strictly SETTLEMENT_READY and balances remain untouched
         assertEq(escrow.lockedBalances(buyer), 5000);
         assertEq(escrow.balances(buyer), 20_000);
     }
@@ -401,6 +432,12 @@ contract SettlementAndEscrowTest is Test {
             )
         );
         escrow.claimExpiredRefund(obligationId);
+
+        // Advance lifecycle: DELIVERY_VERIFIED -> SETTLEMENT_READY
+        vm.startPrank(operator);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
+        vm.stopPrank();
 
         // Advance timestamp past deadline
         vm.warp(deadline + 1);
@@ -535,5 +572,231 @@ contract SettlementAndEscrowTest is Test {
         vm.prank(address(settlement));
         vm.expectRevert(Escrow.InvalidParticipants.selector);
         escrow.executeSettlementTransfer(user, user, 1000);
+    }
+
+    function test_Escrow_SetSettlementContractSetOnce() public {
+        vm.prank(admin);
+        vm.expectRevert(Escrow.AlreadyInitialized.selector);
+        escrow.setSettlementContract(address(0x123));
+    }
+
+    // PHASE 2 REGRESSION TESTS: Real Accounting & Settlement Invariant
+    function test_Settlement_OneBuyerOneSeller_RealAccountingFlow() public {
+        address buyer = address(0xB001);
+        address seller = prosumer;
+        bytes32 obligationId = keccak256("obl-real-acct-01");
+        uint256 tradeAmount = 6000;
+        uint64 deadline = uint64(block.timestamp + 86400);
+
+        // Fund buyer
+        vm.startPrank(admin);
+        token.transfer(buyer, 10_000);
+        vm.stopPrank();
+
+        // Buyer deposits 10,000 into Escrow
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 10_000);
+        escrow.deposit(10_000);
+        vm.stopPrank();
+
+        uint256 buyerBalInitial = escrow.balances(buyer);
+        uint256 sellerBalInitial = escrow.balances(seller);
+        assertEq(buyerBalInitial, 10_000);
+        assertEq(sellerBalInitial, 0);
+
+        // Operator locks obligation
+        vm.prank(operator);
+        settlement.lockObligation(obligationId, buyer, seller, tradeAmount, 1, 48, deadline);
+
+        assertEq(escrow.lockedBalances(buyer), tradeAmount);
+        assertEq(escrow.getFreeBalance(buyer), 4000);
+
+        // Advance lifecycle: DELIVERY_VERIFIED -> SETTLEMENT_READY
+        vm.startPrank(operator);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
+
+        // Settle obligation
+        settlement.settleObligation(obligationId, tradeAmount);
+        vm.stopPrank();
+
+        // 1. Buyer balance decreased
+        assertEq(escrow.balances(buyer), buyerBalInitial - tradeAmount);
+        assertEq(escrow.lockedBalances(buyer), 0);
+        assertEq(escrow.getFreeBalance(buyer), 4000);
+
+        // 2. Seller balance increased
+        assertEq(escrow.balances(seller), sellerBalInitial + tradeAmount);
+
+        // 3. Exact conservation
+        assertEq(escrow.balances(buyer) + escrow.balances(seller), 10_000);
+        assertEq(escrow.totalDeposited(), 10_000);
+    }
+
+    function test_Settlement_PartialDelivery_ExcessUnlockedForBuyer() public {
+        address buyer = address(0xB002);
+        address seller = prosumer;
+        bytes32 obligationId = keccak256("obl-partial-01");
+        uint256 lockedAmount = 10_000;
+        uint256 deliveredAmount = 7000; // Partial delivery
+        uint64 deadline = uint64(block.timestamp + 86400);
+
+        vm.startPrank(admin);
+        token.transfer(buyer, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 10_000);
+        escrow.deposit(10_000);
+        vm.stopPrank();
+
+        vm.startPrank(operator);
+        settlement.lockObligation(obligationId, buyer, seller, lockedAmount, 1, 48, deadline);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
+
+        // Settle partial amount
+        settlement.settleObligation(obligationId, deliveredAmount);
+        vm.stopPrank();
+
+        // Seller receives delivered amount
+        assertEq(escrow.balances(seller), deliveredAmount);
+
+        // Buyer only charged delivered amount; 3,000 remaining unlocked as free balance
+        assertEq(escrow.balances(buyer), 3000);
+        assertEq(escrow.lockedBalances(buyer), 0);
+        assertEq(escrow.getFreeBalance(buyer), 3000);
+
+        // Exact conservation
+        assertEq(escrow.balances(buyer) + escrow.balances(seller), 10_000);
+    }
+
+    function test_Settlement_MultipleBuyersAndSellers_Conservation() public {
+        address buyer1 = address(0xB1);
+        address buyer2 = address(0xB2);
+        address seller1 = address(0x5111);
+        address seller2 = address(0x5222);
+
+        bytes32 partS1 = keccak256("part-s1");
+        bytes32 partS2 = keccak256("part-s2");
+
+        vm.startPrank(admin);
+        participants.registerParticipant(seller1, partS1, 1, ParticipantRegistry.RoleType.PROSUMER, keccak256("b-s1"));
+        participants.registerParticipant(seller2, partS2, 1, ParticipantRegistry.RoleType.PROSUMER, keccak256("b-s2"));
+        token.transfer(buyer1, 20_000);
+        token.transfer(buyer2, 15_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer1);
+        token.approve(address(escrow), 20_000);
+        escrow.deposit(20_000);
+        vm.stopPrank();
+
+        vm.startPrank(buyer2);
+        token.approve(address(escrow), 15_000);
+        escrow.deposit(15_000);
+        vm.stopPrank();
+
+        uint64 deadline = uint64(block.timestamp + 86400);
+
+        vm.startPrank(operator);
+        settlement.lockObligation(keccak256("obl-m1"), buyer1, seller1, 12_000, 1, 48, deadline);
+        settlement.lockObligation(keccak256("obl-m2"), buyer2, seller2, 8000, 1, 48, deadline);
+
+        settlement.updateObligationState(keccak256("obl-m1"), Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(keccak256("obl-m1"), Escrow.EscrowState.SETTLEMENT_READY);
+        settlement.updateObligationState(keccak256("obl-m2"), Escrow.EscrowState.DELIVERY_VERIFIED);
+        settlement.updateObligationState(keccak256("obl-m2"), Escrow.EscrowState.SETTLEMENT_READY);
+
+        settlement.settleObligation(keccak256("obl-m1"), 12_000);
+        settlement.settleObligation(keccak256("obl-m2"), 8000);
+        vm.stopPrank();
+
+        assertEq(escrow.balances(buyer1), 8000);
+        assertEq(escrow.balances(buyer2), 7000);
+        assertEq(escrow.balances(seller1), 12_000);
+        assertEq(escrow.balances(seller2), 8000);
+
+        // Economic Conservation Invariant
+        uint256 totalBalances = escrow.balances(buyer1) + escrow.balances(buyer2) + escrow.balances(seller1) + escrow.balances(seller2);
+        assertEq(totalBalances, 35_000);
+        assertEq(escrow.totalDeposited(), 35_000);
+    }
+
+    function test_Settlement_NegativeNetDebtor_CollectedBeforeCreditorClaims() public {
+        address buyer = address(0xDEB001);
+        address seller = prosumer;
+        bytes32 buyerPartId = keccak256("part-debtor-01");
+        uint32 dateEpoch = 25000;
+        uint32 zoneId = 1;
+
+        vm.startPrank(admin);
+        participants.registerParticipant(buyer, buyerPartId, zoneId, ParticipantRegistry.RoleType.CONSUMER, keccak256("b-debtor"));
+        token.transfer(buyer, 10_000);
+        vm.stopPrank();
+
+        // Debtor deposits funds in Escrow
+        vm.startPrank(buyer);
+        token.approve(address(escrow), 10_000);
+        escrow.deposit(10_000);
+        vm.stopPrank();
+
+        // Daily statement leaves:
+        // Leaf 0: Buyer debit of -5000 paise
+        // Leaf 1: Seller credit of +5000 paise
+        int256 buyerNet = -5000;
+        int256 sellerNet = 5000;
+
+        bytes32 leaf0 = keccak256(abi.encodePacked(bytes1(0x02), buyer, dateEpoch, buyerNet, uint64(5000), uint64(0), uint64(0), uint32(0)));
+        bytes32 leaf1 = keccak256(abi.encodePacked(bytes1(0x02), seller, dateEpoch, sellerNet, uint64(5000), uint64(0), uint64(0), uint32(1)));
+
+        // Binary Merkle tree root of leaf0 and leaf1
+        bytes32 statementRoot;
+        if (leaf0 < leaf1) {
+            statementRoot = keccak256(abi.encodePacked(leaf0, leaf1));
+        } else {
+            statementRoot = keccak256(abi.encodePacked(leaf1, leaf0));
+        }
+
+        bytes32[] memory proofBuyer = new bytes32[](1);
+        proofBuyer[0] = leaf1;
+        bytes32[] memory proofSeller = new bytes32[](1);
+        proofSeller[0] = leaf0;
+
+        bytes[] memory sigs = _signStatement(dateEpoch, zoneId, statementRoot, 5000, 5000);
+
+        vm.prank(operator);
+        settlement.postDailyStatement(dateEpoch, zoneId, statementRoot, 5000, 5000, sigs);
+
+        // 1. Seller claims BEFORE buyer pays -> settlement pool has 0 funds, must revert SettlementPoolExhausted
+        vm.prank(seller);
+        vm.expectRevert(BatchSettlement.SettlementPoolExhausted.selector);
+        settlement.claimSettlement(dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
+
+        // 2. Buyer (debtor) claims and pays debit into settlement pool
+        vm.prank(buyer);
+        settlement.claimSettlement(dateEpoch, zoneId, buyerNet, 5000, 0, 0, 0, proofBuyer);
+
+        assertEq(escrow.balances(buyer), 5000);
+        assertEq(escrow.balances(address(settlement)), 5000);
+
+        // 3. Now seller can claim credit successfully funded by buyer's debit
+        vm.prank(seller);
+        settlement.claimSettlement(dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
+
+        assertEq(escrow.balances(seller), 5000);
+        assertEq(escrow.balances(address(settlement)), 0);
+
+        // 4. Double claims by either party revert
+        vm.prank(buyer);
+        vm.expectRevert();
+        settlement.claimSettlement(dateEpoch, zoneId, buyerNet, 5000, 0, 0, 0, proofBuyer);
+
+        vm.prank(seller);
+        vm.expectRevert();
+        settlement.claimSettlement(dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
+
+        // 5. Total conservation
+        assertEq(escrow.balances(buyer) + escrow.balances(seller), 10_000);
     }
 }
