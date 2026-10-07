@@ -12,6 +12,7 @@ import { NavigationTab } from '../types/ui';
 import { voltmeshTestnet, SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID } from '../config/contracts';
 import { AttestationEnvelope, ClearingResult } from '@energy-dex/types';
 import { safeStringify } from '../lib/utils';
+import { useSession } from '../auth/SessionContext';
 
 export const PIPELINE_ORDER: PipelineStageId[] = [
   'METER',
@@ -528,6 +529,8 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
     [stages]
   );
 
+  const { session } = useSession();
+
   // Guard 2: Can the user execute the action on this stage?
   const canExecuteStage = useCallback(
     (stageId: PipelineStageId): boolean => {
@@ -539,9 +542,22 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (st.prerequisiteId && stages[st.prerequisiteId].status !== 'COMPLETED') {
         return false;
       }
+
+      // Check role authorization for executing stage actions
+      const role = session?.role;
+      if (stageId === 'CLEARING' || stageId === 'ORACLE' || stageId === 'MERKLE') {
+        if (role !== 'discom') return false;
+      } else if (stageId === 'SETTLEMENT') {
+        if (role !== 'discom' && role !== 'seller' && role !== 'buyer') return false;
+      } else if (stageId === 'CERTIFICATE') {
+        if (role !== 'seller') return false;
+      } else if (stageId === 'METER' || stageId === 'ATTESTATION') {
+        if (role !== 'seller' && role !== 'discom') return false;
+      }
+
       return true;
     },
-    [stages]
+    [stages, session?.role]
   );
 
   // Get the blocker stage preventing this stage

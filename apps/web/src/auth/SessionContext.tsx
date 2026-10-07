@@ -281,6 +281,31 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [sessions, activeAddress],
   );
 
+  // Authoritatively re-verify and refresh session profile against backend API
+  useEffect(() => {
+    if (!API || sessions.length === 0) return;
+
+    sessions.forEach(async (s) => {
+      if (!s.token) return;
+      try {
+        const res = await fetch(`${API}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${s.token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          const serverRole = (profile.role ? profile.role.toLowerCase() : null) as Role | null;
+          if (serverRole && serverRole !== s.role) {
+            setSessions((prev) =>
+              prev.map((item) => (same(item.address, s.address) ? { ...item, role: serverRole } : item))
+            );
+          }
+        }
+      } catch {
+        // API offline or unreachable
+      }
+    });
+  }, []);
+
   const addSession = useCallback((s: Session) => {
     setSessions((prev) => [...prev.filter((p) => !same(p.address, s.address)), s]);
     setActiveAddress(s.address);

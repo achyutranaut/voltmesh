@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import Fastify, { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AttestationEnvelope, SignerType } from '@energy-dex/types';
@@ -17,6 +18,7 @@ export interface AppOptions {
   storage?: IReadingStorage;
   trustedDevices?: Map<string, RegisteredDeviceProfile>;
   trustedKeys?: Map<string, Uint8Array>;
+  adminKey?: string;
 }
 
 // Zod schema for device registration (P1-11)
@@ -71,13 +73,21 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
   });
 
   // ---------------------------------------------------------------------------
-  // Authorized Device Registration (P0-10)
-  // ---------------------------------------------------------------------------
   app.post('/api/v1/metering/devices/register', async (request, reply) => {
-    const adminKey = process.env.GATEWAY_ADMIN_KEY || 'gateway-admin-key-voltmesh-2026';
+    const adminKey = options.adminKey ?? process.env.GATEWAY_ADMIN_KEY;
+    if (!adminKey || adminKey.length < 32) {
+      if (process.env.NODE_ENV !== 'test') {
+        throw new Error('FATAL: GATEWAY_ADMIN_KEY must be configured with at least 32 characters.');
+      }
+    }
+
     const authHeader = request.headers.authorization;
-    if (process.env.NODE_ENV !== 'test') {
-      if (!authHeader || authHeader.replace(/^Bearer\s+/i, '') !== adminKey) {
+    if (adminKey) {
+      const token = (authHeader || '').replace(/^Bearer\s+/i, '');
+      const tokenBuf = Buffer.from(token);
+      const expectedBuf = Buffer.from(adminKey);
+      const isMatch = tokenBuf.length === expectedBuf.length && crypto.timingSafeEqual(tokenBuf, expectedBuf);
+      if (!isMatch) {
         return reply.status(401).send({ error: 'UNAUTHORIZED_REGISTRATION', message: 'Valid gateway administrative authorization required' });
       }
     }

@@ -1282,6 +1282,38 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const tokenContract = getContract('MockERC20', DEFAULT_CHAIN_ID);
     if (!tokenContract || !address) throw new Error('Contract or address not ready');
 
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.token) {
+        headers['Authorization'] = `Bearer ${session.token}`;
+      }
+      const res = await fetch(`${apiUrl}/api/v1/faucet/mint`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          recipient: address,
+          amountPaise: amount.toString(),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const txHash = (data.txHash || '0x') as Hash;
+        recordActivity({
+          event: 'FaucetMinted',
+          details: `Minted 1,000 vUSD settlement tokens via server faucet`,
+          txHash,
+          type: 'faucet',
+        });
+        await refreshBalances();
+        return txHash;
+      }
+    } catch {
+      // Fallback to direct client call if server faucet endpoint unreachable
+    }
+
+    // Direct contract execution fallback
     const { hash } = await executeContractTx({
       description: `Mint 1,000 Test vUSD to ${address.slice(0, 6)}...${address.slice(-4)}`,
       address: tokenContract.address,
@@ -1532,9 +1564,13 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     let oracleSignature: Hex | undefined;
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.token) {
+        headers['Authorization'] = `Bearer ${session.token}`;
+      }
       const res = await fetch(`${apiUrl}/api/v1/oracle/sign-statement`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           chainId: DEFAULT_CHAIN_ID,
           settlementContractAddress: settlementContract.address,
@@ -1548,19 +1584,16 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (res.ok) {
         const data = await res.json();
         oracleSignature = data.signature;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Oracle signing request rejected: ${res.status}`);
       }
-    } catch {
-      // Fallback if standalone offline
+    } catch (err: any) {
+      throw new Error(err?.message || 'Oracle signature service unavailable. Private oracle key is not exposed in web bundle.');
     }
 
     if (!oracleSignature) {
-      const devKey = import.meta.env.VITE_DEV_ORACLE_KEY as Hex | undefined;
-      if (devKey) {
-        const devnetOracle = privateKeyToAccount(devKey);
-        oracleSignature = await devnetOracle.signMessage({ message: { raw: statementHash } });
-      } else {
-        throw new Error('Oracle signature required from backend service. Private oracle key is not exposed in web bundle.');
-      }
+      throw new Error('Oracle signature service returned empty signature.');
     }
 
     const { hash } = await executeContractTx({

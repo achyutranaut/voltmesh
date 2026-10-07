@@ -209,9 +209,13 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       let oracleSig: Hash | undefined;
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.token) {
+          headers['Authorization'] = `Bearer ${session.token}`;
+        }
         const res = await fetch(`${apiUrl}/api/v1/oracle/sign-epoch`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             chainId: chainId ?? DEFAULT_CHAIN_ID,
             oracleContractAddress: oracleConfig.address,
@@ -225,29 +229,16 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
         if (res.ok) {
           const data = await res.json();
           oracleSig = data.signature;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || `Oracle signing request rejected: ${res.status}`);
         }
-      } catch {
-        // Fallback if standalone offline
+      } catch (err: any) {
+        throw new Error(err?.message || 'Oracle signature service unavailable. Private oracle key is not exposed in web bundle.');
       }
 
       if (!oracleSig) {
-        const devKey = import.meta.env.VITE_DEV_ORACLE_KEY as Hex | undefined;
-        if (devKey) {
-          const oracleNode = new OracleNode({
-            operatorId: 'DISCOM_NODE',
-            privateKey: devKey,
-            oracleContractAddress: oracleConfig.address,
-            chainId: chainId ?? DEFAULT_CHAIN_ID,
-          });
-          const { signature } = await oracleNode.validateAndSignEpoch(
-            initialZoneId,
-            selectedInterval,
-            sampleReadings
-          );
-          oracleSig = signature.signature as Hash;
-        } else {
-          throw new Error('Oracle signature service required. Oracle private key is not exposed in web bundle.');
-        }
+        throw new Error('Oracle signature service returned empty signature.');
       }
 
       const tx = await commitEpochOnChain(

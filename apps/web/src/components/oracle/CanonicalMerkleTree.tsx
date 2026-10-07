@@ -27,6 +27,7 @@ import { EpochBuilder, BuiltEpoch } from '@energy-dex/epoch-builder';
 import { BinaryMerkleTree } from '@energy-dex/attestation';
 import { DetailDrawerData } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
+import { useSession } from '@/auth/SessionContext';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
 import { Hash, Hex, createPublicClient, http } from 'viem';
@@ -63,6 +64,8 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
     verifyLeafOnChain,
     chainId,
   } = useWallet();
+
+  const { session } = useSession();
 
   const {
     stages,
@@ -334,9 +337,13 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
       let oracleSig: Hash | undefined;
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.token) {
+          headers['Authorization'] = `Bearer ${session.token}`;
+        }
         const res = await fetch(`${apiUrl}/api/v1/oracle/sign-epoch`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             chainId: chainId ?? DEFAULT_CHAIN_ID,
             oracleContractAddress: oracleConfig.address,
@@ -350,29 +357,16 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
         if (res.ok) {
           const data = await res.json();
           oracleSig = data.signature;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || `Oracle signing request rejected: ${res.status}`);
         }
-      } catch {
-        // Fallback to dev key if available
+      } catch (err: any) {
+        throw new Error(err?.message || 'Oracle signature service unavailable. Private oracle key is not exposed in web bundle.');
       }
 
       if (!oracleSig) {
-        const devKey = import.meta.env.VITE_DEV_ORACLE_KEY as Hex | undefined;
-        if (devKey) {
-          const oracleNode = new OracleNode({
-            operatorId: 'DISCOM_NODE',
-            privateKey: devKey,
-            oracleContractAddress: oracleConfig.address,
-            chainId: chainId ?? DEFAULT_CHAIN_ID,
-          });
-          const { signature } = await oracleNode.validateAndSignEpoch(
-            currentZoneId,
-            currentInterval,
-            epoch.readings
-          );
-          oracleSig = signature.signature as Hash;
-        } else {
-          throw new Error('Oracle signature service required. Oracle private key is not exposed in web bundle.');
-        }
+        throw new Error('Oracle signature service returned empty signature.');
       }
 
       const tx = await commitEpochOnChain(

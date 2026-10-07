@@ -287,6 +287,107 @@ describe('Modular Monolith API Server', () => {
       expect(body.researchSubsystems.deterministicAuction.status).toBe('IMPLEMENTED');
       expect(body.researchSubsystems.deliveryReconciliation.status).toBe('IMPLEMENTED');
     });
+
+    it('rejects unauthenticated and unauthorized requests to oracle endpoints', async () => {
+      // 1. Unauthenticated request to sign-epoch returns 401
+      const unauthRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/sign-epoch',
+        payload: {
+          zoneId: 1,
+          intervalIdx: 10,
+          merkleRoot: '0x' + '11'.repeat(32),
+          leafCount: 4,
+          totalWh: '1000',
+        },
+      });
+      expect(unauthRes.statusCode).toBe(401);
+
+      // 2. Regular non-operator participant returns 403
+      const regularToken = app.jwt.sign({ address: '0x1111111111111111111111111111111111111111', role: 'PARTICIPANT' });
+      const forbiddenRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/sign-epoch',
+        headers: { authorization: `Bearer ${regularToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 10,
+          merkleRoot: '0x' + '11'.repeat(32),
+          leafCount: 4,
+          totalWh: '1000',
+        },
+      });
+      expect(forbiddenRes.statusCode).toBe(403);
+
+      // 3. Operator succeeds
+      const operatorToken = app.jwt.sign({ address: testWallet, role: 'OPERATOR' });
+      const opRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/sign-epoch',
+        headers: { authorization: `Bearer ${operatorToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 10,
+          merkleRoot: '0x' + '11'.repeat(32),
+          leafCount: 4,
+          totalWh: '1000',
+        },
+      });
+      expect(opRes.statusCode).toBe(200);
+      const opData = JSON.parse(opRes.payload);
+      expect(opData.signature).toBeDefined();
+      expect(opData.signerAddress).toBeDefined();
+
+      // 4. Operator with spoofed chainId is rejected
+      const spoofRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/sign-epoch',
+        headers: { authorization: `Bearer ${operatorToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: 10,
+          merkleRoot: '0x' + '11'.repeat(32),
+          leafCount: 4,
+          totalWh: '1000',
+          chainId: 1, // Malicious chainId
+        },
+      });
+      expect(spoofRes.statusCode).toBe(400);
+    });
+
+    it('processes authenticated faucet requests on testnet', async () => {
+      // 1. Unauthenticated request to faucet returns 401
+      const unauthRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/faucet/mint',
+        payload: { recipient: testWallet },
+      });
+      expect(unauthRes.statusCode).toBe(401);
+
+      // 2. Authenticated user requests mint
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/faucet/mint',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { recipient: testWallet },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.payload);
+      expect(data.status).toBe('SUCCESS');
+      expect(data.recipient).toBe(testWallet);
+
+      // 3. Request exceeding limit is rejected
+      const overLimitRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/faucet/mint',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          recipient: testWallet,
+          amountPaise: '9999999999999999999999999999',
+        },
+      });
+      expect(overLimitRes.statusCode).toBe(400);
+    });
   });
 });
 

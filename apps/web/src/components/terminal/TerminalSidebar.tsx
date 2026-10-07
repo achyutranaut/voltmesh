@@ -63,7 +63,7 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
   onReturnToStory,
 }) => {
   const { session } = useSession();
-  const isAllowed = (tab: TerminalNavTab) => !session?.role || canView(session.role, tab);
+  const isAllowed = (tab: TerminalNavTab) => !!session?.role && canView(session.role, tab);
 
   return (
     <Sidebar
