@@ -307,7 +307,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
     if (!searchQuery.trim()) return epoch.readings;
     const q = searchQuery.toLowerCase().trim();
     return epoch.readings.filter(
-      (r, idx) =>
+      (r: any, idx: number) =>
         r.deviceId.toLowerCase().includes(q) ||
         (epoch.leafHashes?.[idx] && epoch.leafHashes[idx].toLowerCase().includes(q))
     );
@@ -641,7 +641,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
 
           {/* Leaf Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-1.5 max-h-72 overflow-y-auto p-1.5 bg-[#0B0D0F] rounded border border-zinc-800">
-            {filteredLeaves.map((reading, idx) => {
+            {filteredLeaves.map((reading: any, idx: number) => {
               const isSelected = selectedLeafIndex === idx;
               return (
                 <button
@@ -781,7 +781,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
                       SIBLING HASHES ({inclusionProof.proof.length} ELEMENTS):
                     </span>
                     <div className="space-y-1 mt-1 max-h-40 overflow-y-auto">
-                      {inclusionProof.proof.map((sib, sIdx) => (
+                      {inclusionProof.proof.map((sib: any, sIdx: number) => (
                         <div
                           key={sIdx}
                           className="p-1.5 bg-zinc-950 border border-zinc-850 rounded font-mono text-[10px] text-zinc-400 break-all flex items-center justify-between"

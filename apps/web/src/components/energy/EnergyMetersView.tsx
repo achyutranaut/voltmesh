@@ -179,8 +179,8 @@ export const EnergyMetersView: React.FC<EnergyMetersViewProps> = ({
         { label: 'Enclave Security', value: 'Hardware RoT (Ed25519 Microchip ATECC608B)' },
       ],
       signature: latestEnvelope && meter.deviceId === 'meter-delhi-solar-001' ? {
-        publicKey: '0x' + Array.from(latestEnvelope.publicKey).map((b) => b.toString(16).padStart(2, '0')).join(''),
-        signatureHex: '0x' + Array.from(latestEnvelope.signature).map((b) => b.toString(16).padStart(2, '0')).join(''),
+        publicKey: '0x' + Array.from(latestEnvelope.publicKey).map((b: any) => b.toString(16).padStart(2, '0')).join(''),
+        signatureHex: '0x' + Array.from(latestEnvelope.signature).map((b: any) => b.toString(16).padStart(2, '0')).join(''),
         algorithm: 'Ed25519 (PureEdDSA SHA-512)',
         status: sigValid ? 'VALID' : 'INVALID',
       } : undefined,
