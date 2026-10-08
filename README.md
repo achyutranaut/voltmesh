@@ -1,20 +1,28 @@
 # VoltMesh — Decentralized P2P Energy Trading Platform
 
-[![CI Tests](https://github.com/voltmesh/platform/actions/workflows/test.yml/badge.svg)](https://github.com/voltmesh/platform)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Security Hardened](https://img.shields.io/badge/Security-Hardened-green.svg)](docs/FINAL_SECURITY_HARDENING_REPORT.md)
+[![CI](https://github.com/voltmesh/platform/actions/workflows/ci.yml/badge.svg)](https://github.com/voltmesh/platform)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Foundry](https://img.shields.io/badge/Built%20With-Foundry-orange.svg)](https://getfoundry.sh/)
+[![Security Hardened](https://img.shields.io/badge/Security-Hardened-emerald.svg)](docs/FINAL_SECURITY_HARDENING_REPORT.md)
 
-VoltMesh is a high-throughput, decentralized peer-to-peer (P2P) energy trading platform designed for modern power distribution networks, prosumers, and regional microgrids. It integrates sub-second uniform-price market clearing, verifiable smart contract settlement, cryptographic grid meter attestations, and an authoritative governance model enforcing strict separation of powers and conflict-of-interest prevention.
+VoltMesh is a high-throughput, decentralized peer-to-peer (P2P) energy trading platform and research prototype designed for modern power distribution networks, prosumers, and regional microgrids.
+
+> [!IMPORTANT]
+> **Mode S Sandbox Notice & Regulatory Disclaimer**
+> VoltMesh operates as a **Mode S (Simulation / Research Sandbox)** platform. All assets, tokens, and settlements are executed in a simulated sandbox environment using testnet tokens and synthetic meter attestations. VoltMesh **does NOT constitute legal electricity trading** under the Indian Electricity Act (2003) or relevant CERC/DERC/UPERC regulations. In India, peer-to-peer energy trading is strictly permitted only within regulator-approved pilots conducted by licensed distribution companies (DISCOMs). The certificates generated on VoltMesh are **prototype attestation certificates**, NOT statutory Renewable Energy Certificates (RECs) issued by central agencies (such as Grid-India).
 
 ---
 
 ## Architecture Overview
 
+VoltMesh integrates an off-chain sub-second double auction matcher, cryptographically attested smart meter hardware telemetry, verifiable on-chain Merkle commitments, and atomic smart contract settlements.
+
 ```mermaid
 flowchart TD
-    subgraph Clients["Clients & Gateways"]
+    subgraph Clients["Clients & Edge Ingest"]
         WEB["VoltMesh Web Terminal<br/>(React / Vite)"]
-        INGEST["Meter Ingest Gateway<br/>(ECDSA Hardware Telemetry)"]
+        INGEST["Meter Ingest Gateway<br/>(ECDSA / Ed25519 Telemetry)"]
+        SIM["Meter Simulator<br/>(15-min Intervals)"]
     end
 
     subgraph GovernanceSecurity["Governance & Security Core"]
@@ -24,37 +32,56 @@ flowchart TD
         AUDIT["Cryptographic Audit Trail<br/>(SHA-256 Hash Chain)"]
     end
 
-    subgraph MarketEngine["Market Clearing & Execution"]
+    subgraph MarketEngine["Market Clearing & Oracle"]
         API["VoltMesh API Service<br/>(Fastify REST / WS)"]
-        MATCHER["Uniform-Price Double Auction<br/>(High-Throughput Matcher)"]
-        ORACLE["Oracle Consensus Node<br/>(Grid Frequency & Tariff Quorum)"]
+        MATCHER["Uniform-Price Double Auction<br/>(Discrete Interval Matcher)"]
+        ORACLE["Epoch Oracle Node<br/>(3-Node Consensus & Merkle Tree)"]
     end
 
-    subgraph OnChain["On-Chain Settlement Layer (EVM)"]
+    subgraph OnChain["On-Chain Settlement Layer (Foundry / EVM)"]
         PR["ParticipantRegistry.sol"]
         AR["AccessRegistry.sol"]
+        EO["EpochOracle.sol"]
         SETTLE["BatchSettlement.sol"]
         ESCROW["Escrow.sol"]
-        CERT["CertificateRegistry.sol"]
+        CERT["Certificates.sol"]
     end
 
-    WEB -->|EIP-4361 SIWE| AUTH
+    SIM -->|Raw Telemetry| INGEST
     INGEST -->|Signed Ingestion| API
+    WEB -->|EIP-4361 SIWE| AUTH
     AUTH --> GOV_REG
     API --> COI_GATE
     COI_GATE --> MATCHER
     MATCHER --> SETTLE
+    ORACLE -->|Post Merkle Root| EO
     API --> AUDIT
     SETTLE --> ESCROW
     SETTLE --> CERT
-    ORACLE --> API
 ```
 
 ---
 
-## Governance, Role Isolation & Security Model
+## The 8-Stage Execution Pipeline
 
-VoltMesh enforces strict role separation between **Network Governance** and **Economic Trading Participants**:
+Every 15-minute trading interval progresses sequentially through an 8-stage verification pipeline:
+
+| Stage | Name | Layer | Description |
+| :--- | :--- | :--- | :--- |
+| **01** | `METER` | Simulated / Edge | Smart meter hardware records interval injection/consumption (DLMS/COSEM). |
+| **02** | `ATTESTATION` | Off-Chain | Cryptographic attestation envelope signed via device root-of-trust (Ed25519/ECDSA). |
+| **03** | `ORACLE` | Off-Chain | Decentralized oracle quorum collects readings, validates signatures, and forms epoch. |
+| **04** | `MERKLE` | On-Chain | Canonical binary Merkle root (RFC 6962 leaf prefix + OZ sorted pairs) committed to `EpochOracle.sol`. |
+| **05** | `CLEARING` | On-Chain / Engine | Uniform-price double auction clears bilateral supply and demand for the slot. |
+| **06** | `DELIVERY` | Simulated | Physical feeder telemetry verifies energy injection against contractual obligations. |
+| **07** | `SETTLEMENT` | On-Chain | Multi-party atomic netting, collateral deduction, and payout via `BatchSettlement.sol` & `Escrow.sol`. |
+| **08** | `CERTIFICATE` | On-Chain | Prototype Granular Attestation Certificates (GAC) minted on `Certificates.sol` (ERC-1155). |
+
+---
+
+## Governance, Role Isolation & Security
+
+VoltMesh enforces an immutable separation between **Network Governance** and **Economic Trading Participants**:
 
 ```
                        NETWORK GOVERNANCE
@@ -80,12 +107,9 @@ VoltMesh enforces strict role separation between **Network Governance** and **Ec
                       (Bidirectional Trader)
 ```
 
-### Core Security Guarantees
-1. **Authoritative Server-Side Governance**: Connected wallets and JWT tokens cannot self-assert privileged roles. Roles are strictly verified server-side via the `GovernanceRegistry`.
-2. **Zero Trading for Privileged Roles**: `REGULATOR`, `MARKET_OPERATOR`, `AUDITOR`, and `ORACLE_OPERATOR` identities are blocked with HTTP 403 (`GOVERNANCE_IDENTITY_CANNOT_TRADE`) if they attempt order placement (`RULE-002`).
-3. **11-Point Market Clearing Gate (`canClearMarket`)**: Operators must be chartered, active, non-expired, scoped to the specific zone (`ZONE-01`), and free of economic self-interest to execute market clearing.
-4. **Append-Only Cryptographic Audit Trail**: Every privileged action, market clear, suspension, and blocked attack is appended to a SHA-256 hash-chained log (`H_n = SHA256(H_{n-1} + Payload)`).
-5. **Interactive Attack Simulation Lab**: Built directly into both the backend API (`/api/v1/security/simulate-attack`) and the frontend portal to demonstrate real runtime prevention against 10 attack classes.
+- **Conflict-of-Interest Filter**: Privileged roles (`REGULATOR`, `MARKET_OPERATOR`, `AUDITOR`) are forbidden from submitting orders or holding trading positions.
+- **Auditable SHA-256 Hash Chain**: Privileged state changes are logged to an append-only, tamper-evident cryptographic chain.
+- **Contract Invariant Verification**: Smart contracts strictly enforce economic conservation and solvency (`locked <= balance`, `totalEscrowed == sum(deposits)`).
 
 ---
 
@@ -94,50 +118,83 @@ VoltMesh enforces strict role separation between **Network Governance** and **Ec
 ```
 ├── apps/
 │   └── web/                     # React / Vite Web Trading Terminal & Governance Portal
-├── contracts/                   # Foundry smart contracts (Settlement, Escrow, Registries)
-├── database/                    # PostgreSQL schemas & migrations (init.sql)
+├── contracts/                   # Foundry smart contracts (Solidity 0.8.24, OpenZeppelin v5.7)
+│   ├── src/                     # Core protocol contracts (Settlement, Escrow, Oracle, Registries)
+│   └── test/                    # Fuzz tests, invariant suites, and security simulations
+├── database/                    # TimescaleDB / PostgreSQL schemas and seed data
 ├── packages/
-│   ├── types/                   # Shared TypeScript interfaces & schemas
-│   ├── core/                    # Common utilities & crypto helpers
-│   └── sdk/                     # Client interaction SDK
+│   ├── attestation/             # Canonical hashing, Merkle tree construction & proof generation
+│   ├── clearing/                # Uniform-price double auction clearing engine
+│   └── types/                   # Shared TypeScript interfaces & protocol definitions
 ├── services/
-│   ├── api/                     # Core API server, Market Matcher, Governance & Audit
-│   │   ├── src/governance/      # GovernanceRegistry & AuditLogger implementation
-│   │   └── test/                # Comprehensive unit and integration test suites
-│   ├── ingest-gateway/          # Smart meter telemetry ingestion service
-│   └── oracle-node/             # Distributed grid tariff oracle node
-└── docs/                        # Architecture specs, security reports, and audits
+│   ├── api/                     # Fastify REST/WebSocket server, Governance registry & audit logger
+│   ├── epoch-builder/           # Aggregates meter readings and builds Merkle trees
+│   ├── ingest-gateway/          # Telemetry ingestion and anti-equivocation validator
+│   ├── matcher/                 # Continuous and discrete batch order matching
+│   └── oracle-node/             # Distributed grid tariff and consensus oracle node
+├── simulators/
+│   └── meter-sim/               # Realistic 15-minute grid generation and consumption simulator
+└── docs/                        # Architecture specifications, security audits, and whitepapers
 ```
 
 ---
 
-## Key Governance Documentation
+## Quickstart & Local Setup
 
-- [Governance Model Specification](GOVERNANCE_MODEL.md): Detailed specification of governance membership, lifecycle transitions, role capabilities, and trade-offs.
-- [Role Permission Matrix](ROLE_PERMISSION_MATRIX.md): Granular breakdown of `READ`, `ACTION`, and `FORBIDDEN` operations per role.
-- [Information Access Matrix](INFORMATION_ACCESS_MATRIX.md): Information disclosure rules preventing insider trading and front-running.
-- [Governance Current State Audit](GOVERNANCE_CURRENT_STATE.md): Initial audit of legacy role handling and vulnerability mitigations.
-- [Security Hardening Report](docs/FINAL_SECURITY_HARDENING_REPORT.md): In-depth security remediation and verification results.
+### Prerequisites
+- **Node.js**: `v20.x` or `v22.x`
+- **pnpm**: `v9.x` or `v11.x`
+- **Foundry**: `forge`, `cast`, `anvil` ([getfoundry.sh](https://getfoundry.sh/))
+- **Docker & Docker Compose**: (optional, for TimescaleDB)
 
----
-
-## Verification & Testing
-
-### Running Tests
-Execute the comprehensive test suites across the monorepo:
+### 1. Install Dependencies
 
 ```bash
-# Run all test suites in the API service (including governance tests)
-pnpm --filter @energy-dex/api test
+# Install workspace dependencies
+pnpm install
 
-# Run smart contract verification suites via Foundry
-cd contracts && forge test
-
-# Build all packages and web application
-pnpm build
+# Install Foundry submodules / libraries
+cd contracts
+forge install
+cd ..
 ```
 
-### Pre-Seeded Test Accounts (Anvil / Local Dev)
+### 2. Start Local Database (Optional)
+
+```bash
+docker compose up -d postgres
+```
+
+### 3. Build & Test
+
+```bash
+# Typecheck all TypeScript workspace packages
+pnpm -r typecheck
+
+# Run all TypeScript unit, benchmark, and integration suites
+pnpm vitest run
+
+# Run Foundry test and invariant suites
+cd contracts
+forge test
+cd ..
+```
+
+### 4. Run Development Services
+
+```bash
+# Start backend API service
+pnpm --filter @energy-dex/api dev
+
+# In a separate terminal, launch the Web Terminal
+pnpm --filter @energy-dex/web dev
+```
+
+---
+
+## Pre-Seeded Development Accounts
+
+When running against a local Anvil node (`anvil`), use the following accounts:
 
 | Account | Address | Role | Scope | Trading Permitted |
 | :--- | :--- | :--- | :--- | :--- |
