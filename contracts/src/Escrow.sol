@@ -215,6 +215,10 @@ contract Escrow is ReentrancyGuard {
         ObligationLock storage obl = obligationLocks[obligationId];
         if (obl.state == EscrowState.NONE) revert ObligationNotFound(obligationId);
 
+        if (newState == EscrowState.DELIVERY_VERIFIED && block.timestamp > obl.deadline) {
+            revert ObligationExpired(obligationId, block.timestamp, obl.deadline);
+        }
+
         EscrowState oldState = obl.state;
         if (!isValidTransition(oldState, newState)) {
             revert InvalidObligationStateTransition(obligationId, oldState, newState);
@@ -229,9 +233,6 @@ contract Escrow is ReentrancyGuard {
         if (obl.state == EscrowState.NONE) revert ObligationNotFound(obligationId);
         if (!isValidTransition(obl.state, EscrowState.SETTLED)) {
             revert InvalidObligationState(obligationId, obl.state, EscrowState.SETTLEMENT_READY);
-        }
-        if (block.timestamp > obl.deadline) {
-            revert ObligationExpired(obligationId, block.timestamp, obl.deadline);
         }
         if (settleAmount > obl.amount) revert InvalidAmount();
 
@@ -253,13 +254,16 @@ contract Escrow is ReentrancyGuard {
         balances[buyer] -= settleAmount;
         balances[seller] += settleAmount;
 
+        // Capture previous state for exact event emission
+        EscrowState prevState = obl.state;
+
         // Any leftover from original locked amount remains with buyer as unreserved free balance
         obl.state = EscrowState.SETTLED;
         obl.settledAt = uint64(block.timestamp);
 
         emit SettlementTransferred(buyer, seller, settleAmount);
         emit ObligationSettled(obligationId, buyer, seller, settleAmount);
-        emit ObligationStateChanged(obligationId, EscrowState.LOCKED, EscrowState.SETTLED);
+        emit ObligationStateChanged(obligationId, prevState, EscrowState.SETTLED);
     }
 
     function refundObligation(bytes32 obligationId) external onlySettlement nonReentrant {
@@ -278,12 +282,14 @@ contract Escrow is ReentrancyGuard {
         }
         lockedBalances[buyer] -= amount;
 
+        EscrowState prevState = obl.state;
+
         obl.state = EscrowState.REFUNDED;
         obl.settledAt = uint64(block.timestamp);
 
         emit CollateralReleased(buyer, amount);
         emit ObligationRefunded(obligationId, buyer, amount);
-        emit ObligationStateChanged(obligationId, EscrowState.LOCKED, EscrowState.REFUNDED);
+        emit ObligationStateChanged(obligationId, prevState, EscrowState.REFUNDED);
     }
 
     /**
@@ -292,8 +298,8 @@ contract Escrow is ReentrancyGuard {
     function claimExpiredRefund(bytes32 obligationId) external nonReentrant whenNotPaused {
         ObligationLock storage obl = obligationLocks[obligationId];
         if (obl.state == EscrowState.NONE) revert ObligationNotFound(obligationId);
-        if (obl.state == EscrowState.SETTLED || obl.state == EscrowState.REFUNDED) {
-            revert ObligationAlreadyTerminated(obligationId, obl.state);
+        if (obl.state != EscrowState.LOCKED) {
+            revert InvalidObligationState(obligationId, obl.state, EscrowState.LOCKED);
         }
         if (block.timestamp <= obl.deadline) {
             revert ObligationNotExpired(obligationId, block.timestamp, obl.deadline);
@@ -310,12 +316,14 @@ contract Escrow is ReentrancyGuard {
         }
         lockedBalances[buyer] -= amount;
 
+        EscrowState prevState = obl.state;
+
         obl.state = EscrowState.REFUNDED;
         obl.settledAt = uint64(block.timestamp);
 
         emit CollateralReleased(buyer, amount);
         emit ObligationRefunded(obligationId, buyer, amount);
-        emit ObligationStateChanged(obligationId, EscrowState.LOCKED, EscrowState.REFUNDED);
+        emit ObligationStateChanged(obligationId, prevState, EscrowState.REFUNDED);
     }
 
     function executeSettlementTransfer(
