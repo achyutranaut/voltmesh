@@ -3584,6 +3584,11 @@
           "name": "claimSettlement",
           "inputs": [
             {
+              "name": "participant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
               "name": "dateEpoch",
               "type": "uint32",
               "internalType": "uint32"

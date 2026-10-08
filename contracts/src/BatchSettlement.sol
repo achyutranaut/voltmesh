@@ -229,6 +229,7 @@ contract BatchSettlement {
     }
 
     function claimSettlement(
+        address participant,
         uint32 dateEpoch,
         uint32 zoneId,
         int256 netAmountPaise,
@@ -238,8 +239,8 @@ contract BatchSettlement {
         uint32 leafIndex,
         bytes32[] calldata merkleProof
     ) external whenNotPaused {
-        if (!participantRegistry.isRegisteredAndActive(msg.sender)) {
-            revert ParticipantNotActive(msg.sender);
+        if (!participantRegistry.isRegisteredAndActive(participant)) {
+            revert ParticipantNotActive(participant);
         }
 
         DailyStatement storage stmt = dailyStatements[dateEpoch][zoneId];
@@ -251,7 +252,7 @@ contract BatchSettlement {
         bytes32 leafHash = keccak256(
             abi.encodePacked(
                 STATEMENT_PREFIX,
-                msg.sender,
+                participant,
                 dateEpoch,
                 netAmountPaise,
                 deliveredWh,
@@ -277,15 +278,15 @@ contract BatchSettlement {
                 revert SettlementPoolExhausted();
             }
             // Funds released from escrow settlement pool to participant
-            escrow.executeSettlementTransfer(address(this), msg.sender, creditAmount);
+            escrow.executeSettlementTransfer(address(this), participant, creditAmount);
         } else if (netAmountPaise < 0) {
             uint256 debitAmount = uint256(-netAmountPaise);
             stmt.totalCollectedDebitsPaise += debitAmount;
             // Collect net debit from participant into settlement contract pool
-            escrow.executeSettlementTransfer(msg.sender, address(this), debitAmount);
+            escrow.executeSettlementTransfer(participant, address(this), debitAmount);
         }
 
-        emit SettlementClaimed(msg.sender, dateEpoch, zoneId, netAmountPaise, leafIndex);
+        emit SettlementClaimed(participant, dateEpoch, zoneId, netAmountPaise, leafIndex);
     }
 
     /**

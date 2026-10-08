@@ -432,6 +432,7 @@ contract SecurityAuditTest is Test {
         vm.prank(prosumer);
         vm.expectRevert(BatchSettlement.SettlementPoolExhausted.selector);
         settlement.claimSettlement(
+            prosumer,
             dateEpoch,
             zoneId,
             netAmount,
@@ -453,6 +454,7 @@ contract SecurityAuditTest is Test {
         // Prosumer claims settlement successfully now that statement debits are backed
         vm.prank(prosumer);
         settlement.claimSettlement(
+            prosumer,
             dateEpoch,
             zoneId,
             netAmount,

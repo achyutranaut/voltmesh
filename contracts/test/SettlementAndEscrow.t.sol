@@ -195,6 +195,7 @@ contract SettlementAndEscrowTest is Test {
         bytes32[] memory emptyProof = new bytes32[](0);
         vm.prank(prosumer);
         settlement.claimSettlement(
+            prosumer,
             dateEpoch,
             zoneId,
             netAmount,
@@ -211,6 +212,7 @@ contract SettlementAndEscrowTest is Test {
         vm.prank(prosumer);
         vm.expectRevert();
         settlement.claimSettlement(
+            prosumer,
             dateEpoch,
             zoneId,
             netAmount,
@@ -849,18 +851,18 @@ contract SettlementAndEscrowTest is Test {
         // 1. Seller claims BEFORE buyer pays -> settlement pool has 0 funds, must revert SettlementPoolExhausted
         vm.prank(seller);
         vm.expectRevert(BatchSettlement.SettlementPoolExhausted.selector);
-        settlement.claimSettlement(dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
+        settlement.claimSettlement(seller, dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
 
         // 2. Buyer (debtor) claims and pays debit into settlement pool
         vm.prank(buyer);
-        settlement.claimSettlement(dateEpoch, zoneId, buyerNet, 5000, 0, 0, 0, proofBuyer);
+        settlement.claimSettlement(buyer, dateEpoch, zoneId, buyerNet, 5000, 0, 0, 0, proofBuyer);
 
         assertEq(escrow.balances(buyer), 5000);
         assertEq(escrow.balances(address(settlement)), 5000);
 
         // 3. Now seller can claim credit successfully funded by buyer's debit
         vm.prank(seller);
-        settlement.claimSettlement(dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
+        settlement.claimSettlement(seller, dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
 
         assertEq(escrow.balances(seller), 5000);
         assertEq(escrow.balances(address(settlement)), 0);
@@ -868,11 +870,11 @@ contract SettlementAndEscrowTest is Test {
         // 4. Double claims by either party revert
         vm.prank(buyer);
         vm.expectRevert();
-        settlement.claimSettlement(dateEpoch, zoneId, buyerNet, 5000, 0, 0, 0, proofBuyer);
+        settlement.claimSettlement(buyer, dateEpoch, zoneId, buyerNet, 5000, 0, 0, 0, proofBuyer);
 
         vm.prank(seller);
         vm.expectRevert();
-        settlement.claimSettlement(dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
+        settlement.claimSettlement(seller, dateEpoch, zoneId, sellerNet, 5000, 0, 0, 1, proofSeller);
 
         // 5. Total conservation
         assertEq(escrow.balances(buyer) + escrow.balances(seller), 10_000);
