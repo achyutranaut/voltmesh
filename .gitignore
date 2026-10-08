@@ -16,6 +16,7 @@ pnpm-debug.log*
 .env.*.local
 
 # Foundry
+contracts/lib/
 contracts/cache/
 contracts/out/
 contracts/broadcast/
