@@ -2,7 +2,7 @@
 
 ## Mass-Scale Research & Architecture Specification — V1 (Phase 2)
 
-**Date:** 1 October 2026 · **Primary jurisdiction:** India · **Status:** research and architecture blueprint (no code)
+**Date:** 1 October 2026 · **Primary jurisdiction:** India · **Status:** active prototype and architecture specification (Phase 3 implementation in repository)
 
 **Evidence key used throughout** (so you can see how much weight each statement carries):
 
