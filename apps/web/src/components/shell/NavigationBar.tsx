@@ -13,8 +13,8 @@ interface NavigationBarProps {
 export const NavigationBar: React.FC<NavigationBarProps> = ({
   activeTab,
   onTabChange,
-  orderCount = 2,
-  meterCount = 6,
+  orderCount = 0,
+  meterCount,
   certCount = 0,
 }) => {
   const tabs = [
@@ -22,13 +22,13 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       id: 'market' as NavigationTab,
       label: 'CALL MARKET',
       icon: Sliders,
-      badge: `${orderCount} ORDERS`,
+      badge: orderCount > 0 ? `${orderCount} ORDERS` : undefined,
     },
     {
       id: 'energy' as NavigationTab,
       label: 'METERS & TELEMETRY',
       icon: Zap,
-      badge: `${meterCount} METERS`,
+      badge: meterCount !== undefined ? `${meterCount} METERS` : undefined,
     },
     {
       id: 'oracle' as NavigationTab,

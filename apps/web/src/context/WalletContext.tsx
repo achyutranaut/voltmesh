@@ -304,12 +304,24 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       };
     }
 
-    if (roles.isAdmin || roles.isOperator) {
+    if (roles.isOperator) {
       return {
         canBuy: true,
         canSell: true,
         canRegisterDevice: true,
         canClearMarket: true,
+        canOperate: true,
+        canIssueCredentials: true,
+        canAudit: true,
+      };
+    }
+
+    if (roles.isAdmin) {
+      return {
+        canBuy: true,
+        canSell: true,
+        canRegisterDevice: true,
+        canClearMarket: false,
         canOperate: true,
         canIssueCredentials: true,
         canAudit: true,

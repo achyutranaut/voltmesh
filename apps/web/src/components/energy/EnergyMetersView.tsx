@@ -74,7 +74,7 @@ export const EnergyMetersView: React.FC<EnergyMetersViewProps> = ({
       sourceType: SourceType.SOLAR_PV,
       ratedCapacityW: BigInt(ratedCapacity),
       cumulativeWh: 142850n,
-      latestIntervalWh: latestEnvelope ? latestEnvelope.payload.energyWh : 1250n,
+      latestIntervalWh: latestEnvelope ? latestEnvelope.payload.energyWh : 0n,
       direction: 0,
       status: activeFault !== SimulatedFault.NONE ? 'WARNING' : 'ONLINE',
       firmware: 'FW-v2.4.1-SGX',

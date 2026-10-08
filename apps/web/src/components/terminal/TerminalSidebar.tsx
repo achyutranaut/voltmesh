@@ -57,7 +57,7 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
   activeTab,
   onTabChange,
   orderCount = 0,
-  meterCount = 6,
+  meterCount,
   certCount = 0,
   onOpenWalletModal,
   onReturnToStory,

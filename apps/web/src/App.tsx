@@ -164,61 +164,8 @@ export default function App() {
   const [equivocationEnvelope, setEquivocationEnvelope] = useState<AttestationEnvelope | null>(null);
   const [sigValid, setSigValid] = useState<boolean | null>(null);
 
-  // Market Orders State
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      orderId: 'b-01',
-      participant: '0x2222222222222222222222222222222222222222',
-      zoneId: 1,
-      intervalIdx: initialMonotonicInterval,
-      side: OrderSide.BUY,
-      quantityWh: 2000n,
-      pricePaisePerKWh: 550n,
-      nonce: 1n,
-      expiry: Math.floor(Date.now() / 1000) + 3600,
-      signature: new Uint8Array(65),
-      createdAt: Math.floor(Date.now() / 1000) - 50,
-    },
-    {
-      orderId: 'b-02',
-      participant: '0x4444444444444444444444444444444444444444',
-      zoneId: 1,
-      intervalIdx: initialMonotonicInterval,
-      side: OrderSide.BUY,
-      quantityWh: 1500n,
-      pricePaisePerKWh: 480n,
-      nonce: 2n,
-      expiry: Math.floor(Date.now() / 1000) + 3600,
-      signature: new Uint8Array(65),
-      createdAt: Math.floor(Date.now() / 1000) - 40,
-    },
-    {
-      orderId: 's-01',
-      participant: '0x1111111111111111111111111111111111111111',
-      zoneId: 1,
-      intervalIdx: initialMonotonicInterval,
-      side: OrderSide.SELL,
-      quantityWh: 2000n,
-      pricePaisePerKWh: 350n,
-      nonce: 1n,
-      expiry: Math.floor(Date.now() / 1000) + 3600,
-      signature: new Uint8Array(65),
-      createdAt: Math.floor(Date.now() / 1000) - 60,
-    },
-    {
-      orderId: 's-02',
-      participant: '0x5555555555555555555555555555555555555555',
-      zoneId: 1,
-      intervalIdx: initialMonotonicInterval,
-      side: OrderSide.SELL,
-      quantityWh: 1000n,
-      pricePaisePerKWh: 400n,
-      nonce: 2n,
-      expiry: Math.floor(Date.now() / 1000) + 3600,
-      signature: new Uint8Array(65),
-      createdAt: Math.floor(Date.now() / 1000) - 30,
-    },
-  ]);
+  // Market Orders State (Driven by live API / User Wallet Signatures)
+  const [orders, setOrders] = useState<Order[]>([]);
 
   const [clearingResult, setClearingResult] = useState<ClearingResult | null>(null);
 
@@ -268,7 +215,7 @@ export default function App() {
       priceFloorPaiseKWh: 200n,
       priceCapPaiseKWh: 1200n,
       zoneCapacityWh: 1000000n,
-      epochSeed: 'seed-web-production-01',
+      epochSeed: `zone-1-interval-${currentInterval}`,
       gateClosureTimestamp: now - 50,
     });
     setClearingResult(result);
@@ -280,29 +227,22 @@ export default function App() {
   // 3. Build Epoch Merkle Tree
   const handleBuildEpoch = () => {
     if (!can(session?.role, 'epoch.build')) return;
-    const readings = [
-      {
-        deviceId: 'meter-delhi-solar-001',
-        zoneId: 1,
-        intervalIdx: currentInterval,
-        energyWh: latestEnvelope ? latestEnvelope.payload.energyWh : 1250n,
-        direction: 0,
-        counter: 1n,
-        timestampUtc: Math.floor(Date.now() / 1000),
-      },
-      {
-        deviceId: 'meter-delhi-solar-002',
-        zoneId: 1,
-        intervalIdx: currentInterval,
-        energyWh: 1500n,
-        direction: 0,
-        counter: 1n,
-        timestampUtc: Math.floor(Date.now() / 1000),
-      },
-    ];
+    const readings = latestEnvelope
+      ? [
+          {
+            deviceId: latestEnvelope.payload.deviceId,
+            zoneId: latestEnvelope.payload.zoneId,
+            intervalIdx: latestEnvelope.payload.intervalIdx,
+            energyWh: latestEnvelope.payload.energyWh,
+            direction: latestEnvelope.payload.direction,
+            counter: latestEnvelope.payload.counter,
+            timestampUtc: latestEnvelope.payload.timestampUtc,
+          },
+        ]
+      : [];
 
     const epoch = EpochBuilder.buildEpoch(1, currentInterval, readings as any);
-    const proof = epoch.getProofForDevice('meter-delhi-solar-001');
+    const proof = readings.length > 0 ? epoch.getProofForDevice(readings[0].deviceId) : [];
     setEpochData({ ...epoch, proof, readingsCount: readings.length });
   };
 
@@ -487,7 +427,6 @@ export default function App() {
             }}
             currentInterval={currentInterval}
             orderCount={orders.length}
-            meterCount={6}
             certCount={claimedCerts.length}
             inspectorData={detailDrawerData}
             onCloseInspector={() => setDetailDrawerData(null)}

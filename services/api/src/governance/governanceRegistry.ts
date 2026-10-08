@@ -222,8 +222,8 @@ export class GovernanceRegistry {
       };
     }
 
-    // 4. Role == MARKET_OPERATOR (or ADMIN)
-    if (member.role !== 'MARKET_OPERATOR' && member.role !== 'ADMIN') {
+    // 4. Role == MARKET_OPERATOR (strictly MARKET_OPERATOR; no single admin may clear markets per regulatory rules)
+    if (member.role !== 'MARKET_OPERATOR') {
       return {
         allowed: false,
         failureCode: 'MARKET_OPERATOR_REQUIRED',
@@ -444,5 +444,9 @@ export class GovernanceRegistry {
 
   public isMarketSuspended(identifier: string): boolean {
     return this.emergencyMarketSuspensions.has(identifier);
+  }
+
+  public getSuspendedMembersCount(): number {
+    return Array.from(this.members.values()).filter((m) => m.status === 'SUSPENDED').length;
   }
 }

@@ -15,6 +15,7 @@
     "@energy-dex/attestation": "workspace:*",
     "@energy-dex/clearing": "workspace:*",
     "@energy-dex/epoch-builder": "workspace:*",
+    "@energy-dex/market-data": "workspace:*",
     "@energy-dex/matcher": "workspace:*",
     "@energy-dex/types": "workspace:*",
     "@fastify/cors": "^10.0.1",

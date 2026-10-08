@@ -29,7 +29,7 @@ export const TerminalShell: React.FC<TerminalShellProps> = ({
   onTabChange,
   currentInterval,
   orderCount = 0,
-  meterCount = 6,
+  meterCount,
   certCount = 0,
   inspectorData,
   onCloseInspector,

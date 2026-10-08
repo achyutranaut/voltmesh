@@ -21,6 +21,7 @@ const EnergyExchangeEngine = lazy(() =>
     default: m.EnergyExchangeEngine,
   }))
 );
+import { useMarketData } from '@/hooks/useMarketData';
 
 export interface CallMarketViewProps {
   currentInterval: number;
@@ -52,6 +53,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
   } = usePipeline();
   const [show3DEngine, setShow3DEngine] = useState(false);
   const [activeChartTab, setActiveChartTab] = useState<'price' | 'depth'>('price');
+  const { referencePrice } = useMarketData(1);
 
   // Filter Bids and Asks
   const bids = useMemo(() => {
@@ -262,6 +264,10 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
               <PriceChart
                 currentPrice={clearingPrice ? parseFloat(clearingPrice) : null}
                 clearingPrice={clearingPrice ? parseFloat(clearingPrice) : null}
+                referencePricePaise={referencePrice?.value ?? null}
+                referencePriceSource={referencePrice?.source}
+                referencePriceAsOf={referencePrice?.asOf}
+                referencePriceStale={referencePrice?.stale}
                 intervalIdx={currentInterval}
               />
             ) : (
@@ -288,6 +294,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
             currentInterval={currentInterval}
             zoneId={1}
             existingOrders={orders}
+            referencePricePaise={referencePrice?.value ?? null}
             onAddOrder={onAddOrder}
           />
         </div>

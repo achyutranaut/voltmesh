@@ -60,8 +60,10 @@ import {
   DISCOMIdentityAdapter,
 } from './adapters/index.js';
 import { GovernanceRegistry, AuditLogger } from './governance/index.js';
+import { CompositeMarketService } from '@energy-dex/market-data';
 
 export interface ApiServerOptions {
+  marketDataService?: CompositeMarketService;
   jwtSecret?: string;
   matcher?: BatchMatcher;
   meterAdapter?: SimulatorMeterAdapter;
@@ -221,12 +223,24 @@ export function deriveCapabilities(
   userDevices: Device[] = [],
   hasDeclaredSolarPosition: boolean = false
 ): ParticipantCapabilities {
-  if (userRole === 'OPERATOR' || userRole === 'ADMIN') {
+  if (userRole === 'OPERATOR') {
     return {
       canBuy: true,
       canSell: true,
       canRegisterDevice: true,
       canClearMarket: true,
+      canOperate: true,
+      canIssueCredentials: true,
+      canAudit: true,
+    };
+  }
+
+  if (userRole === 'ADMIN') {
+    return {
+      canBuy: true,
+      canSell: true,
+      canRegisterDevice: true,
+      canClearMarket: false,
       canOperate: true,
       canIssueCredentials: true,
       canAudit: true,
@@ -353,9 +367,11 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // Governance Registry & Audit Logger: only seed dev members if allowDevKeys is explicitly true
   const governance = options.governanceRegistry ?? new GovernanceRegistry(allowDevKeys);
   const auditLogger = options.auditLogger ?? new AuditLogger();
+  const marketDataService = options.marketDataService ?? new CompositeMarketService();
   (app as any).governance = governance;
   (app as any).governanceRegistry = governance;
   (app as any).auditLogger = auditLogger;
+  (app as any).marketDataService = marketDataService;
 
   // P0-8: Server-side RBAC Role Registry
   const roleRegistry = new Map<string, UserRole>(options.userRoles ?? []);
@@ -417,6 +433,19 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   // Seed default Day-Ahead Market Session (Tomorrow delivery in Indian Market Date Epoch)
   const tomorrowEpoch = getIndianMarketDateEpoch() + 1;
+
+  auditLogger.setDependencies({
+    governanceRegistry: governance,
+    deviceStore: {
+      getDeviceCounts: () => {
+        const devList = Array.from(devices.values());
+        const registered = devList.length;
+        const revoked = devList.filter((d: any) => d.status === 'REVOKED' || d.status === 'QUARANTINED').length;
+        const active = devList.filter((d: any) => !d.status || d.status === 'ACTIVE').length;
+        return { registered, active, revoked };
+      },
+    },
+  });
   const damSession: MarketSession = {
     sessionId: `dam-session-${tomorrowEpoch}-zone1`,
     marketType: 'DAY_AHEAD',
@@ -504,7 +533,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
             canBuy: false,
             canSell: false,
             canRegisterDevice: false,
-            canClearMarket: true,
+            canClearMarket: false,
             canOperate: true,
             canIssueCredentials: true,
             canAudit: true,
@@ -593,6 +622,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       (request as any).authenticatedUser = {
         address: lower,
         role: userRole,
+        govRole: govMember && govMember.status === 'ACTIVE' ? govMember.role : undefined,
+        jurisdiction: govMember?.jurisdiction,
         capabilities,
         participantId: participants.get(lower)?.participantId,
         tokenVersion: payload.tokenVersion ?? currentVer,
@@ -3020,36 +3051,158 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     };
   });
 
-  app.get('/api/v1/security/metrics', async () => {
+  const SecurityEventsQuerySchema = z.object({
+    category: z.string().optional(),
+    severity: z.string().optional(),
+    actorWallet: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  });
+
+  const AuditTrailQuerySchema = z.object({
+    role: z.string().optional(),
+    action: z.string().optional(),
+    actorWallet: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  });
+
+  app.get('/api/v1/security/metrics', { preHandler: authenticate }, async () => {
     return auditLogger.getSystemMetrics();
   });
 
-  app.get('/api/v1/security/events', async (request) => {
-    const q = (request.query || {}) as { category?: string; severity?: string; limit?: string };
-    return auditLogger.getSecurityEvents({
+  app.get('/api/v1/security/events', { preHandler: authenticate }, async (request, reply) => {
+    const parsed = SecurityEventsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Invalid security events query parameters',
+        details: parsed.error.errors,
+      });
+    }
+
+    const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string; jurisdiction?: string };
+    const q = parsed.data;
+
+    let events = auditLogger.getSecurityEvents({
       category: q.category,
       severity: q.severity,
-      limit: q.limit ? parseInt(q.limit, 10) : 50,
+      limit: 500, // fetch up to max so we can role-scope accurately
     });
+
+    const isRegulatorOrAuditor =
+      user.govRole === 'REGULATOR' || user.govRole === 'AUDITOR' || user.role === 'ADMIN' || user.role === 'AUDITOR';
+
+    if (isRegulatorOrAuditor) {
+      if (q.actorWallet) {
+        events = events.filter((e) => (e.actorWallet || e.actor || '').toLowerCase() === q.actorWallet!.toLowerCase());
+      }
+    } else if (user.govRole === 'MARKET_OPERATOR' || user.role === 'OPERATOR') {
+      let allowedZone: number | undefined;
+      if (user.jurisdiction && user.jurisdiction.startsWith('ZONE-')) {
+        allowedZone = parseInt(user.jurisdiction.replace('ZONE-', ''), 10);
+      }
+      events = events.filter((e) => {
+        if (allowedZone !== undefined) {
+          return e.zone === undefined || e.zone === allowedZone;
+        }
+        return true;
+      });
+      if (q.actorWallet) {
+        events = events.filter((e) => (e.actorWallet || e.actor || '').toLowerCase() === q.actorWallet!.toLowerCase());
+      }
+    } else {
+      // Normal participant: ONLY own events
+      const myWallet = user.address.toLowerCase();
+      events = events.filter(
+        (e) =>
+          (e.actorWallet && e.actorWallet.toLowerCase() === myWallet) ||
+          (e.actor && e.actor.toLowerCase() === myWallet) ||
+          (e.wallet && e.wallet.toLowerCase() === myWallet)
+      );
+    }
+
+    return events.slice(0, q.limit);
   });
 
-  app.get('/api/v1/security/audit-trail', async (request) => {
-    const q = (request.query || {}) as { role?: string; action?: string; limit?: string };
-    return auditLogger.getAuditEvents({
+  app.get('/api/v1/security/audit-trail', { preHandler: authenticate }, async (request, reply) => {
+    const parsed = AuditTrailQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Invalid audit trail query parameters',
+        details: parsed.error.errors,
+      });
+    }
+
+    const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string; jurisdiction?: string };
+    const q = parsed.data;
+
+    let events = auditLogger.getAuditEvents({
       role: q.role,
       action: q.action,
-      limit: q.limit ? parseInt(q.limit, 10) : 50,
+      actorWallet: q.actorWallet,
+      limit: 500,
     });
+
+    const isRegulatorOrAuditor =
+      user.govRole === 'REGULATOR' || user.govRole === 'AUDITOR' || user.role === 'ADMIN' || user.role === 'AUDITOR';
+
+    if (isRegulatorOrAuditor) {
+      // Full view
+    } else if (user.govRole === 'MARKET_OPERATOR' || user.role === 'OPERATOR') {
+      let allowedZone: number | undefined;
+      if (user.jurisdiction && user.jurisdiction.startsWith('ZONE-')) {
+        allowedZone = parseInt(user.jurisdiction.replace('ZONE-', ''), 10);
+      }
+      events = events.filter((e) => {
+        if (allowedZone !== undefined) {
+          return e.zoneId === undefined || e.zoneId === allowedZone;
+        }
+        return true;
+      });
+    } else {
+      // Normal participant: ONLY own events
+      const myWallet = user.address.toLowerCase();
+      events = events.filter(
+        (e) =>
+          e.actorWallet.toLowerCase() === myWallet ||
+          (e.targetWallet && e.targetWallet.toLowerCase() === myWallet)
+      );
+    }
+
+    return events.slice(0, q.limit);
   });
 
-  app.get('/api/v1/security/audit-trail/verify', async () => {
-    return auditLogger.verifyAuditTrailIntegrity();
+  app.get('/api/v1/security/audit-trail/verify', { preHandler: authenticate }, async () => {
+    return auditLogger.verifyIntegrityCombined();
   });
 
   // ---------------------------------------------------------------------------
   // 16. Security Lab Attack Simulations (Part 20: Attacks 1 through 10)
   // ---------------------------------------------------------------------------
-  app.post('/api/v1/security/simulate-attack', async (request, reply) => {
+  app.post('/api/v1/security/simulate-attack', { preHandler: authenticate }, async (request, reply) => {
+    if (process.env.NODE_ENV === 'production') {
+      return reply.status(403).send({
+        error: 'DRILL_DISABLED_IN_PRODUCTION',
+        message: 'Security attack simulation drills are strictly prohibited in production environments',
+      });
+    }
+
+    const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string };
+    const isRegulatorOrOperator =
+      user.govRole === 'REGULATOR' ||
+      user.govRole === 'MARKET_OPERATOR' ||
+      user.govRole === 'AUDITOR' ||
+      user.role === 'OPERATOR' ||
+      user.role === 'ADMIN' ||
+      user.role === 'AUDITOR';
+
+    if (!isRegulatorOrOperator) {
+      return reply.status(403).send({
+        error: 'INSUFFICIENT_PERMISSIONS',
+        message: 'Only regulatory or operator identities may trigger attack simulation drills',
+      });
+    }
+
     const body = (request.body || {}) as { attackId?: number | string; attackType?: string };
     const attackId = body.attackType ?? body.attackId;
     const now = Math.floor(Date.now() / 1000);
@@ -3719,5 +3872,96 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // 17. External Advisory Market Data Endpoints (Phase 3)
+  // ---------------------------------------------------------------------------
+  const ReferencePriceQuerySchema = z.object({
+    zoneId: z.coerce.number().int().positive().default(1),
+    from: z.coerce.number().int().nonnegative().optional(),
+    to: z.coerce.number().int().nonnegative().optional(),
+  });
+
+  const IrradianceQuerySchema = z.object({
+    zoneId: z.coerce.number().int().positive().default(1),
+    from: z.coerce.number().int().nonnegative().optional(),
+    to: z.coerce.number().int().nonnegative().optional(),
+  });
+
+  app.get('/api/v1/market-data/reference-price', { preHandler: authenticate }, async (request, reply) => {
+    const parsed = ReferencePriceQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Invalid reference price query parameters',
+        details: parsed.error.errors,
+      });
+    }
+
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const intervalStart = parsed.data.from ?? nowSec;
+      const refPrice = await marketDataService.getReferencePrice(parsed.data.zoneId, intervalStart);
+      return reply.send(refPrice);
+    } catch (err: any) {
+      auditLogger.recordSecurityEvent({
+        category: 'ORACLE',
+        severity: 'LOW',
+        action: 'MARKET_DATA_FETCH_FAILURE',
+        actorWallet: (request as any).userAddress ?? '0x0000000000000000000000000000000000000000',
+        result: 'FAILED',
+        reason: err.message,
+      });
+      return reply.status(502).send({
+        error: 'MARKET_DATA_UNAVAILABLE',
+        message: 'Advisory reference price data is temporarily unavailable.',
+      });
+    }
+  });
+
+  app.get('/api/v1/market-data/irradiance', { preHandler: authenticate }, async (request, reply) => {
+    const parsed = IrradianceQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Invalid irradiance query parameters',
+        details: parsed.error.errors,
+      });
+    }
+
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const from = parsed.data.from ?? nowSec - 3600;
+      const to = parsed.data.to ?? nowSec + 86400;
+      const data = await marketDataService.getSolarIrradiance(from, to);
+      return reply.send(data);
+    } catch (err: any) {
+      auditLogger.recordSecurityEvent({
+        category: 'ORACLE',
+        severity: 'LOW',
+        action: 'IRRADIANCE_DATA_FETCH_FAILURE',
+        actorWallet: (request as any).userAddress ?? '0x0000000000000000000000000000000000000000',
+        result: 'FAILED',
+        reason: err.message,
+      });
+      return reply.status(502).send({
+        error: 'WEATHER_DATA_UNAVAILABLE',
+        message: 'Advisory solar irradiance data is temporarily unavailable.',
+      });
+    }
+  });
+
+  app.get('/api/v1/market-data/status', { preHandler: authenticate }, async (_request, reply) => {
+    try {
+      const status = await marketDataService.getStatus();
+      return reply.send(status);
+    } catch (err: any) {
+      return reply.status(500).send({
+        error: 'STATUS_CHECK_FAILED',
+        message: err.message,
+      });
+    }
+  });
+
   return app;
 }
+

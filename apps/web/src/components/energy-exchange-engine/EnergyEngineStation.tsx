@@ -106,10 +106,10 @@ export const ENERGY_STATIONS: StationDefinition[] = [
     input: 'EIP-712 Signed Bids & Offers',
     process: 'k = 0.5 Midpoint Rule Uniform Price Double Auction',
     output: 'Uniform Clearing Price & Obligations',
-    status: 'MARKET CLEARED (P* = ₹4.50/kWh)',
+    status: 'SAMPLE SIMULATION (P* = ₹4.50/kWh)',
     description: 'Automated 15-minute call market clearing matching supply and demand curves.',
     specs: [
-      { label: 'CLEARING PRICE', value: '₹4.50 / kWh (450 Paise)' },
+      { label: 'SAMPLE CLEARING PRICE', value: '₹4.50 / kWh (Sample Model)' },
       { label: 'CLEARED VOLUME', value: '2,000 Wh (2.0 kWh)' },
       { label: 'OBLIGATIONS MINTED', value: '2 Bilateral Pairs' },
       { label: 'ALGORITHM', value: 'k=0.5 Discrete Uniform' },

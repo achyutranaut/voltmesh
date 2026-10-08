@@ -13,6 +13,8 @@ import {
 } from 'recharts';
 import { RefreshCw, Zap, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { MeterTable, MeterItem } from './MeterTable';
+import { useMarketData } from '@/hooks/useMarketData';
+import { DataSourceBadge } from '@/components/common/DataSourceBadge';
 
 export interface MetersViewProps {
   currentInterval: number;
@@ -39,6 +41,18 @@ export const MetersView: React.FC<MetersViewProps> = ({
   sigValid,
   onSelectDetail,
 }) => {
+  const { currentGhi } = useMarketData(1);
+
+  // Compute physical generation Wh from current GHI if envelope is not yet generated
+  const expectedSolarWh = useMemo(() => {
+    if (currentGhi) {
+      if (currentGhi.value <= 5) return 0n;
+      const kWp = ratedCapacity / 1000;
+      return BigInt(Math.max(0, Math.round(kWp * 1000 * (currentGhi.value / 1000) * 0.8 * 0.25)));
+    }
+    return 0n;
+  }, [currentGhi, ratedCapacity]);
+
   const registeredMeters: MeterItem[] = useMemo(
     () => [
       {
@@ -47,7 +61,7 @@ export const MetersView: React.FC<MetersViewProps> = ({
         sourceType: SourceType.SOLAR_PV,
         ratedCapacityW: BigInt(ratedCapacity),
         cumulativeWh: 142850n,
-        latestIntervalWh: latestEnvelope ? latestEnvelope.payload.energyWh : 1250n,
+        latestIntervalWh: latestEnvelope ? latestEnvelope.payload.energyWh : expectedSolarWh,
         direction: 0,
         status: activeFault !== SimulatedFault.NONE ? 'WARNING' : 'ONLINE',
         firmware: 'FW-v2.4.1-SGX',
@@ -334,6 +348,19 @@ export const MetersView: React.FC<MetersViewProps> = ({
         activeFault={activeFault}
         onSelectDetail={onSelectDetail}
       />
+
+      {/* Attribution and Advisory Notice */}
+      <div className="pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+        <span>Advisory solar irradiance referenced from Open-Meteo API. Does not affect on-chain clearing.</span>
+        {currentGhi && (
+          <DataSourceBadge
+            source={currentGhi.source}
+            asOf={currentGhi.asOf}
+            stale={currentGhi.stale}
+            showAttributionLink={true}
+          />
+        )}
+      </div>
     </div>
   );
 };

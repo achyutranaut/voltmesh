@@ -12,6 +12,7 @@ export interface OrderEntryProps {
   currentInterval: number;
   zoneId?: number;
   existingOrders?: Order[];
+  referencePricePaise?: number | null;
   onAddOrder: (order: Order) => void;
 }
 
@@ -19,6 +20,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
   currentInterval,
   zoneId = 1,
   existingOrders = [],
+  referencePricePaise = null,
   onAddOrder,
 }) => {
   const {
@@ -320,12 +322,23 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
               ₹/kWh
             </span>
           </div>
-          <div className="flex items-center justify-between text-xs text-zinc-500 mt-1 px-0.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mt-1 px-0.5">
             <span>Circuit bounds: ₹2.00 – ₹12.00/kWh</span>
-            {isPriceOutOfBounds && (
-              <span className="text-amber-400 font-medium">Exceeds regulatory limits</span>
+            {referencePricePaise && (
+              <span className="font-mono text-xs">
+                Ref: ₹{(referencePricePaise / 100).toFixed(2)}/kWh
+              </span>
             )}
           </div>
+          {referencePricePaise && pricePaise > 0 && Math.abs(pricePaise - referencePricePaise) / referencePricePaise > 0.3 && (
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-400 mt-1.5 bg-amber-950/20 border border-amber-500/30 p-1.5 rounded">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              <span>Advisory: Order price deviates &gt;30% from current reference price (₹{(referencePricePaise / 100).toFixed(2)}/kWh).</span>
+            </div>
+          )}
+          {isPriceOutOfBounds && (
+            <div className="text-amber-400 font-medium text-xs mt-1">Exceeds regulatory limits</div>
+          )}
         </div>
 
         {/* Quantity Input in kWh */}

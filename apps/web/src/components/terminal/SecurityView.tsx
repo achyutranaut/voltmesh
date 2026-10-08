@@ -24,6 +24,7 @@ import {
   Info,
 } from 'lucide-react';
 import { DetailDrawerData } from '@/types/ui';
+import { useWallet } from '@/context/WalletContext';
 
 export interface SecurityViewProps {
   currentInterval?: number;
@@ -51,9 +52,9 @@ interface SecurityMetricState {
   criticalEventsCount: number;
   highEventsCount: number;
   blockedActionsCount: number;
-  registeredDevicesCount: number;
-  activeDevicesCount: number;
-  revokedDevicesCount: number;
+  registeredDevicesCount: number | null;
+  activeDevicesCount: number | null;
+  revokedDevicesCount: number | null;
   equivocationsCount: number;
   suspiciousOrdersCount: number;
   settlementIntegrity: string;
@@ -62,20 +63,20 @@ interface SecurityMetricState {
 }
 
 const DEFAULT_METRICS: SecurityMetricState = {
-  systemIntegrity: 'HEALTHY',
-  oracleQuorumHealth: '3 / 4 (HEALTHY)',
-  totalSecurityEvents: 14,
+  systemIntegrity: 'UNKNOWN',
+  oracleQuorumHealth: 'UNKNOWN',
+  totalSecurityEvents: 0,
   criticalEventsCount: 0,
-  highEventsCount: 2,
-  blockedActionsCount: 14,
-  registeredDevicesCount: 12,
-  activeDevicesCount: 11,
-  revokedDevicesCount: 1,
+  highEventsCount: 0,
+  blockedActionsCount: 0,
+  registeredDevicesCount: null,
+  activeDevicesCount: null,
+  revokedDevicesCount: null,
   equivocationsCount: 0,
   suspiciousOrdersCount: 0,
-  settlementIntegrity: 'VALID',
-  certificateIntegrity: 'VALID',
-  hashChainValid: true,
+  settlementIntegrity: 'UNKNOWN',
+  certificateIntegrity: 'UNKNOWN',
+  hashChainValid: false,
 };
 
 const ATTACK_VECTORS = [
@@ -217,6 +218,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   currentInterval = 48,
   onSelectDetail,
 }) => {
+  const { session } = useWallet();
   const [metrics, setMetrics] = useState<SecurityMetricState>(DEFAULT_METRICS);
   const [simulationResults, setSimulationResults] = useState<Record<string, AttackSimulationResult>>({});
   const [loadingSimulation, setLoadingSimulation] = useState<string | null>(null);
@@ -225,30 +227,34 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/security/metrics');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+      };
+      const res = await fetch('/api/v1/security/metrics', { headers });
       if (res.ok) {
         const data = await res.json();
         setMetrics({
-          systemIntegrity: data.systemIntegrity ?? 'HEALTHY',
-          oracleQuorumHealth: data.oracleQuorumHealth ?? '3 / 4 (HEALTHY)',
-          totalSecurityEvents: data.totalSecurityEvents ?? 14,
+          systemIntegrity: data.systemIntegrity ?? 'UNKNOWN',
+          oracleQuorumHealth: data.oracleQuorumHealth ?? 'UNKNOWN',
+          totalSecurityEvents: data.totalSecurityEvents ?? 0,
           criticalEventsCount: data.criticalEventsCount ?? 0,
-          highEventsCount: data.highEventsCount ?? 2,
-          blockedActionsCount: data.blockedActionsCount ?? 14,
-          registeredDevicesCount: data.registeredDevicesCount ?? 12,
-          activeDevicesCount: data.activeDevicesCount ?? 11,
-          revokedDevicesCount: data.revokedDevicesCount ?? 1,
+          highEventsCount: data.highEventsCount ?? 0,
+          blockedActionsCount: data.blockedActionsCount ?? 0,
+          registeredDevicesCount: data.registeredDevicesCount ?? null,
+          activeDevicesCount: data.activeDevicesCount ?? null,
+          revokedDevicesCount: data.revokedDevicesCount ?? null,
           equivocationsCount: data.equivocationsCount ?? 0,
           suspiciousOrdersCount: data.suspiciousOrdersCount ?? 0,
-          settlementIntegrity: data.settlementIntegrity ?? 'VALID',
-          certificateIntegrity: data.certificateIntegrity ?? 'VALID',
-          hashChainValid: data.hashChainValid ?? true,
+          settlementIntegrity: data.settlementIntegrity ?? 'UNKNOWN',
+          certificateIntegrity: data.certificateIntegrity ?? 'UNKNOWN',
+          hashChainValid: data.hashChainValid ?? false,
         });
       }
     } catch {
       // Offline fallback: keep metrics in state
     }
-  }, []);
+  }, [session?.token]);
 
   useEffect(() => {
     fetchMetrics();
@@ -259,9 +265,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const handleSimulateAttack = async (attackType: string) => {
     setLoadingSimulation(attackType);
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+      };
       const res = await fetch('/api/v1/security/simulate-attack', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ attackType }),
       });
       const data = await res.json();
@@ -410,9 +420,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
               <Zap className="w-3.5 h-3.5 text-amber-400" />
             </div>
             <div className="text-sm font-semibold text-white">
-              {metrics.activeDevicesCount} / {metrics.registeredDevicesCount} Active
+              {metrics.activeDevicesCount !== null && metrics.registeredDevicesCount !== null
+                ? `${metrics.activeDevicesCount} / ${metrics.registeredDevicesCount} Active`
+                : 'UNAVAILABLE'}
             </div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">Quarantined / Revoked: {metrics.revokedDevicesCount}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">
+              Quarantined / Revoked: {metrics.revokedDevicesCount !== null ? metrics.revokedDevicesCount : 'N/A'}
+            </div>
           </div>
 
           <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3">

@@ -389,5 +389,69 @@ describe('Modular Monolith API Server', () => {
       expect(overLimitRes.statusCode).toBe(400);
     });
   });
+
+  describe('Advisory Market Data Endpoints', () => {
+    it('requires authentication for reference price, irradiance, and status', async () => {
+      const pRes = await app.inject({ method: 'GET', url: '/api/v1/market-data/reference-price' });
+      expect(pRes.statusCode).toBe(401);
+
+      const iRes = await app.inject({ method: 'GET', url: '/api/v1/market-data/irradiance' });
+      expect(iRes.statusCode).toBe(401);
+
+      const sRes = await app.inject({ method: 'GET', url: '/api/v1/market-data/status' });
+      expect(sRes.statusCode).toBe(401);
+    });
+
+    it('returns typed advisory reference price when authenticated', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/market-data/reference-price?zoneId=1',
+        headers: { authorization: `Bearer ${authToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.payload);
+      expect(data.value).toBeDefined();
+      expect(data.unit).toBe('paise/kWh');
+      expect(data.source).toBeDefined();
+      expect(typeof data.asOf).toBe('number');
+      expect(typeof data.stale).toBe('boolean');
+    });
+
+    it('returns typed solar irradiance timeseries when authenticated', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/market-data/irradiance?zoneId=1',
+        headers: { authorization: `Bearer ${authToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.payload);
+      expect(Array.isArray(data)).toBe(true);
+      if (data.length > 0) {
+        expect(data[0].unit).toBe('W/m²');
+        expect(data[0].source).toBeDefined();
+      }
+    });
+
+    it('returns 400 on invalid query parameters', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/market-data/reference-price?zoneId=not-a-number',
+        headers: { authorization: `Bearer ${authToken}` },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns provider health and status', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/market-data/status',
+        headers: { authorization: `Bearer ${authToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.payload);
+      expect(data.provider).toBe('CompositeMarketService');
+      expect(data.healthy).toBe(true);
+    });
+  });
 });
 

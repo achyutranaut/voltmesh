@@ -749,6 +749,8 @@ export interface SecurityEvent {
   settlementImpact?: 'NO_SETTLEMENT_IMPACT' | 'SETTLEMENT_HALTED' | 'SETTLEMENT_PROTECTED' | 'DIRECT_SETTLEMENT_IMPACT' | 'PREVENTS_FALSE_SETTLEMENT' | 'PREVENTS_CONFLICTING_SETTLEMENT' | 'SETTLEMENT_BLOCKED_PENDING_QUORUM' | 'DOUBLE_SPEND_PREVENTED' | 'WASH_TRADING_PREVENTED' | 'OVERCOMMITTING_PREVENTED' | 'DOUBLE_ISSUANCE_PREVENTED' | 'PRICE_MANIPULATION_PREVENTED' | 'ESCROW_INVARIANT_PRESERVED' | string;
   metadata?: Record<string, any>;
   transactionHash?: string;
+  prevEventHash?: string;
+  eventHash?: string;
 }
 
 export interface SecuritySystemMetrics {
