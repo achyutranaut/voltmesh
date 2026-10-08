@@ -813,6 +813,30 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (errorName === 'InvalidOracleProof') {
         return 'Oracle Merkle proof failed verification against on-chain epoch root.';
       }
+      if (errorName === 'ZeroRoot') {
+        return 'Epoch submission rejected: Merkle root cannot be zero.';
+      }
+      if (errorName === 'ZeroLeafCount') {
+        return 'Epoch submission rejected: Leaf count cannot be zero.';
+      }
+      if (errorName === 'ChallengeWindowClosed') {
+        return 'Epoch dispute rejected: 30-day challenge window has closed.';
+      }
+      if (errorName === 'ObligationExpired') {
+        return 'Obligation has expired past its delivery deadline.';
+      }
+      if (errorName === 'InvalidObligationState') {
+        return 'Obligation is not in the required state for this operation.';
+      }
+      if (errorName === 'InvalidObligationStateTransition') {
+        return 'Invalid obligation state transition in Escrow lifecycle.';
+      }
+      if (errorName === 'InsufficientFreeBalance') {
+        return 'Insufficient free (unlocked) escrow balance.';
+      }
+      if (errorName === 'InsufficientLockedBalance') {
+        return 'Insufficient locked collateral balance in Escrow.';
+      }
       if (args && args.length > 0) {
         return `${errorName}(${args.join(', ')})`;
       }
