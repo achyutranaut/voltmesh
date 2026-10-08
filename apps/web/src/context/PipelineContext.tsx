@@ -352,7 +352,8 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   const syncPipelineFromChain = useCallback(
     async (targetInterval?: number, targetZone?: number) => {
       const zone = targetZone ?? flow.zoneId ?? 1;
-      let interval = targetInterval ?? flow.intervalIdx;
+      const currentAbsoluteSlot = Math.floor(Date.now() / 1000 / 900);
+      let interval = targetInterval ?? (flow.intervalIdx && flow.intervalIdx > 0 ? flow.intervalIdx : currentAbsoluteSlot);
       if (!interval) return;
 
       try {
@@ -374,7 +375,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
           epochRecord.finalizedAt > 0n &&
           epochRecord.merkleRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000';
 
-        // If target interval is not yet finalized, check previous intervals (e.g. interval 1990160 when slot is 1990163)
+        // If target interval is not yet finalized, check previous intervals (e.g. within 10 slots)
         if (!isEpochFinalized && interval > 1) {
           for (let offset = 1; offset <= 10; offset++) {
             if (interval - offset <= 0) break;
@@ -400,7 +401,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
           }
         }
 
-        // 2. Read BatchSettlement for this interval
+        // 2. Read BatchSettlement commitments for this interval
         let isClearingCommitted = false;
         if (settlementConfig?.address) {
           try {
@@ -412,6 +413,23 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
             })) as any;
             if (commitment && (commitment[6] > 0n || commitment.committedAt > 0n)) {
               isClearingCommitted = true;
+            }
+          } catch {}
+        }
+
+        // 3. Read BatchSettlement dailyStatements for this dateEpoch
+        let isSettlementPosted = false;
+        const dateEpoch = Math.floor(interval / 96);
+        if (settlementConfig?.address) {
+          try {
+            const statement = (await publicClient.readContract({
+              address: settlementConfig.address,
+              abi: settlementConfig.abi,
+              functionName: 'dailyStatements',
+              args: [dateEpoch, zone],
+            })) as any;
+            if (statement && (statement[7] > 0n || statement.postedAt > 0n)) {
+              isSettlementPosted = true;
             }
           } catch {}
         }
@@ -453,6 +471,29 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
                 };
               }
             }
+
+            if (isSettlementPosted) {
+              if (next.DELIVERY.status !== 'COMPLETED') {
+                next.DELIVERY = {
+                  ...next.DELIVERY,
+                  status: 'COMPLETED',
+                  statusMessage: 'Physical delivery verified against daily statement',
+                };
+              }
+              next.SETTLEMENT = {
+                ...next.SETTLEMENT,
+                status: 'COMPLETED',
+                statusMessage: `Settlement finalized on-chain (BatchSettlement.sol, DateEpoch ${dateEpoch})`,
+              };
+              if (next.CERTIFICATE.status === 'LOCKED') {
+                next.CERTIFICATE = {
+                  ...next.CERTIFICATE,
+                  status: 'READY',
+                  statusMessage: 'Ready for Renewable Energy Certificate issuance',
+                };
+              }
+            }
+
             return next;
           });
 
@@ -880,8 +921,9 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
         updatedAt: Date.now(),
       }));
       setSelectedStageId('DELIVERY');
+      await syncPipelineFromChain();
     },
-    [stages.MERKLE.status, publicClient]
+    [stages.MERKLE.status, publicClient, syncPipelineFromChain]
   );
 
   // Stage 06: Physical Grid Delivery (Section 14)
@@ -971,6 +1013,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
           });
           setFlow((f) => ({ ...f, settlementTxHash: txHash, updatedAt: Date.now() }));
           setSelectedStageId('CERTIFICATE');
+          await syncPipelineFromChain();
         } else {
           throw new Error('Settlement transaction reverted.');
         }
