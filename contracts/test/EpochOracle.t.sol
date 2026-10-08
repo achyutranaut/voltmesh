@@ -233,4 +233,75 @@ contract EpochOracleTest is Test {
         bool verified = oracle.verifyLeafInclusion(1, 100, keccak256("leaf"), proof);
         assertFalse(verified);
     }
+
+    // 11. submitEpoch reverts on zero root or zero leaf count
+    function test_SubmitEpoch_ZeroRootOrZeroLeafCount_Reverts() public {
+        uint32 zoneId = 1;
+        uint32 intervalIdx = 100;
+        bytes[] memory signatures = new bytes[](3);
+
+        // Zero root
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(block.chainid, address(oracle), zoneId, intervalIdx, bytes32(0), uint32(10), uint64(5000))
+        ).toEthSignedMessageHash();
+        for (uint256 i = 0; i < 3; i++) {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKeys[i], messageHash);
+            signatures[i] = abi.encodePacked(r, s, v);
+        }
+        vm.expectRevert(EpochOracle.ZeroRoot.selector);
+        oracle.submitEpoch(zoneId, intervalIdx, bytes32(0), 10, 5000, signatures);
+
+        // Zero leafCount
+        bytes32 validRoot = keccak256("valid_root");
+        messageHash = keccak256(
+            abi.encodePacked(block.chainid, address(oracle), zoneId, intervalIdx, validRoot, uint32(0), uint64(5000))
+        ).toEthSignedMessageHash();
+        for (uint256 i = 0; i < 3; i++) {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKeys[i], messageHash);
+            signatures[i] = abi.encodePacked(r, s, v);
+        }
+        vm.expectRevert(EpochOracle.ZeroLeafCount.selector);
+        oracle.submitEpoch(zoneId, intervalIdx, validRoot, 0, 5000, signatures);
+    }
+
+    // 12. challengeEpoch reverts after challenge window has closed (finalizedAt + 30 days)
+    function test_ChallengeEpoch_WindowClosed_Reverts() public {
+        test_ValidQuorum_Succeeds();
+
+        // Warp past finalizedAt + 30 days
+        vm.warp(block.timestamp + 30 days + 1);
+
+        vm.prank(auditor);
+        vm.expectRevert(EpochOracle.ChallengeWindowClosed.selector);
+        oracle.challengeEpoch(1, 100, "Too late challenge");
+    }
+
+    // 13. Resubmission succeeds if epoch was RESOLVED_INVALID
+    function test_ResubmitEpoch_AfterResolvedInvalid_Succeeds() public {
+        test_ChallengeLifecycle_InvalidResolution();
+
+        uint32 zoneId = 1;
+        uint32 intervalIdx = 100;
+        bytes32 newRoot = keccak256("corrected_merkle_root");
+        uint32 newLeafCount = 12;
+        uint64 newTotalWh = 6000;
+
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(block.chainid, address(oracle), zoneId, intervalIdx, newRoot, newLeafCount, newTotalWh)
+        ).toEthSignedMessageHash();
+
+        bytes[] memory signatures = new bytes[](3);
+        for (uint256 i = 0; i < 3; i++) {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(oracleKeys[i], messageHash);
+            signatures[i] = abi.encodePacked(r, s, v);
+        }
+
+        // Resubmission should now succeed
+        oracle.submitEpoch(zoneId, intervalIdx, newRoot, newLeafCount, newTotalWh, signatures);
+
+        EpochOracle.EpochRecord memory rec = oracle.getEpoch(zoneId, intervalIdx);
+        assertEq(rec.merkleRoot, newRoot);
+        assertEq(rec.leafCount, newLeafCount);
+        assertEq(uint256(rec.status), uint256(EpochOracle.EpochStatus.FINALIZED));
+    }
 }

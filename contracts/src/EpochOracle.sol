@@ -61,6 +61,9 @@ contract EpochOracle {
     error SystemPaused();
     error CallerNotAdmin();
     error CallerNotAuditor();
+    error ZeroRoot();
+    error ZeroLeafCount();
+    error ChallengeWindowClosed();
 
     modifier whenNotPaused() {
         if (accessRegistry.paused()) revert SystemPaused();
@@ -117,7 +120,11 @@ contract EpochOracle {
         uint64 totalWh,
         bytes[] calldata signatures
     ) external whenNotPaused {
-        if (epochs[zoneId][intervalIdx].finalizedAt != 0) {
+        if (merkleRoot == bytes32(0)) revert ZeroRoot();
+        if (leafCount == 0) revert ZeroLeafCount();
+
+        EpochRecord storage existingEpoch = epochs[zoneId][intervalIdx];
+        if (existingEpoch.status != EpochStatus.NONE && existingEpoch.status != EpochStatus.RESOLVED_INVALID) {
             revert EpochAlreadyFinalized(zoneId, intervalIdx);
         }
 
@@ -200,6 +207,7 @@ contract EpochOracle {
         EpochRecord storage epoch = epochs[zoneId][intervalIdx];
         if (epoch.finalizedAt == 0) revert EpochNotFound(zoneId, intervalIdx);
         if (epoch.status != EpochStatus.FINALIZED) revert InvalidEpochStatus();
+        if (block.timestamp > epoch.finalizedAt + 30 days) revert ChallengeWindowClosed();
 
         epoch.status = EpochStatus.CHALLENGED;
         epoch.challenger = msg.sender;
