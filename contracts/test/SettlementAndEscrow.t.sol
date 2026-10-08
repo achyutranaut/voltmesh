@@ -456,7 +456,7 @@ contract SettlementAndEscrowTest is Test {
 
         _lockObligation(obligationId, buyer, bKey, seller, sKey, 10_000, 1, 48, deadline);
 
-        // Attempting recovery before deadline must revert
+        // In LOCKED state, attempt recovery before deadline must revert
         vm.prank(buyer);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -468,16 +468,10 @@ contract SettlementAndEscrowTest is Test {
         );
         escrow.claimExpiredRefund(obligationId);
 
-        // Advance lifecycle: DELIVERY_VERIFIED -> SETTLEMENT_READY
-        vm.startPrank(operator);
-        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
-        settlement.updateObligationState(obligationId, Escrow.EscrowState.SETTLEMENT_READY);
-        vm.stopPrank();
-
-        // Advance timestamp past deadline
+        // Advance timestamp past deadline while still LOCKED
         vm.warp(deadline + 1);
 
-        // Settlement after expiry must revert
+        // In LOCKED state after deadline, delivery verification reverts
         vm.prank(operator);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -487,9 +481,9 @@ contract SettlementAndEscrowTest is Test {
                 deadline
             )
         );
-        settlement.settleObligation(obligationId, 10_000);
+        settlement.updateObligationState(obligationId, Escrow.EscrowState.DELIVERY_VERIFIED);
 
-        // Buyer reclaims collateral
+        // Buyer reclaims collateral because delivery was never verified before deadline
         vm.prank(buyer);
         escrow.claimExpiredRefund(obligationId);
 
@@ -500,9 +494,10 @@ contract SettlementAndEscrowTest is Test {
         vm.prank(buyer);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Escrow.ObligationAlreadyTerminated.selector,
+                Escrow.InvalidObligationState.selector,
                 obligationId,
-                Escrow.EscrowState.REFUNDED
+                Escrow.EscrowState.REFUNDED,
+                Escrow.EscrowState.LOCKED
             )
         );
         escrow.claimExpiredRefund(obligationId);
