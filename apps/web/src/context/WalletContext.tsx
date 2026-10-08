@@ -30,6 +30,7 @@ import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
 import { useSession } from '../auth/SessionContext';
 import { can } from '../auth/permissions';
+import { safeStringify } from '../lib/json';
 
 const ALL_CONTRACT_ABIS = Object.values(deploymentArtifacts.contracts).flatMap(
   (c: any) => c.abi || []
@@ -914,7 +915,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: safeStringify({
           jsonrpc: '2.0',
           id: Date.now(),
           method: 'anvil_setBalance',
@@ -1291,7 +1292,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const res = await fetch(`${apiUrl}/api/v1/faucet/mint`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
+        body: safeStringify({
           recipient: address,
           amountPaise: amount.toString(),
         }),
@@ -1581,7 +1582,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const res = await fetch(`${apiUrl}/api/v1/oracle/sign-statement`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
+        body: safeStringify({
           chainId: DEFAULT_CHAIN_ID,
           settlementContractAddress: settlementContract.address,
           dateEpoch,

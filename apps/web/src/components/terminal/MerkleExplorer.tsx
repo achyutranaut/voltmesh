@@ -24,6 +24,7 @@ import {
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
 import { Hash, Hex, createPublicClient, http } from 'viem';
+import { normalizeEpochRecord, safeStringify } from '@/lib/json';
 import {
   buildDemoEpochReadings,
   DEMO_SELLER_DEVICE_ID,
@@ -90,12 +91,13 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
           transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
         });
 
-        const record = (await publicClient.readContract({
+        const rawRecord = await publicClient.readContract({
           address: oracleConfig.address,
           abi: oracleConfig.abi,
           functionName: 'getEpoch',
           args: [initialZoneId, selectedInterval],
-        })) as any;
+        });
+        const record = normalizeEpochRecord(rawRecord);
 
         if (!active) return;
 
@@ -117,12 +119,13 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
           for (let offset = 1; offset <= 10; offset++) {
             if (selectedInterval - offset <= 0) break;
             try {
-              const prev = (await publicClient.readContract({
+              const rawPrev = await publicClient.readContract({
                 address: oracleConfig.address,
                 abi: oracleConfig.abi,
                 functionName: 'getEpoch',
                 args: [initialZoneId, selectedInterval - offset],
-              })) as any;
+              });
+              const prev = normalizeEpochRecord(rawPrev);
               if (
                 prev &&
                 prev.finalizedAt > 0n &&
@@ -216,7 +219,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
         const res = await fetch(`${apiUrl}/api/v1/oracle/sign-epoch`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
+          body: safeStringify({
             chainId: chainId ?? DEFAULT_CHAIN_ID,
             oracleContractAddress: oracleConfig.address,
             zoneId: initialZoneId,

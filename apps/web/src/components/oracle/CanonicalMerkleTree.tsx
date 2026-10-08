@@ -38,6 +38,7 @@ import { Input } from '@/components/ui/input';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
 import { StageLockGate } from '@/components/terminal/StageLockGate';
 import { NavigationTab } from '@/types/ui';
+import { normalizeEpochRecord, safeStringify } from '@/lib/json';
 
 interface CanonicalMerkleTreeProps {
   onReturnToMarket?: () => void;
@@ -126,12 +127,13 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
         transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
       });
 
-      const record = (await publicClient.readContract({
+      const rawRecord = await publicClient.readContract({
         address: oracleConfig.address,
         abi: oracleConfig.abi,
         functionName: 'getEpoch',
         args: [currentZoneId, currentInterval],
-      })) as any;
+      });
+      const record = normalizeEpochRecord(rawRecord);
 
       if (record && record.finalizedAt > 0n) {
         setIsOnChainCommitted(true);
@@ -344,7 +346,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
         const res = await fetch(`${apiUrl}/api/v1/oracle/sign-epoch`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
+          body: safeStringify({
             chainId: chainId ?? DEFAULT_CHAIN_ID,
             oracleContractAddress: oracleConfig.address,
             zoneId: currentZoneId,

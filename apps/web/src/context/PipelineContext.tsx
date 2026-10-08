@@ -11,7 +11,7 @@ import {
 import { NavigationTab } from '../types/ui';
 import { voltmeshTestnet, SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID } from '../config/contracts';
 import { AttestationEnvelope, ClearingResult } from '@energy-dex/types';
-import { safeStringify } from '../lib/utils';
+import { safeStringify, normalizeEpochRecord } from '../lib/json';
 import { useSession } from '../auth/SessionContext';
 
 export const PIPELINE_ORDER: PipelineStageId[] = [
@@ -361,12 +361,13 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
         if (!oracleConfig?.address) return;
 
         // 1. Read EpochOracle.getEpoch(zone, interval)
-        let epochRecord = (await publicClient.readContract({
+        const rawEpoch = await publicClient.readContract({
           address: oracleConfig.address,
           abi: oracleConfig.abi,
           functionName: 'getEpoch',
           args: [zone, interval],
-        })) as any;
+        });
+        let epochRecord = normalizeEpochRecord(rawEpoch);
 
         let isEpochFinalized =
           epochRecord &&
@@ -378,12 +379,13 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
           for (let offset = 1; offset <= 10; offset++) {
             if (interval - offset <= 0) break;
             try {
-              const prevRecord = (await publicClient.readContract({
+              const rawPrev = await publicClient.readContract({
                 address: oracleConfig.address,
                 abi: oracleConfig.abi,
                 functionName: 'getEpoch',
                 args: [zone, interval - offset],
-              })) as any;
+              });
+              const prevRecord = normalizeEpochRecord(rawPrev);
               if (
                 prevRecord &&
                 prevRecord.finalizedAt > 0n &&
