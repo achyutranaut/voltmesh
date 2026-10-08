@@ -1,0 +1,69 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-typescript:
+    name: TypeScript Tests & Verification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck Workspace Packages
+        run: pnpm -r typecheck
+
+      - name: Run Vitest Suites
+        run: pnpm vitest run
+
+      - name: Build Monorepo Dependencies
+        run: pnpm build
+
+      - name: Run Web Build
+        run: pnpm --filter @energy-dex/web build
+
+  test-foundry:
+    name: Foundry Smart Contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
+
+      - name: Install contract dependencies
+        working-directory: contracts
+        run: forge install
+
+      - name: Run Forge build
+        working-directory: contracts
+        run: forge build --sizes
+
+      - name: Run Forge tests & invariants
+        working-directory: contracts
+        run: forge test -vvv
