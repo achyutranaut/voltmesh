@@ -43,6 +43,7 @@ export interface Session {
   expiresAt: number;
   token?: string;
   demoKey?: DemoKey;
+  chainId?: number;
 }
 
 interface StoredSession {
@@ -52,6 +53,7 @@ interface StoredSession {
   expiresAt: number;
   token?: string;
   demoKey?: DemoKey;
+  chainId?: number;
 }
 
 const SESSIONS_STORAGE_KEY = 'voltmesh_sessions';
@@ -101,6 +103,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
         expiresAt: stored.expiresAt,
         token: stored.token,
         demoKey: key,
+        chainId: stored.chainId ?? voltmeshTestnet.id,
       };
     }
 
@@ -128,6 +131,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
         walletClient,
         expiresAt: stored.expiresAt,
         token: stored.token,
+        chainId: stored.chainId ?? voltmeshTestnet.id,
       };
     }
   } catch (err) {
@@ -256,6 +260,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         expiresAt: s.expiresAt,
         token: s.token,
         demoKey: s.demoKey,
+        chainId: s.chainId,
       }));
       sessionStorage.setItem(SESSIONS_STORAGE_KEY, safeStringify(serializable));
     } catch (err) {
@@ -451,6 +456,28 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setPending(null);
     setStatus('idle');
     setError(null);
+  }, []);
+
+  // Restore and verify injected sessions against window.ethereum via eth_accounts on load (never eth_requestAccounts)
+  useEffect(() => {
+    const eth = typeof window !== 'undefined' ? (window as any).ethereum : null;
+    if (!eth?.request) return;
+
+    eth.request({ method: 'eth_accounts' })
+      .then((accounts: string[]) => {
+        if (!Array.isArray(accounts)) return;
+        if (accounts.length === 0) {
+          // If no accounts currently authorized, remove injected sessions to avoid stale auth
+          setSessions((prev) => prev.filter((s) => s.kind !== 'injected'));
+          setPending((p) => (p && p.kind === 'injected' ? null : p));
+        } else {
+          // Keep only injected sessions matching currently authorized accounts
+          setSessions((prev) =>
+            prev.filter((s) => s.kind !== 'injected' || accounts.some((acc) => same(acc, s.address)))
+          );
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // If the user changes account inside MetaMask, that identity is no longer verified.
