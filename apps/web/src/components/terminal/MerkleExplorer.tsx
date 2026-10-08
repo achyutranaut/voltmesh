@@ -402,7 +402,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
               <span className="text-zinc-500">Payload:</span> DLMS/COSEM HDLC telemetry frames signed by meter secure enclaves.
             </div>
             <div>
-              <span className="text-zinc-500">Aggregation:</span> Built into an RFC 6962 compliant binary Merkle tree with prefix <code className="text-zinc-300 font-mono text-xs">0x00</code> for leaves and <code className="text-zinc-300 font-mono text-xs">0x01</code> for internal nodes.
+              <span className="text-zinc-500">Aggregation:</span> Built into an RFC 6962-style leaf prefix, sorted-pair internal nodes binary Merkle tree with prefix <code className="text-zinc-300 font-mono text-xs">0x00</code> for leaves and OpenZeppelin-compatible sorted-pair internal nodes.
             </div>
           </div>
         </div>
