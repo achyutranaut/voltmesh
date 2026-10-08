@@ -18,6 +18,7 @@ import {
   Lock,
   ExternalLink,
   Info,
+  Bot,
 } from 'lucide-react';
 import { useSession } from '@/auth/SessionContext';
 import { DetailDrawerData } from '@/types/ui';
@@ -562,12 +563,13 @@ export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }
                     <th className="py-2.5 px-3">Result</th>
                     <th className="py-2.5 px-3">Enforced Rule</th>
                     <th className="py-2.5 px-3">Reason</th>
+                    <th className="py-2.5 px-3 text-right">Advisor</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
                   {securityEvents.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-6 text-center text-zinc-500">
+                      <td colSpan={9} className="py-6 text-center text-zinc-500">
                         No security incidents detected. System operating under normal parameters.
                       </td>
                     </tr>
@@ -611,6 +613,47 @@ export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }
                         </td>
                         <td className="py-2.5 px-3 text-zinc-400 max-w-xs truncate" title={e.reason}>
                           {e.reason || 'Blocked by security policy'}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const headers: Record<string, string> = session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+                                const res = await fetch(`${apiBase}/api/v1/advisor/explain-event`, {
+                                  method: 'POST',
+                                  headers: { ...headers, 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ eventId: e.id }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  if (onSelectDetail) {
+                                    onSelectDetail({
+                                      title: `Security Advisor: ${e.action}`,
+                                      subtitle: `Event ID: ${e.id} (Advisory Only)`,
+                                      category: 'SECURITY ADVISOR',
+                                      statusBadge: { label: data.confidence ? String(data.confidence).toUpperCase() : 'ADVISORY', variant: 'info' },
+                                      metrics: [
+                                        { label: 'Model', value: data.model ?? 'Deterministic' },
+                                        { label: 'Confidence', value: data.confidence ?? 'medium' },
+                                      ],
+                                      properties: [
+                                        { label: 'Summary', value: data.summary },
+                                        { label: 'Actions', value: (data.recommendedHumanActions || []).join('; ') || 'None' },
+                                        { label: 'Notice', value: 'AI-generated, advisory only' },
+                                      ],
+                                    });
+                                  }
+                                }
+                              } catch {
+                                // fallback ignore
+                              }
+                            }}
+                            className="px-2 py-1 text-[11px] rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 ml-auto"
+                            title="Analyze with Security Advisor"
+                          >
+                            <Bot className="w-3 h-3" />
+                            <span>Explain</span>
+                          </button>
                         </td>
                       </tr>
                     ))

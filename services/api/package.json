@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@energy-dex/advisor": "workspace:*",
     "@energy-dex/attestation": "workspace:*",
     "@energy-dex/clearing": "workspace:*",
     "@energy-dex/epoch-builder": "workspace:*",

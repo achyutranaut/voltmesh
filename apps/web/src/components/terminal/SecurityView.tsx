@@ -22,9 +22,11 @@ import {
   ArrowRight,
   HelpCircle,
   Info,
+  Sparkles,
+  Bot,
 } from 'lucide-react';
 import { DetailDrawerData } from '@/types/ui';
-import { useWallet } from '@/context/WalletContext';
+import { useSession } from '@/auth/SessionContext';
 
 export interface SecurityViewProps {
   currentInterval?: number;
@@ -212,18 +214,34 @@ const ATTACK_VECTORS = [
     expectedResult: 'REJECTED',
     expectedStatus: 400,
   },
+  {
+    id: 'LLM_PROMPT_INJECTION',
+    name: '13. LLM Prompt Injection & Output Manipulation',
+    category: 'INTEGRITY',
+    severity: 'HIGH',
+    ruleId: 'RULE-LLM-001',
+    description: 'Hostile actor embeds instructions and HTML tags in event reason/evidence to override AI advisor.',
+    protection: 'Input delimiters escaped; strict schema validation; unverified event citations dropped; HTML/URLs stripped.',
+    expectedResult: 'BLOCKED',
+    expectedStatus: 200,
+  },
 ];
 
 export const SecurityView: React.FC<SecurityViewProps> = ({
   currentInterval = 48,
   onSelectDetail,
 }) => {
-  const { session } = useWallet();
+  const { session } = useSession();
   const [metrics, setMetrics] = useState<SecurityMetricState>(DEFAULT_METRICS);
   const [simulationResults, setSimulationResults] = useState<Record<string, AttackSimulationResult>>({});
   const [loadingSimulation, setLoadingSimulation] = useState<string | null>(null);
   const [oracleQuarantined, setOracleQuarantined] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'simulator' | 'quorum' | 'rules'>('simulator');
+  const [activeTab, setActiveTab] = useState<'simulator' | 'advisor' | 'quorum' | 'rules'>('simulator');
+  const [advisorEventId, setAdvisorEventId] = useState<string>('');
+  const [advisorQuestion, setAdvisorQuestion] = useState<string>('');
+  const [advisorAnalysis, setAdvisorAnalysis] = useState<any>(null);
+  const [advisorLoading, setAdvisorLoading] = useState<boolean>(false);
+  const [advisorError, setAdvisorError] = useState<string | null>(null);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -347,6 +365,62 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
         { label: 'Detected At', value: new Date(sim.timestamp * 1000).toLocaleTimeString() },
       ],
     });
+  };
+
+  const handleExplainEvent = async (eventId: string) => {
+    setActiveTab('advisor');
+    setAdvisorEventId(eventId);
+    setAdvisorLoading(true);
+    setAdvisorError(null);
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+      };
+      const res = await fetch('/api/v1/advisor/explain-event', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ eventId }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Advisor query failed (${res.status})`);
+      }
+      const data = await res.json();
+      setAdvisorAnalysis(data);
+    } catch (err: any) {
+      setAdvisorError(err.message || 'Failed to analyze security event');
+    } finally {
+      setAdvisorLoading(false);
+    }
+  };
+
+  const handleAskAdvisor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!advisorQuestion.trim()) return;
+    setAdvisorLoading(true);
+    setAdvisorError(null);
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+      };
+      const res = await fetch('/api/v1/advisor/ask', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ question: advisorQuestion }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Advisor query failed (${res.status})`);
+      }
+      const data = await res.json();
+      setAdvisorAnalysis(data);
+    } catch (err: any) {
+      setAdvisorError(err.message || 'Failed to submit advisor query');
+    } finally {
+      setAdvisorLoading(false);
+    }
   };
 
   return (
@@ -475,7 +549,19 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           }`}
         >
           <Cpu className="w-3.5 h-3.5" />
-          <span>Red-Team Attack Lab (12 Vectors)</span>
+          <span>Red-Team Attack Lab ({ATTACK_VECTORS.length} Vectors)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('advisor')}
+          className={`flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-t-lg transition-colors ${
+            activeTab === 'advisor'
+              ? 'bg-white/[0.08] text-white border-b-2 border-emerald-400'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.02]'
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Security Advisor (AI Advisory)</span>
         </button>
 
         <button
@@ -601,18 +687,212 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     </button>
 
                     {res && (
-                      <button
-                        onClick={() => handleInspectAttack(res)}
-                        className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
-                      >
-                        <span>Audit Proof</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleExplainEvent(typeof res.attackId === 'string' ? res.attackId : `sim-${res.attackId}`)}
+                          className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 font-medium"
+                          title="Explain incident using Security Advisor"
+                        >
+                          <Bot className="w-3.5 h-3.5" />
+                          <span>Explain</span>
+                        </button>
+                        <button
+                          onClick={() => handleInspectAttack(res)}
+                          className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                        >
+                          <span>Audit Proof</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Security Advisor (AI Advisory) */}
+      {activeTab === 'advisor' && (
+        <div className="space-y-6">
+          <div className="bg-panel border border-white/[0.08] rounded-xl p-5 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/[0.06] pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Bot className="w-5 h-5 text-indigo-400" />
+                  <h2 className="text-base font-semibold text-white">AI Security Advisor</h2>
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    AI-generated, advisory only
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Read-only LLM auditor for explaining anomalous telemetry, attack drills, and rule violations.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-zinc-400">
+                  Model: <span className="text-white font-medium">{advisorAnalysis?.model ?? 'Mock / Deterministic Engine'}</span>
+                </span>
+                {advisorAnalysis?.fallbackUsed && (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                    Advisor unavailable (template fallback)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Natural Plain-Text Ask Form */}
+            <form onSubmit={handleAskAdvisor} className="space-y-2">
+              <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Ask Security Advisor (Natural Query)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={advisorQuestion}
+                  onChange={(e) => setAdvisorQuestion(e.target.value)}
+                  placeholder="e.g. Why was ORACLE_EQUIVOCATION quarantined, and what human actions are required?"
+                  className="flex-1 bg-black/40 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                  maxLength={500}
+                />
+                <button
+                  type="submit"
+                  disabled={advisorLoading || !advisorQuestion.trim()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {advisorLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bot className="w-3.5 h-3.5" />
+                      <span>Ask Advisor</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {advisorError && (
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                {advisorError}
+              </div>
+            )}
+
+            {/* Advisor Output Card */}
+            {advisorAnalysis ? (
+              <div className="p-4 rounded-xl bg-black/40 border border-indigo-500/30 space-y-4">
+                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-white">Advisory Analysis</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                        advisorAnalysis.confidence === 'high'
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : advisorAnalysis.confidence === 'medium'
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-zinc-500/20 text-zinc-300'
+                      }`}
+                    >
+                      CONFIDENCE: {String(advisorAnalysis.confidence).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono">
+                    Prompt v{advisorAnalysis.promptVersion ?? '1.0.0'} • Generated:{' '}
+                    {new Date((advisorAnalysis.generatedAt ?? Date.now() / 1000) * 1000).toLocaleTimeString()}
+                  </div>
+                </div>
+
+                {/* Summary (Plain text only) */}
+                <div>
+                  <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">Executive Summary</h4>
+                  <p className="text-xs text-zinc-200 leading-relaxed font-sans bg-white/[0.02] p-3 rounded-lg border border-white/[0.04]">
+                    {advisorAnalysis.summary}
+                  </p>
+                </div>
+
+                {/* Findings & Citations */}
+                {advisorAnalysis.findings && advisorAnalysis.findings.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Findings & Citations</h4>
+                    <div className="space-y-2">
+                      {advisorAnalysis.findings.map((f: any, idx: number) => (
+                        <div key={idx} className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] text-xs space-y-1.5">
+                          <div className="text-zinc-200">{f.claim}</div>
+                          {f.eventIds && f.eventIds.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-white/[0.04]">
+                              <span className="text-[10px] text-zinc-400 font-mono">Citations:</span>
+                              {f.eventIds.map((eid: string) => (
+                                <button
+                                  key={eid}
+                                  onClick={() => {
+                                    if (onSelectDetail) {
+                                      onSelectDetail({
+                                        title: `Cited Event: ${eid}`,
+                                        subtitle: 'Referenced by Security Advisor finding',
+                                        category: 'ADVISORY AUDIT',
+                                        statusBadge: { label: 'CITED', variant: 'info' },
+                                        metrics: [{ label: 'Event ID', value: eid }],
+                                        properties: [
+                                          { label: 'Event ID', value: eid, mono: true },
+                                          { label: 'Finding Context', value: f.claim },
+                                          { label: 'Integrity Check', value: 'Verified citation from whitelist set' },
+                                        ],
+                                      });
+                                    }
+                                  }}
+                                  className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition-colors"
+                                >
+                                  {eid}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommended Human Actions */}
+                {advisorAnalysis.recommendedHumanActions && advisorAnalysis.recommendedHumanActions.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recommended Human Actions</h4>
+                    <ul className="space-y-1 bg-white/[0.02] p-3 rounded-lg border border-white/[0.04]">
+                      {advisorAnalysis.recommendedHumanActions.map((act: string, idx: number) => (
+                        <li key={idx} className="text-xs text-amber-200/90 flex items-start gap-2">
+                          <span className="text-amber-400 font-bold">•</span>
+                          <span>{act}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Flags if any */}
+                {advisorAnalysis.flags && advisorAnalysis.flags.length > 0 && (
+                  <div className="pt-2 border-t border-white/[0.06] flex items-center gap-2 flex-wrap text-[10px]">
+                    <span className="text-zinc-400">Security Flags:</span>
+                    {advisorAnalysis.flags.map((flag: string, idx: number) => (
+                      <span key={idx} className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
+                        {flag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-8 text-center border border-dashed border-white/[0.08] rounded-xl text-xs text-zinc-500 space-y-1">
+                <Bot className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                <p>No active advisor analysis.</p>
+                <p className="text-zinc-600">Select &quot;Explain&quot; on an incident card or enter a question above.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
