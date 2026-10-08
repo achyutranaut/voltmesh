@@ -41,6 +41,14 @@ const AttestationBodySchema = z.object({
 });
 
 export function buildApp(options: AppOptions = {}): FastifyInstance {
+  const isProduction = process.env.NODE_ENV === 'production';
+  let adminKey = options.adminKey ?? process.env.GATEWAY_ADMIN_KEY;
+
+  // Fail-secure startup check: GATEWAY_ADMIN_KEY must be configured with min 32 chars in non-test mode
+  if ((isProduction || process.env.NODE_ENV !== 'test') && (!adminKey || adminKey.length < 32)) {
+    throw new Error('FATAL: GATEWAY_ADMIN_KEY must be configured with at least 32 characters.');
+  }
+
   const app = Fastify({ logger: false });
   const storage = options.storage ?? new MemoryReadingStorage();
 
@@ -74,15 +82,8 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
 
   // ---------------------------------------------------------------------------
   app.post('/api/v1/metering/devices/register', async (request, reply) => {
-    const adminKey = options.adminKey ?? process.env.GATEWAY_ADMIN_KEY;
-    if (!adminKey || adminKey.length < 32) {
-      if (process.env.NODE_ENV !== 'test') {
-        throw new Error('FATAL: GATEWAY_ADMIN_KEY must be configured with at least 32 characters.');
-      }
-    }
-
-    const authHeader = request.headers.authorization;
     if (adminKey) {
+      const authHeader = request.headers.authorization;
       const token = (authHeader || '').replace(/^Bearer\s+/i, '');
       const tokenBuf = Buffer.from(token);
       const expectedBuf = Buffer.from(adminKey);
@@ -90,6 +91,8 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
       if (!isMatch) {
         return reply.status(401).send({ error: 'UNAUTHORIZED_REGISTRATION', message: 'Valid gateway administrative authorization required' });
       }
+    } else if (process.env.NODE_ENV !== 'test') {
+      return reply.status(503).send({ error: 'GATEWAY_ADMIN_KEY_NOT_CONFIGURED', message: 'Device registration disabled: admin key not configured' });
     }
 
     const parse = DeviceRegistrationSchema.safeParse(request.body);

@@ -1,3 +1,7 @@
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 import { buildApiServer } from './app.js';
 
 export * from './app.js';

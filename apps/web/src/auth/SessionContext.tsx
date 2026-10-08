@@ -7,7 +7,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { voltmeshTestnet } from '@/config/contracts';
-import { Action, Role, TabId, can as canDo, canView as canSee } from './permissions';
+import { Action, Role, TabId, can as canDo, canView as canSee, normalizeRole } from './permissions';
 import { safeStringify } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
@@ -64,7 +64,7 @@ function parseJwtRole(token?: string): Role | null {
     if (parts.length !== 3) return null;
     const payload = JSON.parse(atob(parts[1]));
     if (payload.role && payload.role !== 'unregistered') {
-      return payload.role as Role;
+      return normalizeRole(payload.role);
     }
   } catch {}
   return null;
@@ -282,6 +282,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   // Authoritatively re-verify and refresh session profile against backend API
+  const sessionTokenSignatures = useMemo(
+    () => sessions.map((s) => `${s.address.toLowerCase()}:${s.token || ''}`).join(';'),
+    [sessions],
+  );
+
   useEffect(() => {
     if (!API || sessions.length === 0) return;
 
@@ -293,10 +298,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
         if (res.ok) {
           const profile = await res.json();
-          const serverRole = (profile.role ? profile.role.toLowerCase() : null) as Role | null;
-          if (serverRole && serverRole !== s.role) {
+          const resolvedRole = normalizeRole(profile.role, profile.capabilities);
+          if (resolvedRole && resolvedRole !== s.role) {
             setSessions((prev) =>
-              prev.map((item) => (same(item.address, s.address) ? { ...item, role: serverRole } : item))
+              prev.map((item) => (same(item.address, s.address) ? { ...item, role: resolvedRole } : item))
             );
           }
         }
@@ -304,7 +309,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // API offline or unreachable
       }
     });
-  }, []);
+  }, [sessionTokenSignatures]);
 
   const addSession = useCallback((s: Session) => {
     setSessions((prev) => [...prev.filter((p) => !same(p.address, s.address)), s]);
@@ -364,7 +369,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await fn();
     } catch (err: any) {
       setStatus('error');
-      setError(err?.code === 4001 ? 'Request cancelled in the wallet.' : err?.message ?? 'Sign-in failed.');
+      let msg = err?.message ?? 'Sign-in failed.';
+      if (err?.code === 4001) {
+        msg = 'Request cancelled in the wallet.';
+      } else if (err?.name === 'TypeError' && err?.message === 'Failed to fetch') {
+        msg = `Failed to connect to API at ${API || 'http://localhost:3000'}. Ensure the backend service is running.`;
+      }
+      setError(msg);
     }
   }, []);
 

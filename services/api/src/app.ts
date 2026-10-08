@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, encodePacked, toHex, createPublicClient, createWalletClient, parseUnits, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { foundry, sepolia } from 'viem/chains';
 import {
   Participant,
   ParticipantRole,
@@ -319,9 +319,22 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   if (!ALLOWED_CHAINS.includes(chainId)) {
     throw new Error(`FATAL: Chain ID ${chainId} is not allowed. VoltMesh strictly permits Anvil local devnet (31337) and Sepolia testnet (11155111).`);
   }
-  const settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address ?? '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318');
-  const oracleContractAddress = options.oracleContractAddress ?? (process.env.EPOCH_ORACLE_ADDRESS as Address ?? '0x0165878A594ca255338adfa4d48449f69242Eb8F');
-  const erc20ContractAddress = options.erc20ContractAddress ?? (process.env.MOCK_ERC20_ADDRESS as Address ?? '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853');
+  // Strict network contract address binding: Anvil defaults are strictly permitted ONLY on local chain 31337
+  let settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address | undefined);
+  let oracleContractAddress = options.oracleContractAddress ?? (process.env.EPOCH_ORACLE_ADDRESS as Address | undefined);
+  let erc20ContractAddress = options.erc20ContractAddress ?? (process.env.MOCK_ERC20_ADDRESS as Address | undefined);
+
+  if (chainId === 31337) {
+    settlementContractAddress ??= '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318';
+    oracleContractAddress ??= '0x0165878A594ca255338adfa4d48449f69242Eb8F';
+    erc20ContractAddress ??= '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853';
+  } else {
+    if (!settlementContractAddress || !oracleContractAddress || !erc20ContractAddress) {
+      throw new Error(
+        `FATAL: Missing contract addresses on network ${chainId}. BATCH_SETTLEMENT_ADDRESS, EPOCH_ORACLE_ADDRESS, and MOCK_ERC20_ADDRESS must be explicitly provided on non-local networks.`
+      );
+    }
+  }
 
   // P1-17: Restrict CORS origin in production
   if (isProduction) {
@@ -1129,6 +1142,11 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
 
   // ---------------------------------------------------------------------------
+  // Faucet rate limiting state: wallet -> timestamp of last mint
+  const faucetLastMint = new Map<string, number>();
+  const FAUCET_COOLDOWN_MS = 60_000; // 60 seconds cooldown between mints per wallet
+
+  // ---------------------------------------------------------------------------
   // Test-Token Faucet Endpoint (Devnet & Sepolia Faucet)
   // ---------------------------------------------------------------------------
   app.post('/api/v1/faucet/mint', { preHandler: [authenticate] }, async (request, reply) => {
@@ -1141,6 +1159,17 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     const validated = validateBody(FaucetMintSchema, request.body, reply);
     if (!validated) return;
 
+    // Per-wallet cooldown quota check
+    const now = Date.now();
+    const lastMint = faucetLastMint.get(user.address) ?? 0;
+    if (now - lastMint < FAUCET_COOLDOWN_MS && process.env.NODE_ENV !== 'test') {
+      const waitSec = Math.ceil((FAUCET_COOLDOWN_MS - (now - lastMint)) / 1000);
+      return reply.status(429).send({
+        error: 'FAUCET_RATE_LIMITED',
+        message: `Faucet cooldown active. Please wait ${waitSec}s before requesting more test tokens.`,
+      });
+    }
+
     const recipient = (validated.recipient || user.address).toLowerCase() as Address;
     const maxMintAmount = parseUnits('1000', 18);
     const requestedAmount = validated.amountPaise ? BigInt(validated.amountPaise) : maxMintAmount;
@@ -1152,15 +1181,32 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
-    // Deployer account on Anvil local devnet
-    const deployerKey = (process.env.FAUCET_PRIVATE_KEY || process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
+    // Network-specific RPC and Private Key resolution
+    const rpcUrl = chainId === 11155111
+      ? (process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org')
+      : (process.env.DEVNET_RPC_URL || 'http://127.0.0.1:8545');
+
+    const chainConfig = chainId === 11155111 ? sepolia : foundry;
+
+    let deployerKey: Hex | undefined = (process.env.FAUCET_PRIVATE_KEY || process.env.PRIVATE_KEY) as Hex | undefined;
+    if (!deployerKey) {
+      if (chainId === 31337) {
+        // Anvil default account #0 on local chain 31337 only
+        deployerKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+      } else {
+        return reply.status(503).send({
+          error: 'FAUCET_KEY_NOT_CONFIGURED',
+          message: 'FAUCET_PRIVATE_KEY must be configured to dispense test tokens on Sepolia',
+        });
+      }
+    }
 
     try {
       const deployerAccount = privateKeyToAccount(deployerKey);
       const walletClient = createWalletClient({
         account: deployerAccount,
-        chain: foundry,
-        transport: http('http://127.0.0.1:8545'),
+        chain: chainConfig,
+        transport: http(rpcUrl),
       });
 
       const hash = await walletClient.writeContract({
@@ -1178,6 +1224,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         functionName: 'mint',
         args: [recipient, requestedAmount],
       });
+
+      faucetLastMint.set(user.address, now);
 
       auditLogger.recordAuditEvent({
         actorWallet: user.address,
@@ -1197,18 +1245,19 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         amount: requestedAmount.toString(),
       });
     } catch (err: any) {
-      // If node is offline in unit test environment, return test mock confirmation
-      if (process.env.NODE_ENV === 'test' || allowDevKeys) {
-        return reply.send({
-          status: 'SUCCESS',
-          txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          recipient,
-          amount: requestedAmount.toString(),
-          mock: true,
-        });
-      }
+      auditLogger.recordAuditEvent({
+        actorWallet: user.address,
+        role: user.role,
+        action: 'FAUCET_MINT_FAILED',
+        resourceType: 'TEST_TOKEN',
+        resourceId: erc20ContractAddress,
+        status: 'FAILED',
+        reason: `Failed to mint test tokens: ${err.message}`,
+        failureCode: 'MINT_REVERTED',
+      });
+
       return reply.status(502).send({
-        error: 'FAUCET_RPC_ERROR',
+        error: 'FAUCET_MINT_FAILED',
         message: `Failed to execute on-chain mint: ${err.message}`,
       });
     }

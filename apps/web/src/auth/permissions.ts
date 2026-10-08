@@ -51,13 +51,37 @@ export const ROLES: Record<Role, RoleInfo> = {
   },
 };
 
+/**
+ * Normalizes a backend API role string ('OPERATOR', 'ADMIN', 'DISCOM', 'AUDITOR', 'PARTICIPANT', etc.)
+ * or client role string ('seller', 'buyer', 'discom', 'regulator') into a valid client Role.
+ */
+export function normalizeRole(rawRole?: string | null, capabilities?: { canSell?: boolean; canBuy?: boolean } | null): Role | null {
+  if (!rawRole) return null;
+  const lower = rawRole.toLowerCase();
+  if (lower === 'seller' || lower === 'buyer' || lower === 'discom' || lower === 'regulator') {
+    return lower as Role;
+  }
+  if (lower === 'operator' || lower === 'admin') {
+    return 'discom';
+  }
+  if (lower === 'auditor') {
+    return 'regulator';
+  }
+  if (lower === 'participant') {
+    // If capabilities are available, check if prosumer/seller
+    if (capabilities?.canSell) return 'seller';
+    return 'buyer';
+  }
+  return null;
+}
+
 export const can = (role: Role | undefined, action: Action) =>
-  !!role && ROLES[role].actions.includes(action);
+  !!role && !!ROLES[role] && ROLES[role].actions.includes(action);
 
 export const canView = (role: Role | undefined, tab: TabId) =>
-  !!role && ROLES[role].tabs.includes(tab);
+  !!role && !!ROLES[role] && ROLES[role].tabs.includes(tab);
 
-export const firstAllowedTab = (role: Role): TabId => ROLES[role].tabs[0];
+export const firstAllowedTab = (role: Role): TabId => (ROLES[role] ? ROLES[role].tabs[0] : 'market');
 
 export const allowedSides = (role: Role | undefined): OrderSide[] => {
   const sides: OrderSide[] = [];

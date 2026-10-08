@@ -1300,6 +1300,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (res.ok) {
         const data = await res.json();
         const txHash = (data.txHash || '0x') as Hash;
+        if (!data.txHash || data.txHash === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+          throw new Error(data.message || 'Server faucet could not confirm on-chain mint.');
+        }
         recordActivity({
           event: 'FaucetMinted',
           details: `Minted 1,000 vUSD settlement tokens via server faucet`,
@@ -1308,9 +1311,16 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         });
         await refreshBalances();
         return txHash;
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `Faucet request failed with status ${res.status}`);
       }
-    } catch {
-      // Fallback to direct client call if server faucet endpoint unreachable
+    } catch (err: any) {
+      // If error is explicit rejection from faucet (e.g. rate limit, over limit), surface it directly
+      if (err?.message && !err.message.includes('fetch')) {
+        throw err;
+      }
+      // Otherwise, only attempt direct contract call if server is unreachable
     }
 
     // Direct contract execution fallback
