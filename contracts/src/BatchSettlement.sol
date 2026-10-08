@@ -338,7 +338,6 @@ contract BatchSettlement {
     );
 
     error UnauthorizedObligationSigner(address expected, address recovered);
-    error SignaturesRequired();
 
     /**
      * @notice Computes EIP-712 obligation hash for bilateral delivery commitments.
@@ -395,21 +394,6 @@ contract BatchSettlement {
             revert UnauthorizedObligationSigner(seller, recoveredSeller);
         }
         escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
-    }
-
-    /**
-     * @dev Deprecated unauthenticated lockObligation is disabled to prevent operator unauthorized drainage.
-     */
-    function lockObligation(
-        bytes32,
-        address,
-        address,
-        uint256,
-        uint32,
-        uint32,
-        uint64
-    ) external pure {
-        revert SignaturesRequired();
     }
 
     /**

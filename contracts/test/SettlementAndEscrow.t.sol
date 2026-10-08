@@ -783,12 +783,7 @@ contract SettlementAndEscrowTest is Test {
         escrow.deposit(10_000);
         vm.stopPrank();
 
-        // 1. Unsigned lockObligation call must revert with SignaturesRequired
-        vm.prank(operator);
-        vm.expectRevert(BatchSettlement.SignaturesRequired.selector);
-        settlement.lockObligation(obligationId, buyer, seller, 5000, 1, 48, deadline);
-
-        // 2. Lock with forged/unauthorized buyer signature (signed by operator instead of buyer) must revert
+        // 1. Lock with forged/unauthorized buyer signature (signed by operator instead of buyer) must revert
         bytes memory forgedBuyerSig = _signObligation(obligationId, buyer, seller, 5000, 1, 48, deadline, 0x09);
         bytes memory validSellerSig = _signObligation(obligationId, buyer, seller, 5000, 1, 48, deadline, sKey);
         address rogueSigner = vm.addr(0x09);

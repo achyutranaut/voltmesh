@@ -13,7 +13,7 @@ import "../src/CertificateRegistry.sol";
 import "../src/RetirementRegistry.sol";
 import "../src/mocks/MockERC20.sol";
 
-contract SecurityAuditTest is Test {
+contract AttackSimulationsTest is Test {
     using MessageHashUtils for bytes32;
 
     AccessRegistry public access;
