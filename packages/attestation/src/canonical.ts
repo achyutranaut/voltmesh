@@ -8,22 +8,15 @@ export const STATEMENT_PREFIX = '0x02';
 /**
  * Safely normalizes any string or hex identifier into a strict 32-byte bytes32 hex representation.
  * - If 32-byte hex (66 chars with '0x'): preserved as-is.
- * - If hex < 32 bytes: right-padded to 32 bytes.
- * - If hex > 32 bytes: keccak256 hashed.
- * - If string <= 32 UTF-8 bytes: right-padded to 32 bytes.
- * - If string > 32 UTF-8 bytes: keccak256 hashed.
+ * - If hex has any other length: throws error.
+ * - If non-hex string: keccak256(stringToHex(val)).
  */
 export function normalizeToBytes32(val: string): `0x${string}` {
   if (isHex(val)) {
     if (val.length === 66) return val as `0x${string}`;
-    if (val.length < 66) return pad(val as `0x${string}`, { size: 32, dir: 'right' });
-    return keccak256(val as `0x${string}`);
+    throw new Error(`Invalid hex bytes32 string length: expected 66 characters ('0x' + 64 hex characters), got ${val.length}`);
   }
-  const hex = stringToHex(val);
-  if (hex.length <= 66) {
-    return pad(hex, { size: 32, dir: 'right' });
-  }
-  return keccak256(hex);
+  return keccak256(stringToHex(val));
 }
 
 /**
@@ -91,7 +84,7 @@ export function hashStatementLeaf(statement: SettlementStatementLeaf): `0x${stri
 }
 
 /**
- * Serializes MeterReadingPayload to a deterministic binary buffer (Protobuf / canonical binary representation).
+ * Serializes MeterReadingPayload to a deterministic binary buffer (canonical JSON).
  */
 export function serializePayload(payload: MeterReadingPayload): Uint8Array {
   const jsonStr = JSON.stringify({
@@ -107,7 +100,7 @@ export function serializePayload(payload: MeterReadingPayload): Uint8Array {
 }
 
 /**
- * Deserializes deterministic binary buffer to MeterReadingPayload.
+ * Deserializes deterministic binary buffer (canonical JSON) to MeterReadingPayload.
  */
 export function deserializePayload(buffer: Uint8Array): MeterReadingPayload {
   const jsonStr = new TextDecoder().decode(buffer);
