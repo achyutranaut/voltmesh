@@ -1012,6 +1012,8 @@ VoltMesh includes in-depth technical specifications, architectural designs, and 
 ### Architecture & Runtime
 - [`REAL_RUNTIME_FLOW.md`](REAL_RUNTIME_FLOW.md): Step-by-step audit of all 23 runtime stages and execution paths.
 - [`docs/VOLTMESH_FINAL_ARCHITECTURE.md`](docs/VOLTMESH_FINAL_ARCHITECTURE.md): Comprehensive system specification and mass-scale architecture.
+- [`docs/ARCHITECTURE-V1.md`](docs/ARCHITECTURE-V1.md): Mass-Scale Research & Architecture Specification V1 (Phase 2, 792 lines).
+- [`docs/RESEARCH_BLUEPRINT.md`](docs/RESEARCH_BLUEPRINT.md): Condensed 16-section executive research blueprint with Mermaid system workflows.
 - [`docs/V1.1_Technical_Design_Specification.md`](docs/V1.1_Technical_Design_Specification.md): Low-level wire formats, byte schemas, and math models.
 - [`docs/SETTLEMENT_AND_BILLING_MODEL.md`](docs/SETTLEMENT_AND_BILLING_MODEL.md): Tariff structures, wheeling charge models, and escrow mechanics.
 

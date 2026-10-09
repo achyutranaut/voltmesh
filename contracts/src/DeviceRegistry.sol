@@ -95,7 +95,15 @@ contract DeviceRegistry {
         emit DeviceRegistered(deviceId, signerAddress, zoneId, signerType, capacityWh);
     }
 
-    function revokeDevice(bytes32 deviceId, string calldata reason) external onlyRegistrar {
+    error CallerNotAuthorized();
+
+    function revokeDevice(bytes32 deviceId, string calldata reason) external {
+        if (!accessRegistry.hasRole(accessRegistry.REGISTRAR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.REGULATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
+            revert CallerNotAuthorized();
+        }
         Device storage d = devices[deviceId];
         if (d.registeredAt == 0) revert DeviceNotFound(deviceId);
         d.isRevoked = true;

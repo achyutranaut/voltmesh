@@ -77,12 +77,23 @@ To run fully self-hosted without external third-party data egress:
    LLM_MODEL=llama3.2
    ```
 
-### Mode 3: Anthropic Claude
+### Mode 3: Anthropic Claude (Server-Side Only)
+> [!IMPORTANT]
+> `ANTHROPIC_API_KEY` is loaded strictly on the Node.js server. **Never** expose this key to browser bundles or prefix with `VITE_`.
 ```bash
 ADVISOR_ENABLED=true
 LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-api03-...
+ANTHROPIC_API_KEY=sk-ant-api03-... # Server-only! Never prefix with VITE_
 LLM_MODEL=claude-3-5-sonnet-20241022
+```
+
+### Mode 4: OpenAI-Compatible Endpoint (e.g., vLLM, LocalAI, OpenAI)
+```bash
+ADVISOR_ENABLED=true
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.openai.com/v1 # or http://localhost:11434/v1 for Ollama OpenAI compatibility
+LLM_API_KEY=sk-...                     # Server-only! Never prefix with VITE_
+LLM_MODEL=gpt-4o-mini
 ```
 
 ---

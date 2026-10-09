@@ -218,3 +218,18 @@ CREATE INDEX IF NOT EXISTS idx_security_events_actor ON security_events(actor_wa
 CREATE INDEX IF NOT EXISTS idx_security_events_severity ON security_events(severity);
 CREATE INDEX IF NOT EXISTS idx_security_events_category ON security_events(category);
 
+-- 12. Market Reference Table (External Advisory Reference Data: Prices & Weather)
+CREATE TABLE IF NOT EXISTS market_reference (
+    id SERIAL,
+    source VARCHAR(64) NOT NULL,
+    kind VARCHAR(32) NOT NULL CHECK (kind IN ('REFERENCE_PRICE', 'SOLAR_IRRADIANCE', 'WIND_SPEED')),
+    zone_id INT NOT NULL,
+    interval_start TIMESTAMPTZ NOT NULL,
+    value NUMERIC(12, 4) NOT NULL,
+    unit VARCHAR(32) NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, interval_start)
+);
+SELECT create_hypertable('market_reference', 'interval_start', if_not_exists => TRUE);
+CREATE INDEX IF NOT EXISTS idx_market_ref_query ON market_reference(zone_id, kind, interval_start DESC);
+

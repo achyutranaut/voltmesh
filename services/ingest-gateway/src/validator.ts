@@ -6,11 +6,16 @@ export interface ValidationResult {
   payload?: MeterReadingPayload;
   error?: string;
   isEquivocation?: boolean;
+  failureCode?: string;
+  plausibilityStatus?: 'VERIFIED' | 'UNCHECKED' | 'IMPLAUSIBLE';
 }
 
 export interface ValidationOptions {
   getRegisteredKey?: (deviceId: string) => Uint8Array | undefined;
   trustedPublicKey?: Uint8Array;
+  solarCapacityW?: bigint;
+  solarIrradianceGhi?: number; // W/m²
+  weatherDataStale?: boolean;
 }
 
 export class AttestationValidator {
@@ -85,6 +90,47 @@ export class AttestationValidator {
       return { valid: false, error: 'Counter must be strictly positive' };
     }
 
-    return { valid: true, payload };
+    // Physical plausibility check for solar injection
+    let plausibilityStatus: 'VERIFIED' | 'UNCHECKED' | 'IMPLAUSIBLE' = 'UNCHECKED';
+
+    if (options?.solarCapacityW && options.solarCapacityW > 0n) {
+      const ghi = options.solarIrradianceGhi;
+      const isStale = options.weatherDataStale ?? false;
+
+      if (ghi === undefined || isStale) {
+        // When irradiance data is unavailable or stale, do NOT reject; log and flag UNCHECKED
+        plausibilityStatus = 'UNCHECKED';
+      } else {
+        const kWp = Number(options.solarCapacityW) / 1000;
+        // Night generation check: generation > 0 when ghi < 5 W/m²
+        if (ghi < 5 && payload.energyWh > 0n) {
+          return {
+            valid: false,
+            payload,
+            error: `Physically implausible solar generation (${payload.energyWh} Wh) detected at night (GHI: ${ghi} W/m²)`,
+            failureCode: 'PHYSICALLY_IMPLAUSIBLE',
+            plausibilityStatus: 'IMPLAUSIBLE',
+          };
+        }
+
+        // Clear sky maximum threshold: energyWh > clearSkyMaxWh * 1.2
+        const clearSkyMaxWh = Math.round(kWp * 1000 * (ghi / 1000) * 1.0 * 0.25);
+        const maxAllowedWh = BigInt(Math.round(clearSkyMaxWh * 1.2));
+
+        if (payload.energyWh > maxAllowedWh && maxAllowedWh > 0n) {
+          return {
+            valid: false,
+            payload,
+            error: `Physically implausible solar generation: reading ${payload.energyWh} Wh exceeds clear-sky max allowance of ${maxAllowedWh} Wh`,
+            failureCode: 'PHYSICALLY_IMPLAUSIBLE',
+            plausibilityStatus: 'IMPLAUSIBLE',
+          };
+        }
+
+        plausibilityStatus = 'VERIFIED';
+      }
+    }
+
+    return { valid: true, payload, plausibilityStatus };
   }
 }

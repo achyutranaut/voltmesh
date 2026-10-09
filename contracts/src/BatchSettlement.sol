@@ -90,6 +90,8 @@ contract BatchSettlement {
     event SettlementPoolFunded(address indexed funder, uint256 amount);
 
     error CallerNotOperator();
+    error CallerNotRegulator();
+    error SettlementFrozen(uint32 dateEpoch, uint32 zoneId);
     error CommitmentAlreadyExists(uint32 zoneId, uint32 intervalIdx);
     error StatementAlreadyPosted(uint32 dateEpoch, uint32 zoneId);
     error StatementNotFound(uint32 dateEpoch, uint32 zoneId);
@@ -104,6 +106,13 @@ contract BatchSettlement {
     error InvalidParticipants();
     error InvalidAmount();
     error SystemPaused();
+    error OversightAccountsCannotTrade();
+    error CrossDomainTradeProhibited(address buyer, address seller);
+
+    // dateEpoch => zoneId => isFrozen
+    mapping(uint32 => mapping(uint32 => bool)) public settlementFrozen;
+
+    event SettlementFreezeUpdated(uint32 indexed dateEpoch, uint32 indexed zoneId, bool frozen);
 
     modifier onlyOperator() {
         if (!accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender)) {
@@ -112,9 +121,34 @@ contract BatchSettlement {
         _;
     }
 
+    modifier onlyRegulator() {
+        if (!accessRegistry.hasRole(accessRegistry.REGULATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
+            revert CallerNotRegulator();
+        }
+        _;
+    }
+
+    modifier onlyTrader(address account) {
+        if (accessRegistry.isOversightAccount(account)) {
+            revert OversightAccountsCannotTrade();
+        }
+        _;
+    }
+
     modifier whenNotPaused() {
         if (accessRegistry.paused()) revert SystemPaused();
         _;
+    }
+
+    function freezeSettlement(uint32 dateEpoch, uint32 zoneId) external onlyRegulator whenNotPaused {
+        settlementFrozen[dateEpoch][zoneId] = true;
+        emit SettlementFreezeUpdated(dateEpoch, zoneId, true);
+    }
+
+    function unfreezeSettlement(uint32 dateEpoch, uint32 zoneId) external onlyRegulator whenNotPaused {
+        settlementFrozen[dateEpoch][zoneId] = false;
+        emit SettlementFreezeUpdated(dateEpoch, zoneId, false);
     }
 
     constructor(
@@ -238,7 +272,12 @@ contract BatchSettlement {
         uint64 shortfallPenaltyPaise,
         uint32 leafIndex,
         bytes32[] calldata merkleProof
-    ) external whenNotPaused {
+    ) external whenNotPaused onlyTrader(msg.sender) onlyTrader(participant) {
+        if (settlementFrozen[dateEpoch][zoneId]) {
+            revert SettlementFrozen(dateEpoch, zoneId);
+        }
+        accessRegistry.markTraded(participant);
+
         if (!participantRegistry.isRegisteredAndActive(participant)) {
             revert ParticipantNotActive(participant);
         }
@@ -292,10 +331,11 @@ contract BatchSettlement {
     /**
      * @notice Cancels an order on-chain using its nonce to prevent matching or settlement inclusion.
      */
-    function cancelOrder(uint256 nonce) external whenNotPaused {
+    function cancelOrder(uint256 nonce) external whenNotPaused onlyTrader(msg.sender) {
         if (!participantRegistry.isRegisteredAndActive(msg.sender)) {
             revert ParticipantNotActive(msg.sender);
         }
+        accessRegistry.markTraded(msg.sender);
         cancelledNonces[msg.sender][nonce] = true;
         emit OrderCancelled(msg.sender, nonce);
     }
@@ -384,6 +424,17 @@ contract BatchSettlement {
         if (buyer == address(0) || seller == address(0) || buyer == seller) {
             revert InvalidParticipants();
         }
+
+        // Neither buyer nor seller can be an oversight account
+        if (accessRegistry.isOversightAccount(buyer) || accessRegistry.isOversightAccount(seller)) {
+            revert OversightAccountsCannotTrade();
+        }
+
+        // Reject cross-domain trades (buyer and seller must both be DEMO or both LIVE)
+        if (accessRegistry.isDemo(buyer) != accessRegistry.isDemo(seller)) {
+            revert CrossDomainTradeProhibited(buyer, seller);
+        }
+
         bytes32 oblHash = hashObligation(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
         address recoveredBuyer = oblHash.recover(buyerSig);
         if (recoveredBuyer != buyer) {
@@ -393,6 +444,10 @@ contract BatchSettlement {
         if (recoveredSeller != seller) {
             revert UnauthorizedObligationSigner(seller, recoveredSeller);
         }
+
+        accessRegistry.markTraded(buyer);
+        accessRegistry.markTraded(seller);
+
         escrow.lockObligationCollateral(obligationId, buyer, seller, amount, zoneId, intervalIdx, deadline);
     }
 

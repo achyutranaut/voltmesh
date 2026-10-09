@@ -48,9 +48,17 @@ contract CertificateRegistry is ERC1155 {
     error AlreadyInitialized();
     error InvalidAddress();
     error SystemPaused();
+    error OversightAccountsCannotTrade();
 
     modifier onlyRetirement() {
         if (msg.sender != retirementRegistry) revert CallerNotRetirement();
+        _;
+    }
+
+    modifier onlyTrader(address account) {
+        if (accessRegistry.isOversightAccount(account)) {
+            revert OversightAccountsCannotTrade();
+        }
         _;
     }
 
@@ -86,6 +94,43 @@ contract CertificateRegistry is ERC1155 {
         emit RetirementRegistryUpdated(_retirementRegistry);
     }
 
+    function _validateClaimEligible(
+        uint32 zoneId,
+        bytes32 deviceId,
+        uint64 energyWh,
+        uint8 sourceType
+    ) internal view returns (address deviceOwner) {
+        if (!deviceRegistry.isDeviceValid(deviceId)) {
+            revert DeviceNotRegisteredOrRevoked(deviceId);
+        }
+        if (!deviceRegistry.checkCapacity(deviceId, energyWh)) {
+            revert ExceedsRatedCapacity(deviceId, energyWh);
+        }
+
+        DeviceRegistry.Device memory dev = deviceRegistry.getDevice(deviceId);
+
+        if (dev.sourceType != DeviceRegistry.SourceType.SOLAR_PV && dev.sourceType != DeviceRegistry.SourceType.WIND) {
+            revert NonRenewableSourceType(uint8(dev.sourceType));
+        }
+        if (sourceType != uint8(dev.sourceType)) {
+            revert MismatchedSourceType(sourceType, uint8(dev.sourceType));
+        }
+        if (zoneId != dev.zoneId) {
+            revert MismatchedZoneId(zoneId, dev.zoneId);
+        }
+
+        deviceOwner = participantRegistry.participantIdToWallet(dev.participantId);
+        if (deviceOwner == address(0)) {
+            revert DeviceOwnerNotFound(deviceId);
+        }
+        if (!participantRegistry.isRegisteredAndActive(deviceOwner)) {
+            revert InactiveOrSuspendedParticipant(deviceOwner);
+        }
+        if (participantRegistry.getParticipantByWallet(deviceOwner).roleType != ParticipantRegistry.RoleType.PROSUMER) {
+            revert ParticipantNotProsumer(deviceOwner);
+        }
+    }
+
     /**
      * @notice Lazily mints ERC-1155 certificates by proving injection in a finalized epoch.
      */
@@ -97,50 +142,16 @@ contract CertificateRegistry is ERC1155 {
         uint8 sourceType,
         uint64 counter,
         bytes32[] calldata oracleMerkleProof
-    ) external whenNotPaused returns (uint256 tokenId) {
-        if (!deviceRegistry.isDeviceValid(deviceId)) {
-            revert DeviceNotRegisteredOrRevoked(deviceId);
-        }
-        if (!deviceRegistry.checkCapacity(deviceId, energyWh)) {
-            revert ExceedsRatedCapacity(deviceId, energyWh);
-        }
+    ) external whenNotPaused onlyTrader(msg.sender) returns (uint256 tokenId) {
+        address deviceOwner = _validateClaimEligible(zoneId, deviceId, energyWh, sourceType);
 
-        DeviceRegistry.Device memory dev = deviceRegistry.getDevice(deviceId);
-
-        // Green certificates (GACs) strictly restricted to renewable sources (SOLAR_PV, WIND)
-        if (dev.sourceType != DeviceRegistry.SourceType.SOLAR_PV && dev.sourceType != DeviceRegistry.SourceType.WIND) {
-            revert NonRenewableSourceType(uint8(dev.sourceType));
-        }
-
-        if (sourceType != uint8(dev.sourceType)) {
-            revert MismatchedSourceType(sourceType, uint8(dev.sourceType));
-        }
-
-        // Zone must match registered device location
-        if (zoneId != dev.zoneId) {
-            revert MismatchedZoneId(zoneId, dev.zoneId);
-        }
-
-        address deviceOwner = participantRegistry.participantIdToWallet(dev.participantId);
-        if (deviceOwner == address(0)) {
-            revert DeviceOwnerNotFound(deviceId);
-        }
-
-        // Participant must be actively registered and not suspended
-        if (!participantRegistry.isRegisteredAndActive(deviceOwner)) {
-            revert InactiveOrSuspendedParticipant(deviceOwner);
-        }
-
-        // Device owner must be registered as PROSUMER
-        ParticipantRegistry.Participant memory part = participantRegistry.getParticipantByWallet(deviceOwner);
-        if (part.roleType != ParticipantRegistry.RoleType.PROSUMER) {
-            revert ParticipantNotProsumer(deviceOwner);
-        }
-
-        // Strictly only the device owner can trigger claiming
         if (msg.sender != deviceOwner) {
             revert UnauthorizedClaimant();
         }
+        if (accessRegistry.isOversightAccount(deviceOwner) || accessRegistry.isOversightAccount(msg.sender)) {
+            revert OversightAccountsCannotTrade();
+        }
+        accessRegistry.markTraded(deviceOwner);
 
         bytes32 nullifier = keccak256(abi.encodePacked(deviceId, intervalIdx, counter));
         if (claimedLeaves[nullifier]) revert LeafAlreadyMinted(nullifier);
@@ -180,7 +191,8 @@ contract CertificateRegistry is ERC1155 {
     }
 
     /**
-     * @notice Enforces that certificate transfers can only be made to registered, active participants.
+     * @notice Enforces that certificate transfers can only be made to registered, active participants
+     *         and never to oversight accounts (regulators/operators).
      */
     function _update(
         address from,
@@ -188,11 +200,21 @@ contract CertificateRegistry is ERC1155 {
         uint256[] memory ids,
         uint256[] memory values
     ) internal virtual override {
-        // If transferring to an account (not burning to address(0)), recipient must be registered and active
+        // If transferring to an account (not burning to address(0)), recipient must be registered, active, and not oversight
         if (to != address(0) && to != retirementRegistry) {
+            if (accessRegistry.isOversightAccount(to)) {
+                revert OversightAccountsCannotTrade();
+            }
             if (!participantRegistry.isRegisteredAndActive(to)) {
                 revert InactiveOrSuspendedParticipant(to);
             }
+            accessRegistry.markTraded(to);
+        }
+        if (from != address(0)) {
+            if (accessRegistry.isOversightAccount(from)) {
+                revert OversightAccountsCannotTrade();
+            }
+            accessRegistry.markTraded(from);
         }
         super._update(from, to, ids, values);
     }

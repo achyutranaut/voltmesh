@@ -238,6 +238,17 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
         <span className="text-xs text-zinc-500">Signed with your wallet</span>
       </div>
 
+      {isDisallowedRole && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs text-rose-200 flex items-start gap-2">
+          <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <span>
+            <span className="font-semibold text-rose-300">Oversight account: trading disabled.</span>{' '}
+            Market operators and regulators cannot buy or sell energy — enforced on-chain
+            (<span className="font-mono">OversightAccountsCannotTrade</span>). Any trade attempt will revert.
+          </span>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4 bg-panel border border-white/[0.07] rounded-lg p-4">
         {/* Role-Aware Order Side Selection */}
         <div>

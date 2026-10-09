@@ -4,6 +4,7 @@ import { Command, Wallet } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 import { TerminalNavTab } from './TerminalSidebar';
 import { SessionSwitcher } from '../auth/AccessGate';
+import { formatSlotTimeRangeIST } from '@/utils/formatters';
 
 export interface TerminalTopBarProps {
   activeTab: TerminalNavTab;
@@ -24,17 +25,7 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
 }) => {
   const { address, isConnected, chainId } = useWallet();
 
-  // 15-minute slot time calculation (96 slots in 24 hours)
-  const intervalHour = Math.floor(currentInterval / 4) % 24;
-  const intervalMinute = (currentInterval % 4) * 15;
-  const nextIntervalHour = Math.floor((currentInterval + 1) / 4) % 24;
-  const nextIntervalMinute = ((currentInterval + 1) % 4) * 15;
-
-  const intervalTimeWindow = `${String(intervalHour).padStart(2, '0')}:${String(
-    intervalMinute
-  ).padStart(2, '0')}–${String(nextIntervalHour).padStart(2, '0')}:${String(
-    nextIntervalMinute
-  ).padStart(2, '0')}`;
+  const slotInfo = formatSlotTimeRangeIST(currentInterval);
 
   const getTabTitle = (tab: TerminalNavTab) => {
     switch (tab) {
@@ -60,12 +51,6 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
         return 'Terminal';
     }
   };
-
-  const todayFormatted = new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date());
 
   const networkLabel =
     chainId === 11155111
@@ -96,13 +81,13 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
           <span className="text-zinc-600 hidden md:inline">·</span>
 
           <span className="text-zinc-400 hidden md:inline text-xs whitespace-nowrap">
-            {todayFormatted}
+            {slotInfo.dateFormatted}
           </span>
 
           <span className="text-zinc-600 hidden md:inline">·</span>
 
           <span className="text-zinc-400 hidden md:inline text-xs font-mono whitespace-nowrap">
-            {intervalTimeWindow}
+            {slotInfo.timeWindowWithZone}
           </span>
         </div>
       </div>

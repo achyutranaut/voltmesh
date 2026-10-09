@@ -57,18 +57,26 @@ export class MeterSimulator {
   }
 
   /**
-   * Generates a realistic 15-minute generation/load value based on time of day (IST).
+   * Generates a realistic 15-minute generation/load value based on time of day (IST) or irradiance.
    * intervalOfDay: 0..95 (where 48 is 12:00 PM)
+   * optional ghiWm2: global horizontal irradiance (W/m²). When provided, generation is driven by irradiance.
    */
-  public generateExpectedWh(intervalIdx: number): bigint {
+  public generateExpectedWh(intervalIdx: number, ghiWm2?: number): bigint {
     const intervalOfDay = intervalIdx % 96;
 
     if (this.sourceType === SourceType.SOLAR_PV) {
-      // Solar curve between 24 (06:00) and 72 (18:00), peak at 48 (12:00)
+      // If irradiance is provided explicitly, use physical formula: kWp * 1000 * (ghi/1000) * 0.8 * 0.25
+      if (ghiWm2 !== undefined) {
+        if (ghiWm2 <= 5) return 0n; // 0 Wh at night / below threshold
+        const kWp = Number(this.ratedCapacityW) / 1000;
+        const rawWh = kWp * 1000 * (ghiWm2 / 1000) * 0.8 * 0.25;
+        return BigInt(Math.max(0, Math.round(rawWh)));
+      }
+
+      // Default solar curve between 24 (06:00) and 72 (18:00), peak at 48 (12:00)
       if (intervalOfDay >= 24 && intervalOfDay <= 72) {
         const peakDistance = Math.abs(intervalOfDay - 48);
         const solarFactor = Math.max(0, 1 - (peakDistance / 24) ** 2);
-        // Max Wh in 15 mins for ratedCapacityW = ratedCapacityW * 0.25
         const maxIntervalWh = Number(this.ratedCapacityW) * 0.25;
         return BigInt(Math.floor(maxIntervalWh * solarFactor));
       }
@@ -84,11 +92,12 @@ export class MeterSimulator {
    */
   public emitReading(
     intervalIdx: number,
-    fault: SimulatedFault = SimulatedFault.NONE
+    fault: SimulatedFault = SimulatedFault.NONE,
+    ghiWm2?: number
   ): AttestationEnvelope | { original: AttestationEnvelope; equivocation: AttestationEnvelope } {
     let counter = ++this.currentCounter;
     let targetInterval = intervalIdx;
-    let energyWh = this.generateExpectedWh(intervalIdx);
+    let energyWh = this.generateExpectedWh(intervalIdx, ghiWm2);
     const direction = this.sourceType === SourceType.SOLAR_PV ? EnergyDirection.INJECTION : EnergyDirection.CONSUMPTION;
 
     if (fault === SimulatedFault.REPLAY_COUNTER) {

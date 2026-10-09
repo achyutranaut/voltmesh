@@ -17,7 +17,7 @@ import { safeStringify } from '@/lib/utils';
 export const DEMO_MODE =
   import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true';
 
-const API: string | undefined = import.meta.env.VITE_API_URL;
+const API: string = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const SESSION_TTL_MS = 60 * 60 * 1000;
 
 export type DemoKey = 'seller' | 'buyer' | 'discom' | 'regulator';

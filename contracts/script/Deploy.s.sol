@@ -25,21 +25,14 @@ contract DeployScript is Script {
         address retirementRegistry
     ) {
         require(
-            block.chainid == 31337 || block.chainid == 11155111,
-            "Deployments restricted strictly to testnets (Anvil 31337 or Sepolia 11155111)"
+            block.chainid == 31337,
+            "Dual oversight roles can only be granted on devnet (chainid 31337)"
         );
 
-        uint256 deployerPrivateKey;
-        if (block.chainid != 31337) {
-            // Revert immediately if PRIVATE_KEY is absent on non-local networks
-            deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        } else {
-            // Allow default Anvil account #0 strictly on local chain 31337
-            deployerPrivateKey = vm.envOr(
-                "PRIVATE_KEY",
-                uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
-            );
-        }
+        uint256 deployerPrivateKey = vm.envOr(
+            "PRIVATE_KEY",
+            uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
+        );
 
         address deployer = vm.addr(deployerPrivateKey);
         console.log("Deploying VoltMesh contracts on chainId:", block.chainid);
@@ -58,15 +51,34 @@ contract DeployScript is Script {
         address oracleSigner;
         address auditor;
 
+        address oversightAccount = vm.envOr(
+            "AUDITOR_ADDRESS",
+            address(0x13e21cccB6fcB1E03105b6243Af4563280E56FDd)
+        );
+
         if (block.chainid == 31337) {
             // Anvil local testnet:
             // Account #3: DISCOM Market Operator
             discomOperator = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
             // Dedicated Oracle Node (public devnet key 0x...0101)
             oracleSigner = 0x25A71a07cecf1753ee65b00E0a3AAEf7e0F51c0F;
-            // Account #4: Regulator / Auditor
+            // Account #4: Legacy Auditor address
             auditor = 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65;
+
+            // Grant REGULATOR_ROLE and OPERATOR_ROLE to dedicated Oversight account ONLY on devnet (31337)
+            access.grantRole(access.REGULATOR_ROLE(), oversightAccount);
+            access.grantRole(access.OPERATOR_ROLE(), oversightAccount);
+            console.log("Dedicated Oversight account provisioned on devnet:", oversightAccount);
+
+            // Mark preset demo test accounts as isDemo = true
+            access.setDemoDomain(0x70997970C51812dc3A010C7d01b50e0d17dc79C8, true); // Buyer demo
+            access.setDemoDomain(0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC, true); // Seller demo
+            access.setDemoDomain(0x90F79bf6EB2c4f870365E785982E1f101E93b906, true); // DISCOM demo
+            access.setDemoDomain(0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65, true); // Regulator demo
+            access.setDemoDomain(oversightAccount, true);                           // Oversight account demo domain
         } else {
+            // On public testnets / production, combined dual oversight role is strictly prohibited
+            require(block.chainid == 31337, "FATAL: Dedicated dual-role oversight account cannot be granted on non-devnet networks");
             discomOperator = vm.envAddress("OPERATOR_ADDRESS");
             oracleSigner = vm.envAddress("ORACLE_ADDRESS");
             auditor = vm.envAddress("AUDITOR_ADDRESS");
@@ -82,6 +94,7 @@ contract DeployScript is Script {
         access.grantRole(access.OPERATOR_ROLE(), discomOperator);
         access.grantRole(access.ORACLE_ROLE(), oracleSigner);
         access.grantRole(access.AUDITOR_ROLE(), auditor);
+        access.grantRole(access.REGULATOR_ROLE(), auditor);
 
         // 2. Participant Registry
         ParticipantRegistry participants = new ParticipantRegistry(address(access));

@@ -210,8 +210,22 @@ contract AttackSimulationsTest is Test {
 
         bytes32[] memory emptyProof = new bytes32[](0);
 
-        // Operator relayer cannot claim on behalf of prosumer; strictly owner-only
+        // Operator now holds OPERATOR_ROLE (an oversight account), so it is blocked
+        // from the trade path even before the owner check: strictly non-trading.
         vm.prank(operator);
+        vm.expectRevert(CertificateRegistry.OversightAccountsCannotTrade.selector);
+        certificates.claimCertificate(
+            TEST_ZONE_ID,
+            intervalIdx,
+            deviceId,
+            TEST_ENERGY_WH,
+            TEST_SOURCE_TYPE,
+            counter,
+            emptyProof
+        );
+
+        // A non-oversight relayer (attacker) is still rejected by the owner-only check.
+        vm.prank(attacker);
         vm.expectRevert(CertificateRegistry.UnauthorizedClaimant.selector);
         certificates.claimCertificate(
             TEST_ZONE_ID,

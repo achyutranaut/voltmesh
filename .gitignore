@@ -35,3 +35,7 @@ env/
 # Testing & Coverage
 coverage/
 .nyc_output/
+
+# Market Reference Data
+data/iex/*.csv
+!data/iex/SAMPLE_IEX_DAM_2026.csv

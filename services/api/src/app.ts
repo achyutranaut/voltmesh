@@ -352,12 +352,22 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     }
   }
 
-  // P1-17: Restrict CORS origin in production
+  // P1-17: Restrict CORS origin in production, allow Vite dev and configured ALLOWED_ORIGINS
+  const defaultAllowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
   if (isProduction) {
-    const allowed = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false;
-    app.register(cors, { origin: allowed });
+    const envOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : [];
+    const allowed = envOrigins.length > 0 ? envOrigins : defaultAllowedOrigins;
+    app.register(cors, {
+      origin: allowed,
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+      credentials: true,
+    });
   } else {
-    app.register(cors, { origin: true });
+    app.register(cors, {
+      origin: true,
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+      credentials: true,
+    });
   }
 
   app.register(jwt, { secret: jwtSecret });
@@ -3191,7 +3201,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
-    const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string };
+    const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string; jurisdiction?: string };
     const isRegulatorOrOperator =
       user.govRole === 'REGULATOR' ||
       user.govRole === 'MARKET_OPERATOR' ||
@@ -3207,7 +3217,15 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
-    const body = (request.body || {}) as { attackId?: number | string; attackType?: string };
+    const body = (request.body || {}) as { attackId?: number | string; attackType?: string; domain?: string; targetAddress?: string };
+    const domain = body.domain || 'DEMO';
+    if (domain === 'LIVE') {
+      return reply.status(400).send({
+        error: 'DRILL_LIVE_DISALLOWED',
+        message: 'Security attack simulation drills are strictly restricted to the DEMO domain with synthetic test state.',
+      });
+    }
+
     const attackId = body.attackType ?? body.attackId;
     const now = Math.floor(Date.now() / 1000);
 
@@ -4328,6 +4346,23 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
     recordAdvisorAudit(user.address, user.role, '/api/v1/advisor/ask', parsed.data.question, advisorRes);
     return reply.send(advisorRes);
+  });
+
+  // Support GET on advisor endpoints returning 401 when unauthenticated
+  app.get('/api/v1/advisor/ask', { preHandler: authenticate }, async (request, reply) => {
+    return reply.status(405).send({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST for /api/v1/advisor/ask' });
+  });
+
+  app.get('/api/v1/advisor/explain-event', { preHandler: authenticate }, async (request, reply) => {
+    return reply.status(405).send({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST for /api/v1/advisor/explain-event' });
+  });
+
+  app.get('/api/v1/advisor/summarize', { preHandler: authenticate }, async (request, reply) => {
+    return reply.status(405).send({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST for /api/v1/advisor/summarize' });
+  });
+
+  app.get('/api/v1/advisor/incident-report', { preHandler: authenticate }, async (request, reply) => {
+    return reply.status(405).send({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST for /api/v1/advisor/incident-report' });
   });
 
   return app;

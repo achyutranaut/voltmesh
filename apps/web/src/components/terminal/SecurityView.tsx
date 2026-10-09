@@ -26,7 +26,8 @@ import {
   Bot,
 } from 'lucide-react';
 import { DetailDrawerData } from '@/types/ui';
-import { useSession } from '@/auth/SessionContext';
+import { useSession, DEMO_MODE } from '@/auth/SessionContext';
+import { apiFetch, mapAdvisorError } from '@/lib/api';
 
 export interface SecurityViewProps {
   currentInterval?: number;
@@ -81,7 +82,7 @@ const DEFAULT_METRICS: SecurityMetricState = {
   hashChainValid: false,
 };
 
-const ATTACK_VECTORS = [
+export const ATTACK_VECTORS = [
   {
     id: 'FAKE_METER_SIGNATURE',
     name: '1. Fake Meter Signature',
@@ -233,6 +234,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 }) => {
   const { session } = useSession();
   const [metrics, setMetrics] = useState<SecurityMetricState>(DEFAULT_METRICS);
+  const [hashChainVerifiedStatus, setHashChainVerifiedStatus] = useState<'VERIFIED' | 'UNVERIFIED' | 'FAILED'>('UNVERIFIED');
   const [simulationResults, setSimulationResults] = useState<Record<string, AttackSimulationResult>>({});
   const [loadingSimulation, setLoadingSimulation] = useState<string | null>(null);
   const [oracleQuarantined, setOracleQuarantined] = useState<boolean>(false);
@@ -243,33 +245,44 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const [advisorLoading, setAdvisorLoading] = useState<boolean>(false);
   const [advisorError, setAdvisorError] = useState<string | null>(null);
 
+  const isOversightRole = session?.role === 'regulator' || session?.role === 'discom';
+  // Drills only run in DEMO mode against synthetic state (Phase 6).
+  const inDemoMode = DEMO_MODE || session?.kind === 'demo';
+  const isDrillAllowed = isOversightRole && inDemoMode;
+
   const fetchMetrics = useCallback(async () => {
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-      };
-      const res = await fetch('/api/v1/security/metrics', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setMetrics({
-          systemIntegrity: data.systemIntegrity ?? 'UNKNOWN',
-          oracleQuorumHealth: data.oracleQuorumHealth ?? 'UNKNOWN',
-          totalSecurityEvents: data.totalSecurityEvents ?? 0,
-          criticalEventsCount: data.criticalEventsCount ?? 0,
-          highEventsCount: data.highEventsCount ?? 0,
-          blockedActionsCount: data.blockedActionsCount ?? 0,
-          registeredDevicesCount: data.registeredDevicesCount ?? null,
-          activeDevicesCount: data.activeDevicesCount ?? null,
-          revokedDevicesCount: data.revokedDevicesCount ?? null,
-          equivocationsCount: data.equivocationsCount ?? 0,
-          suspiciousOrdersCount: data.suspiciousOrdersCount ?? 0,
-          settlementIntegrity: data.settlementIntegrity ?? 'UNKNOWN',
-          certificateIntegrity: data.certificateIntegrity ?? 'UNKNOWN',
-          hashChainValid: data.hashChainValid ?? false,
-        });
+      const data = await apiFetch<any>('/api/v1/security/metrics', session?.token);
+      setMetrics({
+        systemIntegrity: data.systemIntegrity ?? 'UNKNOWN',
+        oracleQuorumHealth: data.oracleQuorumHealth ?? 'UNKNOWN',
+        totalSecurityEvents: data.totalSecurityEvents ?? 0,
+        criticalEventsCount: data.criticalEventsCount ?? 0,
+        highEventsCount: data.highEventsCount ?? 0,
+        blockedActionsCount: data.blockedActionsCount ?? 0,
+        registeredDevicesCount: data.registeredDevicesCount ?? null,
+        activeDevicesCount: data.activeDevicesCount ?? null,
+        revokedDevicesCount: data.revokedDevicesCount ?? null,
+        equivocationsCount: data.equivocationsCount ?? 0,
+        suspiciousOrdersCount: data.suspiciousOrdersCount ?? 0,
+        settlementIntegrity: data.settlementIntegrity ?? 'UNKNOWN',
+        certificateIntegrity: data.certificateIntegrity ?? 'UNKNOWN',
+        hashChainValid: data.hashChainValid ?? false,
+      });
+
+      // Verify audit trail hash chain explicitly
+      try {
+        const verifyData = await apiFetch<any>('/api/v1/security/audit-trail/verify', session?.token);
+        if (verifyData?.valid) {
+          setHashChainVerifiedStatus('VERIFIED');
+        } else {
+          setHashChainVerifiedStatus('FAILED');
+        }
+      } catch {
+        setHashChainVerifiedStatus('UNVERIFIED');
       }
     } catch {
+      setHashChainVerifiedStatus('UNVERIFIED');
       // Offline fallback: keep metrics in state
     }
   }, [session?.token]);
@@ -283,16 +296,10 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const handleSimulateAttack = async (attackType: string) => {
     setLoadingSimulation(attackType);
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-      };
-      const res = await fetch('/api/v1/security/simulate-attack', {
+      const data = await apiFetch<any>('/api/v1/security/simulate-attack', session?.token, {
         method: 'POST',
-        headers,
         body: JSON.stringify({ attackType }),
       });
-      const data = await res.json();
       
       const simResult: AttackSimulationResult = {
         attackId: data.attackId ?? attackType,
@@ -373,23 +380,17 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
     setAdvisorLoading(true);
     setAdvisorError(null);
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-      };
-      const res = await fetch('/api/v1/advisor/explain-event', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ eventId }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Advisor query failed (${res.status})`);
-      }
-      const data = await res.json();
+      const data = await apiFetch<any>(
+        '/api/v1/advisor/explain-event',
+        session?.token,
+        {
+          method: 'POST',
+          body: JSON.stringify({ eventId }),
+        }
+      );
       setAdvisorAnalysis(data);
     } catch (err: any) {
-      setAdvisorError(err.message || 'Failed to analyze security event');
+      setAdvisorError(mapAdvisorError(err));
     } finally {
       setAdvisorLoading(false);
     }
@@ -401,23 +402,17 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
     setAdvisorLoading(true);
     setAdvisorError(null);
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-      };
-      const res = await fetch('/api/v1/advisor/ask', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ question: advisorQuestion }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Advisor query failed (${res.status})`);
-      }
-      const data = await res.json();
+      const data = await apiFetch<any>(
+        '/api/v1/advisor/ask',
+        session?.token,
+        {
+          method: 'POST',
+          body: JSON.stringify({ question: advisorQuestion }),
+        }
+      );
       setAdvisorAnalysis(data);
     } catch (err: any) {
-      setAdvisorError(err.message || 'Failed to submit advisor query');
+      setAdvisorError(mapAdvisorError(err));
     } finally {
       setAdvisorLoading(false);
     }
@@ -434,6 +429,16 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
               <h1 className="text-xl font-semibold text-white tracking-tight">Security & Trust Center</h1>
               <span className="text-[11px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 ACTIVE DEFENSE
+              </span>
+              <span
+                className={`text-[11px] font-mono uppercase px-2 py-0.5 rounded border ${
+                  inDemoMode
+                    ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                }`}
+                title={inDemoMode ? 'DEMO domain — drills & synthetic state only' : 'LIVE domain — read-only, per-transaction oversight only'}
+              >
+                {inDemoMode ? 'DEMO' : 'LIVE'}
               </span>
             </div>
             <p className="text-xs text-zinc-400 mt-1">
@@ -470,11 +475,44 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
               <span>System Integrity</span>
               <Activity className="w-3.5 h-3.5 text-emerald-400" />
             </div>
-            <div className="text-sm font-semibold text-emerald-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <div
+              className={`text-sm font-semibold flex items-center gap-1.5 ${
+                oracleQuarantined
+                  ? 'text-amber-400'
+                  : metrics.systemIntegrity === 'ACTIVE' || metrics.systemIntegrity === 'ENFORCED'
+                  ? 'text-emerald-400'
+                  : 'text-amber-400'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  oracleQuarantined
+                    ? 'bg-amber-400 animate-pulse'
+                    : metrics.systemIntegrity === 'ACTIVE' || metrics.systemIntegrity === 'ENFORCED'
+                    ? 'bg-emerald-400 animate-pulse'
+                    : 'bg-amber-400'
+                }`}
+              ></span>
               {oracleQuarantined ? 'DEGRADED' : metrics.systemIntegrity}
             </div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">Hash-Chain Valid: {metrics.hashChainValid ? 'YES' : 'NO'}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">
+              Hash-Chain:{' '}
+              <span
+                className={
+                  hashChainVerifiedStatus === 'VERIFIED'
+                    ? 'text-emerald-400'
+                    : hashChainVerifiedStatus === 'FAILED'
+                    ? 'text-rose-400'
+                    : 'text-amber-400'
+                }
+              >
+                {hashChainVerifiedStatus === 'VERIFIED'
+                  ? 'VERIFIED'
+                  : hashChainVerifiedStatus === 'FAILED'
+                  ? 'NO'
+                  : 'Not checked'}
+              </span>
+            </div>
           </div>
 
           <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3">
@@ -509,9 +547,15 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
               <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
             </div>
             <div className="text-sm font-semibold text-rose-400">
-              {metrics.blockedActionsCount + Object.keys(simulationResults).length}
+              {metrics.totalSecurityEvents === 0 && Object.keys(simulationResults).length === 0
+                ? '–'
+                : metrics.blockedActionsCount + Object.keys(simulationResults).length}
             </div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">100% Intercept Rate</div>
+            <div className="text-[10px] text-amber-400 mt-0.5">
+              {metrics.totalSecurityEvents === 0 && Object.keys(simulationResults).length === 0
+                ? 'Not checked'
+                : `${Math.round(((metrics.blockedActionsCount + Object.keys(simulationResults).length) / (metrics.totalSecurityEvents + Object.keys(simulationResults).length)) * 100)}% Intercept Rate`}
+            </div>
           </div>
 
           <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3">
@@ -522,7 +566,11 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
             <div className="text-sm font-semibold text-indigo-300">
               {metrics.settlementIntegrity}
             </div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">Escrow Invariant Verified</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">
+              {metrics.settlementIntegrity === 'ACTIVE' || metrics.settlementIntegrity === 'ENFORCED'
+                ? 'Escrow Invariant Verified'
+                : <span className="text-amber-400">Not checked</span>}
+            </div>
           </div>
 
           <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3">
@@ -595,7 +643,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-200 flex items-start gap-2.5">
             <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <span className="font-semibold text-amber-300">Live Code Execution:</span> Every trigger button executes real validation logic in the backend pipeline (Noble Ed25519 verification, Merkle proof evaluation, monotonic nonce validation, or Escrow invariant guards). No cosmetic mockups.
+              <span className="font-semibold text-amber-300">Live Code Execution — operator role required:</span> Every trigger button executes real validation logic in the backend pipeline (Noble Ed25519 verification, Merkle proof evaluation, monotonic nonce validation, or Escrow invariant guards). No cosmetic mockups. Drills are restricted to OPERATOR / REGULATOR accounts and run only against DEMO domain state — they never move real escrow or alter live settlement.
             </div>
           </div>
 
@@ -668,23 +716,31 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                    <button
-                      onClick={() => handleSimulateAttack(vec.id)}
-                      disabled={isLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
-                    >
-                      {isLoading ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Testing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Trigger Drill</span>
-                        </>
-                      )}
-                    </button>
+                    {isDrillAllowed ? (
+                      <button
+                        onClick={() => handleSimulateAttack(vec.id)}
+                        disabled={isLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Testing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>Trigger Drill</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-zinc-500 italic">
+                        {!isOversightRole
+                          ? 'Drills restricted to regulator/operator'
+                          : 'Drills run on demo accounts only'}
+                      </span>
+                    )}
 
                     {res && (
                       <div className="flex items-center gap-2">
@@ -733,11 +789,16 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono text-zinc-400">
-                  Model: <span className="text-white font-medium">{advisorAnalysis?.model ?? 'Mock / Deterministic Engine'}</span>
+                  Model: <span className="text-white font-medium">{advisorAnalysis?.model ? `${advisorAnalysis.model}${advisorAnalysis.fallbackUsed ? ' (Fallback)' : ''}` : 'Not queried yet'}</span>
                 </span>
-                {advisorAnalysis?.fallbackUsed && (
+                {advisorAnalysis && advisorAnalysis.fallbackUsed && (
                   <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
                     Advisor unavailable (template fallback)
+                  </span>
+                )}
+                {advisorAnalysis && !advisorAnalysis.fallbackUsed && (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+                    Live Provider Connected
                   </span>
                 )}
               </div>

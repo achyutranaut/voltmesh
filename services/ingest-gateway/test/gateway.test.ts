@@ -370,4 +370,58 @@ describe('Ingest Gateway Service (P0-10 Trust Root)', () => {
     const body = JSON.parse(res.payload);
     expect(body.error).toBe('STALE_OR_REPLAYED_COUNTER');
   });
+
+  describe('Solar Irradiance Physical Plausibility Checks', () => {
+    it('rejects positive solar generation at night (GHI < 5 W/m²)', () => {
+      // 5kW rated capacity, day interval 48 emitting 1250 Wh, but actual GHI is 0 W/m² (night)
+      const envelope = sim.emitReading(48) as AttestationEnvelope;
+      const res = AttestationValidator.validate(envelope, {
+        solarCapacityW: 5000n,
+        solarIrradianceGhi: 0, // Night condition
+        weatherDataStale: false,
+      });
+
+      expect(res.valid).toBe(false);
+      expect(res.failureCode).toBe('PHYSICALLY_IMPLAUSIBLE');
+      expect(res.plausibilityStatus).toBe('IMPLAUSIBLE');
+      expect(res.error).toContain('Physically implausible solar generation');
+    });
+
+    it('accepts valid daytime solar generation consistent with GHI', () => {
+      // GHI = 800 W/m², rated capacity 5000W
+      // Clear sky max ~ 5 * 1000 * (800/1000) * 0.25 = 1000 Wh. Allowance * 1.2 = 1200 Wh.
+      // Generate realistic reading with ghi = 800 (yields ~800 Wh)
+      const envelope = sim.emitReading(48, SimulatedFault.NONE, 800) as AttestationEnvelope;
+      const res = AttestationValidator.validate(envelope, {
+        solarCapacityW: 5000n,
+        solarIrradianceGhi: 800,
+        weatherDataStale: false,
+      });
+
+      expect(res.valid).toBe(true);
+      expect(res.plausibilityStatus).toBe('VERIFIED');
+    });
+
+    it('flags reading UNCHECKED and accepts when weather data is stale or unavailable', () => {
+      const envelope = sim.emitReading(48) as AttestationEnvelope;
+
+      // Stale weather data
+      const resStale = AttestationValidator.validate(envelope, {
+        solarCapacityW: 5000n,
+        solarIrradianceGhi: 800,
+        weatherDataStale: true,
+      });
+      expect(resStale.valid).toBe(true);
+      expect(resStale.plausibilityStatus).toBe('UNCHECKED');
+
+      // Unavailable weather data (ghi = undefined)
+      const resUnavailable = AttestationValidator.validate(envelope, {
+        solarCapacityW: 5000n,
+        solarIrradianceGhi: undefined,
+        weatherDataStale: false,
+      });
+      expect(resUnavailable.valid).toBe(true);
+      expect(resUnavailable.plausibilityStatus).toBe('UNCHECKED');
+    });
+  });
 });

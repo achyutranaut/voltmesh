@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useSession } from '@/auth/SessionContext';
 import { DetailDrawerData } from '@/types/ui';
+import { apiFetch } from '@/lib/api';
 
 interface GovernanceMember {
   governanceMemberId: string;
@@ -116,48 +117,33 @@ export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }
   const refreshData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const headers: Record<string, string> = session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+      const token = session?.token;
 
       // 1. Members
-      const membersRes = await fetch(`${apiBase}/api/v1/governance/members`, { headers });
-      if (membersRes.ok) {
-        const data = await membersRes.json();
-        setMembers(data);
-      }
+      const membersData = await apiFetch<GovernanceMember[]>('/api/v1/governance/members', token).catch(() => null);
+      if (membersData) setMembers(membersData);
 
       // 2. Security Events
-      const secRes = await fetch(`${apiBase}/api/v1/security/events?limit=50`, { headers });
-      if (secRes.ok) {
-        const data = await secRes.json();
-        setSecurityEvents(data);
-      }
+      const secData = await apiFetch<SecurityEvent[]>('/api/v1/security/events?limit=50', token).catch(() => null);
+      if (secData) setSecurityEvents(secData);
 
       // 3. Security Metrics
-      const metricsRes = await fetch(`${apiBase}/api/v1/security/metrics`, { headers });
-      if (metricsRes.ok) {
-        const data = await metricsRes.json();
-        setMetrics(data);
-      }
+      const metricsData = await apiFetch<SecurityMetrics>('/api/v1/security/metrics', token).catch(() => null);
+      if (metricsData) setMetrics(metricsData);
 
       // 4. Audit Trail
-      const auditRes = await fetch(`${apiBase}/api/v1/security/audit-trail?limit=30`, { headers });
-      if (auditRes.ok) {
-        const data = await auditRes.json();
-        setAuditEvents(data);
-      }
+      const auditData = await apiFetch<AuditEvent[]>('/api/v1/security/audit-trail?limit=30', token).catch(() => null);
+      if (auditData) setAuditEvents(auditData);
 
       // 5. Hash Chain Verification
-      const verifyRes = await fetch(`${apiBase}/api/v1/security/audit-trail/verify`, { headers });
-      if (verifyRes.ok) {
-        const data = await verifyRes.json();
-        setHashChainStatus(data);
-      }
+      const verifyData = await apiFetch<{ valid: boolean; headHash?: string; totalEvents?: number }>('/api/v1/security/audit-trail/verify', token).catch(() => null);
+      if (verifyData) setHashChainStatus(verifyData);
     } catch (err) {
       console.error('Failed to load governance data:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [apiBase, session?.token]);
+  }, [session?.token]);
 
   useEffect(() => {
     refreshData();
@@ -170,16 +156,10 @@ export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }
     setSimulatingId(attackId);
     setSimulationResult(null);
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-      };
-      const res = await fetch(`${apiBase}/api/v1/security/simulate-attack`, {
+      const data = await apiFetch<any>('/api/v1/security/simulate-attack', session?.token, {
         method: 'POST',
-        headers,
         body: JSON.stringify({ attackId }),
       });
-      const data = await res.json();
       setSimulationResult(data);
       await refreshData();
     } catch (err) {
@@ -618,31 +598,30 @@ export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }
                           <button
                             onClick={async () => {
                               try {
-                                const headers: Record<string, string> = session?.token ? { Authorization: `Bearer ${session.token}` } : {};
-                                const res = await fetch(`${apiBase}/api/v1/advisor/explain-event`, {
-                                  method: 'POST',
-                                  headers: { ...headers, 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ eventId: e.id }),
-                                });
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  if (onSelectDetail) {
-                                    onSelectDetail({
-                                      title: `Security Advisor: ${e.action}`,
-                                      subtitle: `Event ID: ${e.id} (Advisory Only)`,
-                                      category: 'SECURITY ADVISOR',
-                                      statusBadge: { label: data.confidence ? String(data.confidence).toUpperCase() : 'ADVISORY', variant: 'info' },
-                                      metrics: [
-                                        { label: 'Model', value: data.model ?? 'Deterministic' },
-                                        { label: 'Confidence', value: data.confidence ?? 'medium' },
-                                      ],
-                                      properties: [
-                                        { label: 'Summary', value: data.summary },
-                                        { label: 'Actions', value: (data.recommendedHumanActions || []).join('; ') || 'None' },
-                                        { label: 'Notice', value: 'AI-generated, advisory only' },
-                                      ],
-                                    });
+                                const data = await apiFetch<any>(
+                                  '/api/v1/advisor/explain-event',
+                                  session?.token,
+                                  {
+                                    method: 'POST',
+                                    body: JSON.stringify({ eventId: e.id }),
                                   }
+                                );
+                                if (onSelectDetail) {
+                                  onSelectDetail({
+                                    title: `Security Advisor: ${e.action}`,
+                                    subtitle: `Event ID: ${e.id} (Advisory Only)`,
+                                    category: 'SECURITY ADVISOR',
+                                    statusBadge: { label: data.confidence ? String(data.confidence).toUpperCase() : 'ADVISORY', variant: 'info' },
+                                    metrics: [
+                                      { label: 'Model', value: data.model ?? 'Deterministic' },
+                                      { label: 'Confidence', value: data.confidence ?? 'medium' },
+                                    ],
+                                    properties: [
+                                      { label: 'Summary', value: data.summary },
+                                      { label: 'Actions', value: (data.recommendedHumanActions || []).join('; ') || 'None' },
+                                      { label: 'Notice', value: 'AI-generated, advisory only' },
+                                    ],
+                                  });
                                 }
                               } catch {
                                 // fallback ignore

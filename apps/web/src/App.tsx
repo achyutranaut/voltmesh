@@ -46,6 +46,7 @@ import {
   ActivityStream,
   GovernanceView,
   SecurityView,
+  AuditTrailView,
 } from './components/terminal';
 
 export default function App() {
@@ -540,6 +541,12 @@ export default function App() {
             {activeTab === 'security' && (
               <SecurityView
                 currentInterval={currentInterval}
+                onSelectDetail={(detail) => setDetailDrawerData(detail)}
+              />
+            )}
+
+            {activeTab === 'audit' && (
+              <AuditTrailView
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
               />
             )}

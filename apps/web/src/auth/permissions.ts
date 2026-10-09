@@ -4,7 +4,8 @@ export type Role = 'seller' | 'buyer' | 'discom' | 'regulator';
 
 export type TabId =
   | 'market' | 'energy' | 'oracle' | 'merkle' | 'settlement'
-  | 'certificates' | 'operations' | 'contracts' | 'activity' | 'governance' | 'security';
+  | 'certificates' | 'operations' | 'contracts' | 'activity' | 'governance' | 'security'
+  | 'audit';
 
 export type Action =
   | 'order.sell' | 'order.buy' | 'escrow.deposit'
@@ -20,7 +21,7 @@ interface RoleInfo {
 
 const ALL_TABS: TabId[] = [
   'market', 'energy', 'oracle', 'merkle', 'settlement',
-  'certificates', 'operations', 'contracts', 'activity', 'governance', 'security',
+  'certificates', 'operations', 'contracts', 'activity', 'governance', 'security', 'audit',
 ];
 
 // Adjust this table to match docs/AUTHORIZATION_MATRIX.md.
@@ -112,4 +113,35 @@ export function checkOrder(
   return selfTrade
     ? 'This wallet already has an opposite-side order in this interval (self-trade).'
     : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Domain separation & oversight helpers (Phase 3 / Phase 6)          */
+/* ------------------------------------------------------------------ */
+
+/** Roles that are oversight (non-trading) in the VoltMesh two-domain model. */
+export const OVERSIGHT_ROLES: Role[] = ['regulator', 'discom'];
+
+/**
+ * Whether a session role is an oversight account (regulator / operator / auditor).
+ * `discom` == MARKET_OPERATOR, `regulator` == REGULATOR|AUDITOR (see normalizeRole).
+ * Mirrors `AccessRegistry.isOversightAccount()` on-chain.
+ */
+export function isOversightRole(role?: Role | null): boolean {
+  return !!role && OVERSIGHT_ROLES.includes(role);
+}
+
+/** On-chain domain of an account: DEMO or LIVE (real wallets default to LIVE). */
+export type Domain = 'DEMO' | 'LIVE';
+
+/**
+ * Resolve the on-chain domain for the active session.
+ * Demo (preset dev) sessions live in the DEMO domain; any real connected wallet
+ * (injected) defaults to LIVE. This mirrors `AccessRegistry.isDemo` on-chain.
+ */
+export function resolveSessionDomain(
+  kind?: 'injected' | 'demo' | null,
+  demoKey?: string | null,
+): Domain {
+  return kind === 'demo' || !!demoKey ? 'DEMO' : 'LIVE';
 }

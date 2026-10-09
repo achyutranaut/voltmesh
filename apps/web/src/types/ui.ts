@@ -9,7 +9,8 @@ export type NavigationTab =
   | 'contracts'
   | 'activity'
   | 'governance'
-  | 'security';
+  | 'security'
+  | 'audit';
 
 export type PipelineStage =
   | 'METER'

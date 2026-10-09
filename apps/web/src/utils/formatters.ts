@@ -82,3 +82,56 @@ export function truncateHash(hash: string, startChars: number = 6, endChars: num
   if (hash.length <= startChars + endChars) return hash;
   return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
 }
+
+/**
+ * Formats a 15-minute slot index into an unambiguous time range and date in IST (UTC+5:30).
+ * Handles both daily interval indices (0..95) and global monotonic slot indices (e.g., 1990548).
+ * Slot 1990548 -> 02:30-02:45 IST on 9 Oct 2026.
+ */
+export function formatSlotTimeRangeIST(slot: number, nowMs: number = Date.now()): {
+  timeWindow: string;
+  timeWindowWithZone: string;
+  dateFormatted: string;
+  full: string;
+} {
+  const slotDurationMs = 15 * 60 * 1000;
+  let startMs: number;
+
+  if (slot < 96) {
+    // Relative daily slot (0..95) in current IST day
+    const istOffset = (5 * 60 + 30) * 60 * 1000;
+    const istNow = new Date(nowMs + istOffset);
+    const istMidnight = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) - istOffset;
+    startMs = istMidnight + slot * slotDurationMs;
+  } else {
+    // Global monotonic slot index from Unix epoch
+    startMs = slot * slotDurationMs;
+  }
+
+  const endMs = startMs + slotDurationMs;
+
+  const timeDtf = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const dateDtf = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const startTime = timeDtf.format(new Date(startMs));
+  const endTime = timeDtf.format(new Date(endMs));
+  const dateFormatted = dateDtf.format(new Date(startMs));
+
+  return {
+    timeWindow: `${startTime}–${endTime}`,
+    timeWindowWithZone: `${startTime}–${endTime} IST`,
+    dateFormatted,
+    full: `${startTime}-${endTime} IST on ${dateFormatted}`,
+  };
+}

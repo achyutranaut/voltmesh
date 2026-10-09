@@ -201,7 +201,8 @@ contract EpochOracle {
         uint32 intervalIdx,
         string calldata reason
     ) external whenNotPaused {
-        if (!accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
+        if (!accessRegistry.hasRole(accessRegistry.REGULATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
             revert CallerNotAuditor();
         }
         EpochRecord storage epoch = epochs[zoneId][intervalIdx];

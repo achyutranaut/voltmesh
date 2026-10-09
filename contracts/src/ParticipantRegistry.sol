@@ -92,14 +92,28 @@ contract ParticipantRegistry {
         emit ParticipantRegistered(wallet, participantId, zoneId, bindingHash, roleType);
     }
 
-    function suspendParticipant(address wallet) external onlyRegistrar {
+    error CallerNotAuthorized();
+
+    function suspendParticipant(address wallet) external {
+        if (!accessRegistry.hasRole(accessRegistry.REGISTRAR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.REGULATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
+            revert CallerNotAuthorized();
+        }
         Participant storage p = participants[wallet];
         if (p.registeredAt == 0) revert ParticipantNotFound(wallet);
         p.isSuspended = true;
         emit ParticipantSuspended(wallet);
     }
 
-    function reactivateParticipant(address wallet) external onlyRegistrar {
+    function reactivateParticipant(address wallet) external {
+        if (!accessRegistry.hasRole(accessRegistry.REGISTRAR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.REGULATOR_ROLE(), msg.sender) &&
+            !accessRegistry.hasRole(accessRegistry.AUDITOR_ROLE(), msg.sender)) {
+            revert CallerNotAuthorized();
+        }
         Participant storage p = participants[wallet];
         if (p.registeredAt == 0) revert ParticipantNotFound(wallet);
         p.isSuspended = false;

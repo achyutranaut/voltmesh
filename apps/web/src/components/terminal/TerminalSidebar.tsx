@@ -10,6 +10,7 @@ import {
   Cpu,
   FileCode2,
   History,
+  ScrollText,
 } from 'lucide-react';
 import { usePipeline } from '@/context/PipelineContext';
 import {
@@ -29,6 +30,7 @@ import { WalletControl } from './WalletControl';
 import { VoltMeshBrand } from '@/components/brand/VoltMeshBrand';
 import { useSession } from '@/auth/SessionContext';
 import { canView } from '@/auth/permissions';
+import { ATTACK_VECTORS } from './SecurityView';
 
 export type TerminalNavTab =
   | 'market'
@@ -41,7 +43,8 @@ export type TerminalNavTab =
   | 'contracts'
   | 'activity'
   | 'governance'
-  | 'security';
+  | 'security'
+  | 'audit';
 
 export interface TerminalSidebarProps {
   activeTab: TerminalNavTab;
@@ -351,7 +354,28 @@ export const TerminalSidebar: React.FC<TerminalSidebarProps> = ({
                       <ShieldCheck className={`w-4 h-4 shrink-0 ${activeTab === 'security' ? 'text-emerald-400' : 'text-zinc-400'}`} />
                       <span className="text-xs">Security Lab</span>
                       <span className="ml-auto text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                        12 DRILLS
+                        {ATTACK_VECTORS.length} DRILLS
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+
+                {isAllowed('audit') && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={activeTab === 'audit'}
+                      onClick={() => onTabChange('audit')}
+                      tooltip="Audit Trail (read-only)"
+                      className={
+                        activeTab === 'audit'
+                          ? 'bg-emerald-500/15 text-emerald-300 font-medium border border-emerald-500/25'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
+                      }
+                    >
+                      <ScrollText className={`w-4 h-4 shrink-0 ${activeTab === 'audit' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                      <span className="text-xs">Audit Trail</span>
+                      <span className="ml-auto text-[10px] font-mono bg-white/[0.06] text-zinc-300 px-1.5 py-0.5 rounded border border-white/[0.1]">
+                        READ-ONLY
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

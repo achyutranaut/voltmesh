@@ -86,8 +86,17 @@ contract Escrow is ReentrancyGuard {
     error AlreadyInitialized();
     error SystemPaused();
 
+    error OversightAccountsCannotTrade();
+
     modifier onlySettlement() {
         if (msg.sender != settlementContract) revert CallerNotSettlement();
+        _;
+    }
+
+    modifier onlyTrader(address account) {
+        if (accessRegistry.isOversightAccount(account)) {
+            revert OversightAccountsCannotTrade();
+        }
         _;
     }
 
@@ -112,14 +121,15 @@ contract Escrow is ReentrancyGuard {
         emit SettlementContractUpdated(_settlement);
     }
 
-    function deposit(uint256 amount) external nonReentrant whenNotPaused {
+    function deposit(uint256 amount) external nonReentrant whenNotPaused onlyTrader(msg.sender) {
+        accessRegistry.markTraded(msg.sender);
         balances[msg.sender] += amount;
         totalDeposited += amount;
         paymentToken.safeTransferFrom(msg.sender, address(this), amount);
         emit Deposited(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) external nonReentrant {
+    function withdraw(uint256 amount) external nonReentrant onlyTrader(msg.sender) {
         uint256 free = balances[msg.sender] - lockedBalances[msg.sender];
         if (amount > free) revert InsufficientFreeBalance(amount, free);
 
@@ -306,6 +316,10 @@ contract Escrow is ReentrancyGuard {
         }
         if (msg.sender != obl.buyer && !accessRegistry.hasRole(accessRegistry.OPERATOR_ROLE(), msg.sender)) {
             revert UnauthorizedClaimant();
+        }
+        // Buyer cannot be an oversight account
+        if (accessRegistry.isOversightAccount(obl.buyer)) {
+            revert OversightAccountsCannotTrade();
         }
 
         address buyer = obl.buyer;
