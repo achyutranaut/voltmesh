@@ -30,14 +30,14 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Monorepo Dependencies
+        run: pnpm build
+
       - name: Typecheck Workspace Packages
         run: pnpm -r typecheck
 
       - name: Run Vitest Suites
         run: pnpm vitest run
-
-      - name: Build Monorepo Dependencies
-        run: pnpm build
 
       - name: Run Web Build
         run: pnpm --filter @energy-dex/web build
