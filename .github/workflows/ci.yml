@@ -58,7 +58,9 @@ jobs:
 
       - name: Install contract dependencies
         working-directory: contracts
-        run: forge install
+        run: |
+          forge install foundry-rs/forge-std --no-git --shallow
+          forge install OpenZeppelin/openzeppelin-contracts@v5.0.2 --no-git --shallow
 
       - name: Run Forge build
         working-directory: contracts

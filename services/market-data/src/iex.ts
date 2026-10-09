@@ -40,6 +40,8 @@ export class IexCsvProvider implements MarketDataProvider {
     const lines = csv.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length <= 1) return;
 
+    this.isLoaded = true;
+
     // Expected columns: Date,TimeBlock,MCP_INR_kWh,Volume_kWh
     const header = lines[0].toLowerCase();
     const hasHeader = header.includes('date') || header.includes('block') || header.includes('mcp');
