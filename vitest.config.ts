@@ -11,6 +11,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, './apps/web/src'),
       '@energy-dex/types': path.resolve(__dirname, './packages/types/src/index.ts'),
       '@energy-dex/attestation': path.resolve(__dirname, './packages/attestation/src/index.ts'),
       '@energy-dex/clearing': path.resolve(__dirname, './packages/clearing/src/index.ts'),
