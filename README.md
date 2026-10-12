@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7.2-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)](https://react.dev/)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636.svg)](https://soliditylang.org/)
-[![Security Tested](https://img.shields.io/badge/Security-Tested%20(Fuzz--Verified)-emerald.svg)](docs/FINAL_SECURITY_HARDENING_REPORT.md)
+[![Security Tested](https://img.shields.io/badge/Security-Tested%20(Fuzz--Verified)-emerald.svg)](#testing--invariant-verification)
 
 **VoltMesh** is a cyber-physical peer-to-peer (P2P) energy trading and settlement platform designed for distribution grids, prosumers, renewable energy generators, and distribution utilities (DISCOMs). The system bridges off-chain call-market matching (benchmarked in [`tests/benchmarks/scale.benchmark.test.ts`](tests/benchmarks/scale.benchmark.test.ts)), cryptographically signed hardware smart-meter telemetry (Ed25519 / RFC 6962 canonical JSON), fault-tolerant multi-oracle quorums, tamper-evident audit logging, and deterministic EVM smart-contract escrow settlement.
 
@@ -75,7 +75,6 @@ VoltMesh distinguishes between fully executed software, emulated test harnesses,
 - [Demonstration & Evaluator Guide](#demonstration--evaluator-guide)
 - [Configuration Reference](#configuration-reference)
 - [Troubleshooting](#troubleshooting)
-- [Documentation Index](#documentation-index)
 - [Development Workflow](#development-workflow)
 - [Design Principles](#design-principles)
 - [License](#license)
@@ -1086,41 +1085,6 @@ The platform reads configuration from `.env` in the repository root:
 ### 4. Foundry Contract Compilation Errors
 - **Cause**: OpenZeppelin submodules or dependencies not found.
 - **Resolution**: In the repository root, run `cd contracts && forge build && cd ..`.
-
----
-
-## Documentation Index
-
-VoltMesh includes in-depth technical specifications, architectural designs, and security audits:
-
-### Architecture & Runtime
-- [`REAL_RUNTIME_FLOW.md`](REAL_RUNTIME_FLOW.md): Step-by-step audit of all 23 runtime stages and execution paths.
-- [`docs/VOLTMESH_FINAL_ARCHITECTURE.md`](docs/VOLTMESH_FINAL_ARCHITECTURE.md): Comprehensive system specification and mass-scale architecture.
-- [`docs/ARCHITECTURE-V1.md`](docs/ARCHITECTURE-V1.md): Mass-Scale Research & Architecture Specification V1 (Phase 2, 792 lines).
-- [`docs/RESEARCH_BLUEPRINT.md`](docs/RESEARCH_BLUEPRINT.md): Condensed 16-section executive research blueprint with Mermaid system workflows.
-- [`docs/V1.1_Technical_Design_Specification.md`](docs/V1.1_Technical_Design_Specification.md): Low-level wire formats, byte schemas, and math models.
-- [`docs/SETTLEMENT_AND_BILLING_MODEL.md`](docs/SETTLEMENT_AND_BILLING_MODEL.md): Tariff structures, wheeling charge models, and escrow mechanics.
-
-### Governance & Access Control
-- [`GOVERNANCE_MODEL.md`](GOVERNANCE_MODEL.md): Separation of powers, two-domain structure, and regulator mandates.
-- [`GOVERNANCE_CURRENT_STATE.md`](GOVERNANCE_CURRENT_STATE.md): Implementation audit of current governance code.
-- [`ROLE_PERMISSION_MATRIX.md`](ROLE_PERMISSION_MATRIX.md): Exhaustive role capabilities and access permissions.
-- [`INFORMATION_ACCESS_MATRIX.md`](INFORMATION_ACCESS_MATRIX.md): Confidentiality rules and public/private data access limits.
-
-### Cybersecurity & Threat Modeling
-- [`THREAT_MODEL.md`](THREAT_MODEL.md): 14 STRIDE threat actor profiles and cyber-physical attack surfaces.
-- [`SECURITY_ATTACK_MATRIX.md`](SECURITY_ATTACK_MATRIX.md): Detailed mechanics and code defenses for 25 attack vectors.
-- [`FINAL_SECURITY_AUDIT.md`](FINAL_SECURITY_AUDIT.md): Code-level security audit across smart contracts and APIs.
-- [`SECURITY_SCORECARD.md`](SECURITY_SCORECARD.md): Objective scoring across 14 cybersecurity categories (Overall: 4.32/5.00).
-- [`SECURITY_TRADEOFFS.md`](SECURITY_TRADEOFFS.md): Systems analysis of 12 engineering compromises and trade-offs.
-- [`SECURITY_REMEDIATION_STATUS.md`](SECURITY_REMEDIATION_STATUS.md): Historical vulnerability resolution log.
-
-### Evaluation & Audits
-- [`FINAL_EVALUATOR_DEMO.md`](FINAL_EVALUATOR_DEMO.md): 5 concrete evaluative security demonstrations with cURL commands.
-- [`FINAL_SECURITY_DEMO.md`](FINAL_SECURITY_DEMO.md): Red-team evaluation script and attack lab verification.
-- [`FEATURE_UTILIZATION_AUDIT.md`](FEATURE_UTILIZATION_AUDIT.md): Traced taxonomy of implemented vs connected mechanisms.
-- [`DEAD_FEATURES_AND_UNUSED_SECURITY.md`](DEAD_FEATURES_AND_UNUSED_SECURITY.md): Catalog of orphaned views, dead code, and uncalled routes.
-- [`FINAL_REMAINING_RISK.md`](FINAL_REMAINING_RISK.md): Analysis of top residual cyber-physical attack vectors.
 
 ---
 
