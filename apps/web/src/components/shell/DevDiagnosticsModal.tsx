@@ -30,6 +30,7 @@ import { useWallet } from '../../context/WalletContext';
 import {
   SUPPORTED_NETWORKS,
   DEFAULT_CHAIN_ID,
+  RPC_URL,
   voltmeshTestnet,
   getContract,
   getExplorerTxUrl,
@@ -79,7 +80,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isFundingGas, setIsFundingGas] = useState(false);
 
-  const rpcUrl = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.rpcUrl || 'http://127.0.0.1:8545';
+  const rpcUrl = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.rpcUrl || RPC_URL;
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -274,7 +275,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
                 VOLTMESH DEVNET RPC DIAGNOSTICS & TEST SUITE
               </div>
               <div className="text-[11px] text-zinc-500">
-                Live EVM JSON-RPC Telemetry · Chain ID 31337
+                Live EVM JSON-RPC Telemetry · Chain ID {DEFAULT_CHAIN_ID}
               </div>
             </div>
           </div>

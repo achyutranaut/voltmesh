@@ -6,7 +6,7 @@ import {
   type Address, type Hex, type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { voltmeshTestnet } from '@/config/contracts';
+import { voltmeshChain, API_URL as API } from '@/config/contracts';
 import { Action, Role, TabId, can as canDo, canView as canSee, normalizeRole } from './permissions';
 import { safeStringify } from '@/lib/utils';
 
@@ -17,7 +17,6 @@ import { safeStringify } from '@/lib/utils';
 export const DEMO_MODE =
   import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true';
 
-const API: string = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const SESSION_TTL_MS = 60 * 60 * 1000;
 
 export type DemoKey = 'seller' | 'buyer' | 'discom' | 'regulator';
@@ -92,7 +91,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
       const account = privateKeyToAccount(DEMO_ACCOUNTS[key].key);
       const walletClient = createWalletClient({
         account,
-        chain: voltmeshTestnet,
+        chain: voltmeshChain,
         transport: http(),
       });
       return {
@@ -103,7 +102,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
         expiresAt: stored.expiresAt,
         token: stored.token,
         demoKey: key,
-        chainId: stored.chainId ?? voltmeshTestnet.id,
+        chainId: stored.chainId ?? voltmeshChain.id,
       };
     }
 
@@ -121,7 +120,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
       const eth = typeof window !== 'undefined' ? (window as any).ethereum : null;
       const walletClient = createWalletClient({
         account: stored.address,
-        chain: voltmeshTestnet,
+        chain: voltmeshChain,
         transport: eth ? custom(eth) : http(),
       });
       return {
@@ -131,7 +130,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
         walletClient,
         expiresAt: stored.expiresAt,
         token: stored.token,
-        chainId: stored.chainId ?? voltmeshTestnet.id,
+        chainId: stored.chainId ?? voltmeshChain.id,
       };
     }
   } catch (err) {
@@ -203,7 +202,7 @@ function buildMessage(address: Address, nonce: string, issuedAt: number, expires
   return [
     'VoltMesh sign-in',
     `Address: ${address}`,
-    `Chain: ${voltmeshTestnet.id}`,
+    `Chain: ${voltmeshChain.id}`,
     `Nonce: ${nonce}`,
     `Issued: ${new Date(issuedAt).toISOString()}`,
     `Expires: ${new Date(expiresAt).toISOString()}`,
@@ -221,7 +220,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function ensureChain(eth: any) {
-  const chainIdHex = `0x${voltmeshTestnet.id.toString(16)}`;
+  const chainIdHex = `0x${voltmeshChain.id.toString(16)}`;
   try {
     await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] });
   } catch (err: any) {
@@ -230,9 +229,12 @@ async function ensureChain(eth: any) {
       method: 'wallet_addEthereumChain',
       params: [{
         chainId: chainIdHex,
-        chainName: voltmeshTestnet.name,
-        nativeCurrency: voltmeshTestnet.nativeCurrency,
-        rpcUrls: voltmeshTestnet.rpcUrls.default.http,
+        chainName: voltmeshChain.name,
+        nativeCurrency: voltmeshChain.nativeCurrency,
+        rpcUrls: voltmeshChain.rpcUrls.default.http,
+        blockExplorerUrls: voltmeshChain.blockExplorers?.default?.url
+          ? [voltmeshChain.blockExplorers.default.url]
+          : undefined,
       }],
     });
   }
@@ -378,7 +380,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (err?.code === 4001) {
         msg = 'Request cancelled in the wallet.';
       } else if (err?.name === 'TypeError' && err?.message === 'Failed to fetch') {
-        msg = `Failed to connect to API at ${API || 'http://localhost:3000'}. Ensure the backend service is running.`;
+        msg = `Failed to connect to API at ${API || '(VITE_BACKEND_URL not set)'}. Ensure the backend service is running.`;
       }
       setError(msg);
     }
@@ -400,7 +402,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await ensureChain(eth);
         const walletClient = createWalletClient({
           account: address,
-          chain: voltmeshTestnet,
+          chain: voltmeshChain,
           transport: custom(eth),
         });
         await verifyIdentity({ address, kind: 'injected', walletClient });
@@ -414,7 +416,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!DEMO_MODE) throw new Error('Demo accounts are disabled in this build.');
         const { key: pk, role } = DEMO_ACCOUNTS[key];
         const account = privateKeyToAccount(pk);
-        const walletClient = createWalletClient({ account, chain: voltmeshTestnet, transport: http() });
+        const walletClient = createWalletClient({ account, chain: voltmeshChain, transport: http() });
         setStatus('connecting');
         await verifyIdentity({ address: account.address, kind: 'demo', walletClient, demoKey: key }, role);
       }),

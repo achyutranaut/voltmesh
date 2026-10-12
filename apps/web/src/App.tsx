@@ -31,6 +31,7 @@ import { FooterCtaSection } from './components/landing/FooterCtaSection';
 // Shell & Canvas Components
 import { FluidEnergyCanvas } from './components/canvas/FluidEnergyCanvas';
 import { CommandPalette } from './components/shell/CommandPalette';
+import { ConfigBanner } from './components/shell/ConfigBanner';
 
 // New Trading Terminal Shell & Modular Terminal Views
 import {
@@ -354,6 +355,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#050607] text-zinc-200 flex flex-col font-sans selection:bg-emerald-900 selection:text-white relative">
+      {/* Startup config check + wrong-network + role/address debug banners */}
+      <ConfigBanner />
+
       {/* Background Ambient Fluid Energy Canvas */}
       <FluidEnergyCanvas />
 

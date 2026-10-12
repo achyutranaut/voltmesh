@@ -12,6 +12,7 @@ import {
   parseUnits,
   parseEther,
   keccak256,
+  getAddress,
   encodePacked,
   toHex,
   decodeErrorResult,
@@ -19,10 +20,11 @@ import {
 import {
   SUPPORTED_NETWORKS,
   DEFAULT_CHAIN_ID,
-  voltmeshTestnet,
+  voltmeshChain,
   getContract,
   getExplorerTxUrl,
   getExplorerAddressUrl,
+  API_URL,
 } from '../config/contracts';
 import { privateKeyToAccount } from 'viem/accounts';
 import { assertTestnet, assertNoEth } from '../config/network';
@@ -95,10 +97,19 @@ export interface OnChainActivityItem {
 export interface WalletRoles {
   isAdmin: boolean;
   isOperator: boolean;
+  isRegulator: boolean;
+  isAuditor: boolean;
   isOracle: boolean;
   isRegistrar: boolean;
   isParticipant: boolean;
 }
+
+/**
+ * The single resolved UI role for the connected account, derived from on-chain
+ * state. `null` while loading, `'unregistered'` when no role is found, and
+ * `undefined` is never used so a failed read cannot silently default to a role.
+ */
+export type DetectedRole = 'seller' | 'buyer' | 'discom' | 'regulator' | 'unregistered' | null;
 
 export interface EscrowBalances {
   total: bigint;
@@ -145,6 +156,12 @@ export interface WalletContextType {
   tokenBalance: bigint; // vUSD test settlement stablecoin
   escrowBalances: EscrowBalances;
   roles: WalletRoles;
+  /** Resolved on-chain role for the connected account (null while loading). */
+  detectedRole: DetectedRole;
+  /** True while on-chain role detection is in flight. */
+  rolesLoading: boolean;
+  /** Set when on-chain role detection fails; never silently defaults to a role. */
+  rolesError: string | null;
 
   // Actions
   connectMetaMask: () => Promise<void>;
@@ -264,17 +281,25 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [roles, setRoles] = useState<WalletRoles>({
     isAdmin: false,
     isOperator: false,
+    isRegulator: false,
+    isAuditor: false,
     isOracle: false,
     isRegistrar: false,
     isParticipant: false,
   });
+  const [detectedRole, setDetectedRole] = useState<DetectedRole>(null);
+  const [rolesLoading, setRolesLoading] = useState<boolean>(false);
+  const [rolesError, setRolesError] = useState<string | null>(null);
 
   // When session address changes, clear cached balances, activeTx, and onChainActivity
   useEffect(() => {
     setEthBalance(0n);
     setTokenBalance(0n);
     setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
-    setRoles({ isAdmin: false, isOperator: false, isOracle: false, isRegistrar: false, isParticipant: false });
+    setRoles({ isAdmin: false, isOperator: false, isRegulator: false, isAuditor: false, isOracle: false, isRegistrar: false, isParticipant: false });
+    setDetectedRole(null);
+    setRolesLoading(false);
+    setRolesError(null);
     setActiveTx(null);
     setOnChainActivity([]);
   }, [session?.address]);
@@ -485,10 +510,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [txHistory, setTxHistory] = useState<TransactionRecord[]>([]);
   const [onChainActivity, setOnChainActivity] = useState<OnChainActivityItem[]>([]);
 
-  // Public client connected to VoltMesh Testnet RPC
+  // Public client connected to the configured VoltMesh network RPC
   const getPublicClient = useCallback(() => {
     return createPublicClient({
-      chain: voltmeshTestnet,
+      chain: voltmeshChain,
       transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
     });
   }, []);
@@ -534,10 +559,16 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setEthBalance(0n);
       setTokenBalance(0n);
       setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
-      setRoles({ isAdmin: false, isOperator: false, isOracle: false, isRegistrar: false, isParticipant: false });
+      setRoles({ isAdmin: false, isOperator: false, isRegulator: false, isAuditor: false, isOracle: false, isRegistrar: false, isParticipant: false });
       setParticipantRoleType(null);
+      setDetectedRole(null);
+      setRolesLoading(false);
+      setRolesError(null);
       return;
     }
+
+    setRolesLoading(true);
+    setRolesError(null);
 
     try {
       const publicClient = getPublicClient();
@@ -593,57 +624,87 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       }
 
-      // 4. Roles from AccessRegistry & ParticipantRegistry
+      // 4. Roles from AccessRegistry & ParticipantRegistry (on-chain source of truth)
       const accessContract = getContract('AccessRegistry', DEFAULT_CHAIN_ID);
       const participantContract = getContract('ParticipantRegistry', DEFAULT_CHAIN_ID);
 
+      // Normalize the connected address so hasRole comparisons are checksum-safe.
+      let normalized: Address;
+      try {
+        normalized = getAddress(address);
+      } catch {
+        normalized = address;
+      }
+
       let isAdmin = false;
       let isOperator = false;
+      let isRegulator = false;
+      let isAuditor = false;
       let isOracle = false;
       let isRegistrar = false;
       let isParticipant = false;
+      let roleReadError: string | null = null;
 
       if (accessContract) {
         try {
           const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hash;
           const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
+          const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
+          const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
           const ORACLE_ROLE = keccak256(toHex('ORACLE_ROLE'));
           const REGISTRAR_ROLE = keccak256(toHex('REGISTRAR_ROLE'));
 
-          const [hasAdmin, hasOp, hasOra, hasReg] = await Promise.all([
+          const [hasAdmin, hasOp, hasRegulator, hasAuditor, hasOra, hasReg] = await Promise.all([
             publicClient.readContract({
               address: accessContract.address,
               abi: accessContract.abi,
               functionName: 'hasRole',
-              args: [DEFAULT_ADMIN_ROLE, address],
+              args: [DEFAULT_ADMIN_ROLE, normalized],
             }) as Promise<boolean>,
             publicClient.readContract({
               address: accessContract.address,
               abi: accessContract.abi,
               functionName: 'hasRole',
-              args: [OPERATOR_ROLE, address],
+              args: [OPERATOR_ROLE, normalized],
             }) as Promise<boolean>,
             publicClient.readContract({
               address: accessContract.address,
               abi: accessContract.abi,
               functionName: 'hasRole',
-              args: [ORACLE_ROLE, address],
+              args: [REGULATOR_ROLE, normalized],
             }) as Promise<boolean>,
             publicClient.readContract({
               address: accessContract.address,
               abi: accessContract.abi,
               functionName: 'hasRole',
-              args: [REGISTRAR_ROLE, address],
+              args: [AUDITOR_ROLE, normalized],
+            }) as Promise<boolean>,
+            publicClient.readContract({
+              address: accessContract.address,
+              abi: accessContract.abi,
+              functionName: 'hasRole',
+              args: [ORACLE_ROLE, normalized],
+            }) as Promise<boolean>,
+            publicClient.readContract({
+              address: accessContract.address,
+              abi: accessContract.abi,
+              functionName: 'hasRole',
+              args: [REGISTRAR_ROLE, normalized],
             }) as Promise<boolean>,
           ]);
 
           isAdmin = hasAdmin;
           isOperator = hasOp;
+          isRegulator = hasRegulator;
+          isAuditor = hasAuditor;
           isOracle = hasOra;
           isRegistrar = hasReg;
         } catch (e) {
           console.warn('Failed to read access roles:', e);
+          roleReadError = 'Failed to read access roles from AccessRegistry.';
         }
+      } else {
+        roleReadError = 'AccessRegistry address is not configured.';
       }
 
       let onChainRoleType: number | null = null;
@@ -653,14 +714,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             address: participantContract.address,
             abi: participantContract.abi,
             functionName: 'isRegisteredAndActive',
-            args: [address],
+            args: [normalized],
           })) as boolean;
 
           const pRecord = (await publicClient.readContract({
             address: participantContract.address,
             abi: participantContract.abi,
             functionName: 'participants',
-            args: [address],
+            args: [normalized],
           })) as [string, number, number, string, boolean, bigint];
 
           if (pRecord && pRecord[5] > 0n && !pRecord[4]) {
@@ -668,13 +729,29 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         } catch (e) {
           console.warn('Failed to read participant status:', e);
+          roleReadError = roleReadError ?? 'Failed to read participant status from ParticipantRegistry.';
         }
       }
 
       setParticipantRoleType(onChainRoleType);
-      setRoles({ isAdmin, isOperator, isOracle, isRegistrar, isParticipant });
+      setRoles({ isAdmin, isOperator, isRegulator, isAuditor, isOracle, isRegistrar, isParticipant });
+      setRolesError(roleReadError);
+      setRolesLoading(false);
+
+      // Resolve a single UI role. Precedence mirrors the two-domain model:
+      // oversight (operator/regulator/auditor) first, then participant type.
+      let resolved: DetectedRole = 'unregistered';
+      if (isOperator) resolved = 'discom';
+      else if (isRegulator || isAuditor) resolved = 'regulator';
+      else if (onChainRoleType === 1) resolved = 'seller';
+      else if (onChainRoleType === 0) resolved = 'buyer';
+      else if (onChainRoleType === 2) resolved = 'discom';
+      else if (isAdmin) resolved = 'discom';
+      setDetectedRole(resolved);
     } catch (e) {
       console.warn('Error refreshing blockchain balances:', e);
+      setRolesError('Failed to read on-chain state. Check your RPC connection.');
+      setRolesLoading(false);
     }
   }, [address, getPublicClient]);
 
@@ -1001,7 +1078,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         description: opts.description,
         status: 'WRONG_NETWORK',
         timestamp: Date.now(),
-        error: `Connected to wrong network (${chainId}). Please switch to VoltMesh Testnet (${DEFAULT_CHAIN_ID}).`,
+        error: `Connected to wrong network (${chainId}). Please switch to ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'the configured network'} (chain ${DEFAULT_CHAIN_ID}).`,
       };
       setActiveTx(errRecord);
       setTxHistory((prev) => [errRecord, ...prev.slice(0, 19)]);
@@ -1019,7 +1096,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         description: opts.description,
         status: 'RPC_UNAVAILABLE',
         timestamp: Date.now(),
-        error: `VoltMesh RPC (${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl}) is unreachable. Ensure local node is running.`,
+        error: `VoltMesh RPC (${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl}) is unreachable. Check VITE_RPC_URL / your RPC provider.`,
       };
       setActiveTx(errRecord);
       setTxHistory((prev) => [errRecord, ...prev.slice(0, 19)]);
@@ -1049,7 +1126,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         description: opts.description,
         status: 'INSUFFICIENT_NATIVE_BALANCE',
         timestamp: Date.now(),
-        error: 'Connected account has 0 ETH on chain 31337 to pay for gas. Please click "Fund 10 ETH Faucet" to fund your account.',
+        error: `Connected account has 0 ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.currency.symbol ?? 'native'} on chain ${DEFAULT_CHAIN_ID} to pay for gas. Please fund your account with testnet ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.currency.symbol ?? 'gas'}.`,
       };
       setActiveTx(errRecord);
       setTxHistory((prev) => [errRecord, ...prev.slice(0, 19)]);
@@ -1319,7 +1396,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const tokenContract = getContract('MockERC20', DEFAULT_CHAIN_ID);
     if (!tokenContract || !address) throw new Error('Contract or address not ready');
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const apiUrl = API_URL;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (session?.token) {
@@ -1609,7 +1686,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       )
     );
     let oracleSignature: Hex | undefined;
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const apiUrl = API_URL;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (session?.token) {
@@ -1806,6 +1883,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         tokenBalance,
         escrowBalances,
         roles,
+        detectedRole,
+        rolesLoading,
+        rolesError,
         connectMetaMask,
         disconnect,
         switchNetwork,

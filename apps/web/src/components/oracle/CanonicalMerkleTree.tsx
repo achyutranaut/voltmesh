@@ -28,7 +28,7 @@ import { BinaryMerkleTree } from '@energy-dex/attestation';
 import { DetailDrawerData } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
 import { useSession } from '@/auth/SessionContext';
-import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
+import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet, API_URL } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
 import { Hash, Hex, createPublicClient, http } from 'viem';
 import { Button } from '@/components/ui/button';
@@ -337,7 +337,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
       }
 
       let oracleSig: Hash | undefined;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const apiUrl = API_URL;
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (session?.token) {

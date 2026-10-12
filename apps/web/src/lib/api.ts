@@ -9,11 +9,10 @@ export class ApiError extends Error {
   }
 }
 
+import { API_URL } from '@/config/contracts';
+
 export function getApiBaseUrl(): string {
-  return (
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-    'http://localhost:3000'
-  );
+  return (API_URL || '').replace(/\/$/, '');
 }
 
 export async function apiFetch<T = any>(

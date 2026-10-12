@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { VoltMeshLogo } from './VoltMeshLogo';
 import { Shield, Key, Lock, X, CheckCircle2 } from 'lucide-react';
+import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -108,7 +109,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         <div className="text-center mt-3 text-[10px] text-zinc-600">
-          SECURED VIA ED25519 & SECP256K1 ON TESTNET 31337
+          SECURED VIA ED25519 & SECP256K1 ON TESTNET · CHAIN {DEFAULT_CHAIN_ID}
         </div>
       </div>
     </div>

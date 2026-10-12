@@ -11,6 +11,7 @@ import {
   GitBranch,
 } from 'lucide-react';
 import { DetailDrawerData, NavigationTab } from '@/types/ui';
+import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -210,7 +211,7 @@ export const OracleEpochsView: React.FC<OracleEpochsViewProps> = ({
             EpochOracle.sol
           </div>
           <div className="text-[11px] text-zinc-500">
-            EVM Chain ID 31337
+            EVM Chain ID {DEFAULT_CHAIN_ID}
           </div>
         </div>
 

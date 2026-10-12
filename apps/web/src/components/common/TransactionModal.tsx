@@ -11,7 +11,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
-import { getExplorerTxUrl } from '../../config/contracts';
+import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '../../config/contracts';
 
 export const TransactionModal: React.FC = () => {
   const { activeTx, dismissActiveTx, chainId } = useWallet();
@@ -75,7 +75,7 @@ export const TransactionModal: React.FC = () => {
               <div className="space-y-2 w-full">
                 <div className="font-bold text-sm">WRONG NETWORK</div>
                 <div className="text-[11px] text-zinc-400">
-                  {activeTx.error || 'Your wallet is connected to the wrong network. Please switch to VoltMesh Testnet (Chain ID 31337).'}
+                  {activeTx.error || `Your wallet is connected to the wrong network. Please switch to the configured VoltMesh network.`}
                 </div>
               </div>
             </div>
@@ -234,7 +234,7 @@ export const TransactionModal: React.FC = () => {
         <div className="flex items-center justify-end space-x-2 pt-2 border-t border-white/[0.07]">
           {activeTx.hash && activeTx.hash !== '0x' && (
             <a
-              href={getExplorerTxUrl(activeTx.hash, chainId ?? 31337)}
+              href={getExplorerTxUrl(activeTx.hash, chainId ?? DEFAULT_CHAIN_ID)}
               target="_blank"
               rel="noreferrer"
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white text-xs transition-colors"

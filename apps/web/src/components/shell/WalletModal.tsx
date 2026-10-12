@@ -303,7 +303,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                   }`}
                 />
                 <span className="font-semibold text-white">
-                  {isCorrectNetwork ? 'VoltMesh Testnet (31337)' : `Chain ID ${chainId ?? 'Unknown'}`}
+                  {isCorrectNetwork ? (SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? `Chain ${DEFAULT_CHAIN_ID}`) : `Chain ID ${chainId ?? 'Unknown'}`}
                 </span>
               </div>
               <span className={`text-[11px] font-semibold ${isCorrectNetwork ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -318,7 +318,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                   className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 rounded bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs transition-colors cursor-pointer"
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>SWITCH TO TESTNET 31337</span>
+                  <span>SWITCH TO {SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name?.toUpperCase() ?? 'CONFIGURED NETWORK'}</span>
                 </button>
               </div>
             )}

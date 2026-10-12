@@ -234,7 +234,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   const publicClient = useMemo(() => {
     return createPublicClient({
       chain: voltmeshTestnet,
-      transport: http('http://127.0.0.1:8545'),
+      transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
     });
   }, []);
 

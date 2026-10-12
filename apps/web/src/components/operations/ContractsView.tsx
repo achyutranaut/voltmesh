@@ -17,8 +17,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import deploymentArtifacts from '@/contracts/deployments.json';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS } from '@/config/contracts';
 import { createPublicClient, http, Address } from 'viem';
+
+const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
 
 interface ContractRecord {
   name: string;
@@ -42,7 +44,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'EpochOracle',
       address: deploymentArtifacts.contracts.EpochOracle.address,
       role: '1-of-N Quorum Merkle Epoch Roots (Devnet)',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/EpochOracle.sol',
       abiSummary: ['commitEpoch(zoneId, intervalIdx, merkleRoot, leafCount, totalWh, signatures)', 'verifyLeaf(zoneId, intervalIdx, leaf, proof)'],
@@ -51,7 +53,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'Escrow',
       address: deploymentArtifacts.contracts.Escrow.address,
       role: 'Collateral Custody & Delivery Freezing',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/Escrow.sol',
       abiSummary: ['deposit(amount)', 'withdraw(amount)', 'lockCollateral(participant, amount)', 'releaseCollateral(participant, amount)'],
@@ -60,7 +62,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'BatchSettlement',
       address: deploymentArtifacts.contracts.BatchSettlement.address,
       role: 'Atomic T+1 Batch Netting & Cash Payouts',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/BatchSettlement.sol',
       abiSummary: ['commitClearing(zoneId, intervalIdx, price, volume, ordersRoot, obligationsRoot)', 'settleBatch(zoneId, intervalIdx, obligations)'],
@@ -69,7 +71,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'CertificateRegistry',
       address: deploymentArtifacts.contracts.CertificateRegistry.address,
       role: 'Granular Attribute Certificates (ERC-1155)',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/CertificateRegistry.sol',
       abiSummary: ['claimCertificate(zoneId, intervalIdx, deviceId, energyWh, sourceType, counter, proof)', 'transferFrom(from, to, id, amount)'],
@@ -78,7 +80,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'RetirementRegistry',
       address: deploymentArtifacts.contracts.RetirementRegistry.address,
       role: 'Nullifier Commitment & Permanent Burn',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/RetirementRegistry.sol',
       abiSummary: ['retireCertificate(tokenId, nullifier)', 'isNullified(nullifier)'],
@@ -87,7 +89,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'MockERC20',
       address: deploymentArtifacts.contracts.MockERC20.address,
       role: 'vUSD Settlement Stablecoin (6 Decimals)',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/MockERC20.sol',
       abiSummary: ['mint(to, amount)', 'approve(spender, amount)', 'transfer(to, amount)', 'balanceOf(account)'],
@@ -96,7 +98,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'AccessRegistry',
       address: deploymentArtifacts.contracts.AccessRegistry.address,
       role: 'Role-Based Access Control (RBAC)',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/AccessRegistry.sol',
       abiSummary: ['hasRole(role, account)', 'grantRole(role, account)'],
@@ -105,7 +107,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'ParticipantRegistry',
       address: deploymentArtifacts.contracts.ParticipantRegistry.address,
       role: 'Participant Onboarding & Collateral Caps',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/ParticipantRegistry.sol',
       abiSummary: ['registerParticipant(account, zoneId)', 'isRegistered(account)'],
@@ -114,7 +116,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       name: 'DeviceRegistry',
       address: deploymentArtifacts.contracts.DeviceRegistry.address,
       role: 'AMI Smart Meter Hardware Key Attestation',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       status: 'DEPLOYED',
       solidityFile: 'contracts/src/DeviceRegistry.sol',
       abiSummary: ['registerDevice(deviceId, zoneId, pubKey)', 'getDevice(deviceId)'],
@@ -154,7 +156,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     const status = bytecodeStatus[c.name];
     onSelectDetail({
       title: `CONTRACT ${c.name.toUpperCase()}`,
-      subtitle: `Solidity 0.8.24 · Local EVM Chain ID 31337`,
+      subtitle: `Solidity 0.8.24 · Chain ID ${DEFAULT_CHAIN_ID}`,
       category: 'ON-CHAIN SMART CONTRACT',
       statusBadge: {
         label: status?.verified ? 'DEPLOYED & BYTECODE VERIFIED' : 'DEPLOYED & CONFIGURED',
@@ -162,7 +164,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       },
       metrics: [
         { label: 'BYTECODE SIZE', value: status?.verified ? `${status.bytes} bytes` : 'Configured' },
-        { label: 'CHAIN ID', value: '31337' },
+        { label: 'CHAIN ID', value: String(DEFAULT_CHAIN_ID) },
         { label: 'COMPILER', value: 'Solidity 0.8.24' },
       ],
       properties: [
@@ -199,7 +201,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
           </div>
 
           <div className="text-xs text-zinc-400">
-            Chain ID 31337 · Solidity 0.8.24 · Local Devnet
+            Chain ID {DEFAULT_CHAIN_ID} · Solidity 0.8.24 · {NETWORK_LABEL}
           </div>
 
           <p className="text-xs text-zinc-500 max-w-2xl pt-0.5">
@@ -209,7 +211,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
 
         <div className="flex items-center space-x-2 text-xs text-zinc-400 pt-1">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span>CHAIN ID 31337</span>
+          <span>CHAIN ID {DEFAULT_CHAIN_ID}</span>
         </div>
       </div>
 
@@ -242,7 +244,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
                   {c.address.slice(0, 8)}...{c.address.slice(-6)}
                 </td>
                 <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
-                  TESTNET (31337)
+                  {c.network}
                 </td>
                 <td className="py-2.5 px-3 text-zinc-300">
                   {c.role}

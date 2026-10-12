@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/auth/SessionContext';
+import { API_URL } from '@/config/contracts';
 
 export interface ReferencePriceData {
   value: number; // in paise/kWh
@@ -19,7 +20,7 @@ export interface SolarIrradianceData {
 
 export function useMarketData(zoneId = 1, intervalStart?: number) {
   const { session } = useSession();
-  const apiBase = import.meta.env.VITE_API_URL || '';
+  const apiBase = API_URL;
 
   const [referencePrice, setReferencePrice] = useState<ReferencePriceData | null>(null);
   const [irradiance, setIrradiance] = useState<SolarIrradianceData[]>([]);

@@ -5,7 +5,7 @@ import { formatEther, formatUnits } from 'viem';
 import { WalletModal } from './WalletModal';
 import { DevDiagnosticsModal } from './DevDiagnosticsModal';
 import { VoltMeshBrand } from '@/components/brand/VoltMeshBrand';
-import { DEFAULT_CHAIN_ID } from '../../config/contracts';
+import { DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS } from '../../config/contracts';
 
 interface AppHeaderProps {
   currentInterval: number;
@@ -134,7 +134,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               <button
                 onClick={() => switchNetwork(DEFAULT_CHAIN_ID)}
                 className="flex items-center space-x-1 px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs transition-colors cursor-pointer"
-                title={`Switch to VoltMesh Testnet (${DEFAULT_CHAIN_ID})`}
+                title={`Switch to ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh network'} (chain ${DEFAULT_CHAIN_ID})`}
               >
                 <span>SWITCH TO TESTNET</span>
               </button>

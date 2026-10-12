@@ -26,7 +26,7 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import { createPublicClient, http } from 'viem';
-import { voltmeshTestnet } from '@/config/contracts';
+import { voltmeshTestnet, API_URL, USE_LOCAL } from '@/config/contracts';
 
 interface OperationsViewProps {
   currentInterval: number;
@@ -68,22 +68,30 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
         }
       }
 
-      // 2. Check Core API Health (Port 3000)
+      // 2. Check Core API Health (configured backend)
       try {
-        const res = await fetch('http://127.0.0.1:3000/health', {
-          signal: AbortSignal.timeout(1200),
-        });
-        if (mounted) setApiHealthy(res.ok);
+        if (API_URL) {
+          const res = await fetch(`${API_URL.replace(/\/$/, '')}/health`, {
+            signal: AbortSignal.timeout(1200),
+          });
+          if (mounted) setApiHealthy(res.ok);
+        } else if (mounted) {
+          setApiHealthy(false);
+        }
       } catch {
         if (mounted) setApiHealthy(false);
       }
 
-      // 3. Check Ingest Gateway Health (Port 3001)
+      // 3. Check Ingest Gateway Health (local dev only — no public URL in prod)
       try {
-        const res = await fetch('http://127.0.0.1:3001/health', {
-          signal: AbortSignal.timeout(1200),
-        });
-        if (mounted) setGatewayHealthy(res.ok);
+        if (USE_LOCAL) {
+          const res = await fetch('http://127.0.0.1:3001/health', {
+            signal: AbortSignal.timeout(1200),
+          });
+          if (mounted) setGatewayHealthy(res.ok);
+        } else if (mounted) {
+          setGatewayHealthy(false);
+        }
       } catch {
         if (mounted) setGatewayHealthy(false);
       }

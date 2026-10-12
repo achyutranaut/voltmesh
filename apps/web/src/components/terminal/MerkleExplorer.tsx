@@ -21,7 +21,7 @@ import {
   ChevronRight,
   ShieldAlert,
 } from 'lucide-react';
-import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from '@/config/contracts';
+import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet, API_URL } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
 import { Hash, Hex, createPublicClient, http } from 'viem';
 import { normalizeEpochRecord, safeStringify } from '@/lib/json';
@@ -210,7 +210,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       }
 
       let oracleSig: Hash | undefined;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const apiUrl = API_URL;
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (session?.token) {

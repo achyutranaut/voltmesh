@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, ArrowRight, ChevronDown, Menu, X } from 'lucide-react';
 import { VoltMeshLogo } from '../brand/VoltMeshLogo';
+import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 interface StoryNavbarProps {
   onEnterTerminal: () => void;
@@ -78,7 +79,7 @@ const NAV_CATEGORIES: NavCategory[] = [
       },
       {
         title: 'Blockchain Settlement',
-        description: 'Multi-party escrow contracts, state channels & EVM settlement on Chain 31337',
+        description: `Multi-party escrow contracts, state channels & EVM settlement on Chain ${DEFAULT_CHAIN_ID}`,
         href: '#blockchain',
       },
       {

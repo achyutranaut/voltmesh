@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { createPublicClient, http } from 'viem';
-import { voltmeshTestnet } from '@/config/contracts';
+import { voltmeshTestnet, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { Cpu, Server, Activity, Radio, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -75,7 +75,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
     {
       name: 'EVM Chain RPC',
       status: rpcStatus === 'CONNECTED' ? 'Connected' : rpcStatus === 'NOT_CONNECTED' ? 'Not connected' : 'Connecting',
-      provenance: 'Live RPC (Chain 31337)',
+      provenance: `Live RPC (Chain ${DEFAULT_CHAIN_ID})`,
       detail: rpcLatency ? `${rpcLatency} ms latency · Block #${blockNumber?.toString() ?? '--'}` : 'Checking connection...',
       healthy: rpcStatus === 'CONNECTED',
     },

@@ -7,6 +7,7 @@ import { hexToBytes } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle2, FileCheck, Wallet, ShieldAlert, Info } from 'lucide-react';
+import { SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 export interface OrderEntryProps {
   currentInterval: number;
@@ -185,9 +186,9 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
   // 1. Trading Unavailable State (Wallet connected, but unregistered on-chain)
   if (isConnected && !canBuy && !canSell && !isDisallowedRole) {
     const failureReason = !isCorrectNetwork
-      ? `Wallet is connected to network (${chainId}). Required VoltMesh Testnet (Chain ID 31337).`
+      ? `Wallet is connected to network (${chainId}). Required ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh network'} (Chain ID ${DEFAULT_CHAIN_ID}).`
       : !roles.isParticipant
-      ? `Address ${address?.slice(0, 8)}...${address?.slice(-6)} is not registered in ParticipantRegistry on chain 31337.`
+      ? `Address ${address?.slice(0, 8)}...${address?.slice(-6)} is not registered in ParticipantRegistry on chain ${DEFAULT_CHAIN_ID}.`
       : side === OrderSide.BUY && escrowBalances.free === 0n && tokenBalance === 0n
       ? 'Buyer requires an active collateral deposit in the Escrow smart contract to place bids.'
       : 'Account is missing trading permissions in AccessRegistry/ParticipantRegistry.';

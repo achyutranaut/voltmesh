@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useSession } from '@/auth/SessionContext';
 import { DetailDrawerData } from '@/types/ui';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getApiBaseUrl } from '@/lib/api';
 
 interface GovernanceMember {
   governanceMemberId: string;
@@ -100,7 +100,7 @@ const ATTACK_SCENARIOS = [
 
 export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }) => {
   const { session } = useSession();
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const apiBase = getApiBaseUrl();
 
   const [members, setMembers] = useState<GovernanceMember[]>([]);
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);

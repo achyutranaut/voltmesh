@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowRight, Terminal, Activity, Radio, Cpu, ShieldCheck, Zap } from 'lucide-react';
 import { VoltMeshLogo } from '../brand/VoltMeshLogo';
+import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 interface HeroSectionProps {
   onEnterTerminal: () => void;
@@ -20,7 +21,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onEnterTerminal }) => 
         </div>
         <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-sm">
           <Radio className="w-3 h-3 text-cyan-400" />
-          <span>EVM TESTNET 31337</span>
+          <span>EVM TESTNET · CHAIN {DEFAULT_CHAIN_ID}</span>
         </div>
         <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-sm">
           <Activity className="w-3 h-3 text-amber-400" />

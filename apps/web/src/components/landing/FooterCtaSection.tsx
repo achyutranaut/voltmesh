@@ -2,6 +2,7 @@ import React from 'react';
 import { Terminal, FileText, ArrowRight, ShieldCheck, Github, ExternalLink } from 'lucide-react';
 import { VoltMeshLogo } from '../brand/VoltMeshLogo';
 import deploymentArtifacts from '../../contracts/deployments.json';
+import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 interface FooterCtaSectionProps {
   onEnterTerminal: () => void;
@@ -67,7 +68,7 @@ export const FooterCtaSection: React.FC<FooterCtaSectionProps> = ({ onEnterTermi
           </div>
 
           <div>
-            <div className="text-white font-semibold text-xs mb-2">SMART CONTRACTS (CHAIN 31337)</div>
+            <div className="text-white font-semibold text-xs mb-2">SMART CONTRACTS (CHAIN {DEFAULT_CHAIN_ID})</div>
             <ul className="space-y-1.5 text-zinc-400 text-[11px] font-mono">
               <li>EpochOracle.sol @ {deploymentArtifacts.contracts.EpochOracle.address.slice(0, 8)}...{deploymentArtifacts.contracts.EpochOracle.address.slice(-6)}</li>
               <li>Escrow.sol @ {deploymentArtifacts.contracts.Escrow.address.slice(0, 8)}...{deploymentArtifacts.contracts.Escrow.address.slice(-6)}</li>
@@ -90,7 +91,7 @@ export const FooterCtaSection: React.FC<FooterCtaSectionProps> = ({ onEnterTermi
         <div className="max-w-7xl mx-auto mt-8 pt-4 border-t border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-500 gap-2">
           <div>© 2026 VOLTMESH · DECENTRALIZED ENERGY EXCHANGE · ARCHITECTURE V1.1 SPECIFICATION</div>
           <div className="flex items-center space-x-4">
-            <span>TESTNET 31337</span>
+            <span>TESTNET · CHAIN {DEFAULT_CHAIN_ID}</span>
             <span>·</span>
             <span>DLMS/COSEM HDLC</span>
             <span>·</span>

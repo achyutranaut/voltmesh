@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { FileCode2, ExternalLink, Copy, Check, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import deploymentArtifacts from '@/contracts/deployments.json';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS } from '@/config/contracts';
+
+const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
 import { createPublicClient, http, Address } from 'viem';
 
 export interface ContractRecord {
@@ -28,7 +30,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
       name: 'EpochOracle',
       address: deploymentArtifacts.contracts.EpochOracle.address,
       role: 'Consensus Merkle Epoch Roots & Leaf Verification',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
       solidityFile: 'contracts/src/EpochOracle.sol',
       abiSummary: [
@@ -40,7 +42,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
       name: 'Escrow',
       address: deploymentArtifacts.contracts.Escrow.address,
       role: 'Collateral Custody & Delivery Freezing',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
       solidityFile: 'contracts/src/Escrow.sol',
       abiSummary: [
@@ -54,7 +56,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
       name: 'BatchSettlement',
       address: deploymentArtifacts.contracts.BatchSettlement.address,
       role: 'Uniform Call Auction Netting & Escrow Payouts',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
       solidityFile: 'contracts/src/BatchSettlement.sol',
       abiSummary: [
@@ -66,7 +68,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
       name: 'EnergyToken (MockERC20)',
       address: deploymentArtifacts.contracts.MockERC20.address,
       role: 'Settlement Currency & Collateral Denomination',
-      network: 'VoltMesh Testnet (Chain 31337)',
+      network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
       solidityFile: 'contracts/src/MockERC20.sol',
       abiSummary: [

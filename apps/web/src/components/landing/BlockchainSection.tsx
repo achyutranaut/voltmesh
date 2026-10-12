@@ -1,5 +1,6 @@
 import React from 'react';
 import { Layers, Shield, Cpu, Database, CheckCircle2, ArrowRight } from 'lucide-react';
+import { DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 export const BlockchainSection: React.FC = () => {
   return (
@@ -62,7 +63,7 @@ export const BlockchainSection: React.FC = () => {
           </div>
 
           <p className="text-zinc-400 text-xs leading-relaxed">
-            Preserves system invariants, non-custodial cash escrow, proof of generation, and legal dispute settlement on EVM Testnet 31337.
+            Preserves system invariants, non-custodial cash escrow, proof of generation, and legal dispute settlement on EVM Testnet (Chain {DEFAULT_CHAIN_ID}).
           </p>
 
           <div className="space-y-2.5">
