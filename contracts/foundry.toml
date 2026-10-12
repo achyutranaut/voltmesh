@@ -13,6 +13,14 @@ remappings = [
     "forge-std/=lib/forge-std/src/"
 ]
 
+# Allow deploy scripts to write deployment JSON artifacts.
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
+[rpc_endpoints]
+amoy = "${AMOY_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+anvil = "http://127.0.0.1:8545"
+
 [invariant]
 runs = 256
 depth = 64
