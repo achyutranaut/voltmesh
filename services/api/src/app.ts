@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, encodePacked, toHex, createPublicClient, createWalletClient, parseUnits, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry, sepolia } from 'viem/chains';
+import { foundry, sepolia, polygonAmoy } from 'viem/chains';
 import {
   Participant,
   ParticipantRole,
@@ -331,9 +331,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
   const matcher = options.matcher ?? new BatchMatcher();
   const chainId = options.chainId ?? (process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : 31337);
-  const ALLOWED_CHAINS = [31337, 11155111];
+  const ALLOWED_CHAINS = [31337, 11155111, 80002]; // Anvil devnet, Sepolia, Polygon Amoy
   if (!ALLOWED_CHAINS.includes(chainId)) {
-    throw new Error(`FATAL: Chain ID ${chainId} is not allowed. VoltMesh strictly permits Anvil local devnet (31337) and Sepolia testnet (11155111).`);
+    throw new Error(`FATAL: Chain ID ${chainId} is not allowed. VoltMesh permits Anvil local devnet (31337), Sepolia (11155111), and Polygon Amoy (80002).`);
   }
   // Strict network contract address binding: Anvil defaults are strictly permitted ONLY on local chain 31337
   let settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address | undefined);
@@ -352,23 +352,25 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     }
   }
 
-  // P1-17: Restrict CORS origin in production, allow Vite dev and configured ALLOWED_ORIGINS
-  const defaultAllowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
-  if (isProduction) {
-    const envOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : [];
-    const allowed = envOrigins.length > 0 ? envOrigins : defaultAllowedOrigins;
-    app.register(cors, {
-      origin: allowed,
-      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
-      credentials: true,
-    });
-  } else {
-    app.register(cors, {
-      origin: true,
-      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
-      credentials: true,
-    });
-  }
+  // P1-17: Restrict CORS origin in production, allow Vite dev and configured FRONTEND_ORIGIN.
+  // FRONTEND_ORIGIN is the deployed site (e.g. https://voltmesh-ivory.vercel.app);
+  // localhost dev origins are always permitted for local development.
+  const localDevOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  const envOrigins = (process.env.FRONTEND_ORIGIN || process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const allowedOrigins = Array.from(new Set([...localDevOrigins, ...envOrigins]));
+  app.register(cors, {
+    origin: (origin, cb) => {
+      // Allow same-origin / server-to-server / curl (no Origin header)
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+    credentials: true,
+  });
 
   app.register(jwt, { secret: jwtSecret });
 
@@ -795,61 +797,81 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       if (DEMO_ROLES[lower]) return DEMO_ROLES[lower];
     }
 
-    // 4. Try on-chain RPC lookup if Anvil devnet is running
-    try {
-      const publicClient = createPublicClient({
-        chain: foundry,
-        transport: http('http://127.0.0.1:8545'),
-      });
-      const accessAddr = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
-      const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
-      const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
+    // 4. Authoritative on-chain lookup via the CONFIGURED RPC + addresses.
+    //    Never hardcodes localhost; RPC_URL / ACCESS_REGISTRY_ADDRESS /
+    //    PARTICIPANT_REGISTRY_ADDRESS come from the environment so the same
+    //    code path works on Anvil (dev) and Polygon Amoy (production).
+    const onchainRpc = process.env.RPC_URL;
+    const accessAddr = (process.env.ACCESS_REGISTRY_ADDRESS || process.env.BATCH_SETTLEMENT_ADDRESS) as Address | undefined;
+    const participantAddr = process.env.PARTICIPANT_REGISTRY_ADDRESS as Address | undefined;
 
-      const isOp = (await publicClient.readContract({
-        address: accessAddr,
-        abi: [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }],
-        functionName: 'hasRole',
-        args: [OPERATOR_ROLE, lower as Hex],
-      })) as boolean;
-      if (isOp) return 'discom';
+    if (onchainRpc && accessAddr && /^0x[a-fA-F0-9]{40}$/.test(accessAddr)) {
+      try {
+        const publicClient = createPublicClient({
+          chain: foundry,
+          transport: http(onchainRpc),
+        });
+        const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
+        const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
+        const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
 
-      const isAuditor = (await publicClient.readContract({
-        address: accessAddr,
-        abi: [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }],
-        functionName: 'hasRole',
-        args: [AUDITOR_ROLE, lower as Hex],
-      })) as boolean;
-      if (isAuditor) return 'regulator';
+        const roleAbi = [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }];
 
-      const participantAddr = '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
-      const partData = (await publicClient.readContract({
-        address: participantAddr,
-        abi: [{
-          type: 'function',
-          name: 'participants',
-          inputs: [{ name: 'wallet', type: 'address' }],
-          outputs: [
-            { name: 'participantId', type: 'bytes32' },
-            { name: 'zoneId', type: 'uint32' },
-            { name: 'roleType', type: 'uint8' },
-            { name: 'bindingHash', type: 'bytes32' },
-            { name: 'isSuspended', type: 'bool' },
-            { name: 'registeredAt', type: 'uint64' },
-          ],
-          stateMutability: 'view',
-        }],
-        functionName: 'participants',
-        args: [lower as Hex],
-      })) as [string, number, number, string, boolean, bigint];
+        const isOp = (await publicClient.readContract({
+          address: accessAddr,
+          abi: roleAbi,
+          functionName: 'hasRole',
+          args: [OPERATOR_ROLE, lower as Hex],
+        })) as boolean;
+        if (isOp) return 'discom';
 
-      if (partData && partData[0] !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-        const roleType = partData[2];
-        if (roleType === 1) return 'seller';
-        if (roleType === 0) return 'buyer';
-        if (roleType === 2) return 'discom';
+        const isAuditor = (await publicClient.readContract({
+          address: accessAddr,
+          abi: roleAbi,
+          functionName: 'hasRole',
+          args: [AUDITOR_ROLE, lower as Hex],
+        })) as boolean;
+        if (isAuditor) return 'regulator';
+
+        const isRegulator = (await publicClient.readContract({
+          address: accessAddr,
+          abi: roleAbi,
+          functionName: 'hasRole',
+          args: [REGULATOR_ROLE, lower as Hex],
+        })) as boolean;
+        if (isRegulator) return 'regulator';
+
+        if (participantAddr && /^0x[a-fA-F0-9]{40}$/.test(participantAddr)) {
+          const partData = (await publicClient.readContract({
+            address: participantAddr,
+            abi: [{
+              type: 'function',
+              name: 'participants',
+              inputs: [{ name: 'wallet', type: 'address' }],
+              outputs: [
+                { name: 'participantId', type: 'bytes32' },
+                { name: 'zoneId', type: 'uint32' },
+                { name: 'roleType', type: 'uint8' },
+                { name: 'bindingHash', type: 'bytes32' },
+                { name: 'isSuspended', type: 'bool' },
+                { name: 'registeredAt', type: 'uint64' },
+              ],
+              stateMutability: 'view',
+            }],
+            functionName: 'participants',
+            args: [lower as Hex],
+          })) as [string, number, number, string, boolean, bigint];
+
+          if (partData && partData[0] !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+            const roleType = partData[2];
+            if (roleType === 1) return 'seller';
+            if (roleType === 0) return 'buyer';
+            if (roleType === 2) return 'discom';
+          }
+        }
+      } catch {
+        // RPC unreachable or contract not deployed at the configured address
       }
-    } catch {
-      // Devnet unreachable or not running
     }
 
     return undefined;
@@ -869,7 +891,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     const message = [
       'VoltMesh sign-in',
       `Address: ${address}`,
-      `Chain: 31337`,
+      `Chain: ${chainId}`,
       `Nonce: ${nonce}`,
       `Issued: ${new Date(now).toISOString()}`,
       `Expires: ${new Date(now + 3_600_000).toISOString()}`,
@@ -993,7 +1015,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       const chainMatch = body.message.match(/Chain ID:\s*(\d+)/i) || body.message.match(/Chain:\s*(\d+)/i);
       if (chainMatch) {
         const msgChainId = Number(chainMatch[1]);
-        if (msgChainId !== 31337 && msgChainId !== 11155111 && msgChainId !== chainId) {
+        if (msgChainId !== 31337 && msgChainId !== 11155111 && msgChainId !== 80002 && msgChainId !== chainId) {
           return reply.status(401).send({
             error: 'SIWE_CHAIN_MISMATCH',
             message: `Chain ID ${msgChainId} does not match active chain ${chainId}`,
@@ -1195,8 +1217,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // Test-Token Faucet Endpoint (Devnet & Sepolia Faucet)
   // ---------------------------------------------------------------------------
   app.post('/api/v1/faucet/mint', { preHandler: [authenticate] }, async (request, reply) => {
-    // Faucet strictly restricted to testnets
-    if (chainId !== 31337 && chainId !== 11155111) {
+    // Faucet strictly restricted to testnets (never mainnet 1 / 137)
+    if (chainId === 1 || chainId === 137) {
       return reply.status(403).send({ error: 'FAUCET_FORBIDDEN', message: 'Faucet is not available on production mainnet' });
     }
 
@@ -1227,12 +1249,16 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
-    // Network-specific RPC and Private Key resolution
-    const rpcUrl = chainId === 11155111
-      ? (process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org')
-      : (process.env.DEVNET_RPC_URL || 'http://127.0.0.1:8545');
+    // Network-specific RPC and chain config resolution. RPC_URL is the single
+    // configured endpoint; fall back to network defaults only for local dev.
+    const rpcUrl = process.env.RPC_URL
+      || (chainId === 11155111
+        ? (process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org')
+        : chainId === 80002
+          ? (process.env.AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology')
+          : (process.env.DEVNET_RPC_URL || 'http://127.0.0.1:8545'));
 
-    const chainConfig = chainId === 11155111 ? sepolia : foundry;
+    const chainConfig = chainId === 11155111 ? sepolia : chainId === 80002 ? polygonAmoy : foundry;
 
     let deployerKey: Hex | undefined = (process.env.FAUCET_PRIVATE_KEY || process.env.PRIVATE_KEY) as Hex | undefined;
     if (!deployerKey) {
@@ -1242,7 +1268,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       } else {
         return reply.status(503).send({
           error: 'FAUCET_KEY_NOT_CONFIGURED',
-          message: 'FAUCET_PRIVATE_KEY must be configured to dispense test tokens on Sepolia',
+          message: 'FAUCET_PRIVATE_KEY must be configured to dispense test tokens on this testnet',
         });
       }
     }

@@ -4,9 +4,10 @@
   "private": true,
   "description": "Mass-Scale Decentralized Energy Exchange Monorepo",
   "packageManager": "pnpm@11.25.0",
+  "type": "module",
   "scripts": {
     "build": "pnpm --filter \"./packages/*\" --filter \"./simulators/*\" --filter \"./services/*\" run build",
-    "test": "pnpm --filter \"./packages/*\" --filter \"./services/*\" --filter \"./simulators/*\" run test",
+    "test": "pnpm --filter \"./packages/*\" --filter \"./simulators/*\" --filter \"./services/*\" run test",
     "test:e2e": "vitest run tests/e2e/lifecycle.test.ts",
     "test:contracts": "cd contracts && forge test",
     "test:contracts:invariant": "cd contracts && forge test --match-test invariant",
@@ -14,6 +15,10 @@
     "lint": "pnpm --filter \"./packages/*\" run lint",
     "integrity-check": "tsx scripts/data-integrity-check.ts",
     "seed:demo": "tsx scripts/seed-demo-accounts.ts",
+    "verify:roles": "node scripts/verify-roles.js",
+    "check:balances": "node scripts/check-balances.js",
+    "verify": "pnpm verify:roles && pnpm check:balances",
+    "deploy:amoy": "cd contracts && forge script script/DeployAmoy.s.sol --rpc-url amoy --broadcast --verify",
     "clean": "pnpm -r run clean"
   },
   "devDependencies": {
