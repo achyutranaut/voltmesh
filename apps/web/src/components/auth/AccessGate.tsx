@@ -3,6 +3,8 @@ import { ArrowLeft, CheckCircle2, Loader2, LogOut, ShieldCheck, Wallet } from 'l
 import { VoltMeshLogo } from '../brand/VoltMeshLogo';
 import { DEMO_MODE, DemoKey, useSession } from '@/auth/SessionContext';
 import { ROLES, Role } from '@/auth/permissions';
+import { GOOGLE_CLIENT_ID } from '@/config/contracts';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -71,19 +73,94 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onEnter, onBack }) => {
             {/* Interactive controls: dim only these interactive buttons during pending state */}
             <div className={`space-y-5 transition-opacity duration-200 ${busy ? 'opacity-60 pointer-events-none' : ''}`}>
               <div className="space-y-2">
-                <div className="text-[#e4e4e7] font-semibold text-xs tracking-wide">Your wallet</div>
+                <div className="text-[#e4e4e7] font-semibold text-xs tracking-wide">Trading participants (Wallet)</div>
                 <button
                   disabled={busy}
                   onClick={s.signInInjected}
                   className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-2.5 rounded-md shadow-md transition-all cursor-pointer text-xs"
                 >
                   <Wallet className="w-4 h-4" />
-                  Connect wallet and choose account
+                  Connect wallet & sign in (Buyer / Seller)
                 </button>
                 <p className="text-[11px] text-[#a1a1aa] font-sans leading-relaxed">
-                  The wallet will ask which account to share. To test a buyer and a seller with real
-                  wallets, open a second browser window and sign in there with the other account.
+                  Sign in with your browser wallet to trade energy, place limit orders, or verify smart meters.
                 </p>
+              </div>
+
+              {/* Institutional & Regulatory Google OAuth Login */}
+              <div className="space-y-2.5 pt-1">
+                <div className="text-[#e4e4e7] font-semibold text-xs tracking-wide">Institutional login (Google OAuth)</div>
+                <p className="text-[11px] text-[#a1a1aa] font-sans leading-relaxed">
+                  Regulators and DISCOM operators authenticate using authorized Google Identity accounts.
+                </p>
+
+                {GOOGLE_CLIENT_ID ? (
+                  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                    <div className="space-y-2.5">
+                      {/* Regulator Option */}
+                      <div className="p-3 rounded-md border border-[#3f3f46] bg-[#18181b] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-[#f4f4f5] text-xs">Sign in as Regulator</div>
+                            <div className="text-[11px] text-[#a1a1aa] font-sans">Read-only audit & oversight</div>
+                          </div>
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800 text-blue-300">
+                            Audit
+                          </span>
+                        </div>
+                        <div className="pt-0.5 flex">
+                          <GoogleLogin
+                            theme="filled_black"
+                            size="medium"
+                            shape="rectangular"
+                            text="signin_with"
+                            onSuccess={(cred) => {
+                              if (cred.credential) {
+                                s.signInGoogle(cred.credential, 'regulator');
+                              }
+                            }}
+                            onError={() => {
+                              console.error('Google Sign-In failed or was cancelled.');
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Operator Option */}
+                      <div className="p-3 rounded-md border border-[#3f3f46] bg-[#18181b] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-[#f4f4f5] text-xs">Sign in as Operator</div>
+                            <div className="text-[11px] text-[#a1a1aa] font-sans">Clears markets & commits batches</div>
+                          </div>
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800 text-emerald-300">
+                            Operator
+                          </span>
+                        </div>
+                        <div className="pt-0.5 flex">
+                          <GoogleLogin
+                            theme="filled_black"
+                            size="medium"
+                            shape="rectangular"
+                            text="signin_with"
+                            onSuccess={(cred) => {
+                              if (cred.credential) {
+                                s.signInGoogle(cred.credential, 'discom');
+                              }
+                            }}
+                            onError={() => {
+                              console.error('Google Sign-In failed or was cancelled.');
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </GoogleOAuthProvider>
+                ) : (
+                  <div className="p-2.5 rounded-md border border-amber-900/50 bg-amber-950/20 text-amber-300 text-[11px]">
+                    Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Regulator & Operator Google Sign-In.
+                  </div>
+                )}
               </div>
 
               {DEMO_MODE && (
@@ -193,7 +270,11 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onEnter, onBack }) => {
                           </button>
                         </div>
                         <div className="text-[#a1a1aa] font-mono text-[11px] mt-0.5">
-                          {short(x.address)} · {x.kind === 'demo' ? 'demo account' : 'wallet'}
+                          {x.kind === 'google' ? (
+                            <span>{x.email || short(x.address)} · <span className="text-amber-400">Google OAuth</span></span>
+                          ) : (
+                            <span>{short(x.address)} · {x.kind === 'demo' ? 'demo account' : 'wallet'}</span>
+                          )}
                         </div>
                         <p className="text-[#d4d4d8] font-sans text-xs mt-1.5 leading-relaxed">{ROLES[x.role].summary}</p>
                         <div className="flex flex-wrap gap-1.5 mt-2">
@@ -252,14 +333,21 @@ export const SessionSwitcher: React.FC<{ onAddAccount: () => void }> = ({ onAddA
         <button
           key={x.address}
           onClick={() => switchTo(x.address)}
-          title={x.address}
-          className={`px-2.5 py-1 rounded-md border cursor-pointer transition-all ${
+          title={x.email ? `${x.email} (${x.address})` : x.address}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer transition-all ${
             x.address === session.address
               ? 'border-emerald-500 bg-emerald-950/40 text-white font-medium shadow-sm'
               : 'border-[#3f3f46] bg-[#18181b] text-[#a1a1aa] hover:text-white hover:border-zinc-500'
           }`}
         >
-          {ROLES[x.role].label.split(' ')[0]} · {short(x.address)}
+          {x.kind === 'google' && (
+            <span className="text-[9px] font-bold text-amber-300 bg-amber-950/80 border border-amber-700/60 px-1 rounded">
+              Google
+            </span>
+          )}
+          <span>
+            {ROLES[x.role].label.split(' ')[0]} · {x.email ? (x.email.length > 14 ? x.email.slice(0, 11) + '…' : x.email) : short(x.address)}
+          </span>
         </button>
       ))}
       <button

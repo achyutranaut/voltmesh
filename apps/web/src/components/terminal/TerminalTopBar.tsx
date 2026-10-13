@@ -4,6 +4,7 @@ import { Command, Wallet } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 import { TerminalNavTab } from './TerminalSidebar';
 import { SessionSwitcher } from '../auth/AccessGate';
+import { useSession } from '@/auth/SessionContext';
 import { formatSlotTimeRangeIST } from '@/utils/formatters';
 
 export interface TerminalTopBarProps {
@@ -24,6 +25,7 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
   zoneLabel = 'Zone A',
 }) => {
   const { address, isConnected, chainId } = useWallet();
+  const { session } = useSession();
 
   const slotInfo = formatSlotTimeRangeIST(currentInterval);
 
@@ -53,11 +55,13 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
   };
 
   const networkLabel =
-    chainId === 11155111
+    chainId === 80002
+      ? 'Polygon Amoy'
+      : chainId === 11155111
       ? 'Sepolia'
       : chainId === 31337
       ? 'Local Devnet'
-      : 'Devnet';
+      : 'Polygon Amoy';
 
   return (
     <header className="sticky top-0 z-20 flex h-12 w-full items-center justify-between border-b border-white/[0.07] bg-panel/95 px-3 md:px-4 backdrop-blur-md text-zinc-300 font-sans text-xs select-none">
@@ -116,13 +120,21 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
         <button
           onClick={isConnected ? onOpenWalletModal : (onAddAccount ?? (() => window.dispatchEvent(new Event('voltmesh:open-gate'))))}
           className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs font-sans transition-colors cursor-pointer ${
-            isConnected
+            session?.kind === 'google' || isConnected
               ? 'bg-white/[0.04] border-white/[0.08] hover:border-white/[0.15] text-zinc-300 hover:text-white'
               : 'bg-emerald-500 hover:bg-emerald-400 border-transparent text-zinc-950 font-medium'
           }`}
           aria-label="Account status"
         >
-          {isConnected ? (
+          {session?.kind === 'google' ? (
+            <>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-[10px] font-bold text-amber-300 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-700/60">G</span>
+              <span className="font-code text-xs">
+                {session.email ? (session.email.length > 16 ? session.email.slice(0, 13) + '…' : session.email) : (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Google Session')}
+              </span>
+            </>
+          ) : isConnected ? (
             <>
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               <span className="font-code text-xs">

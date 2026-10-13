@@ -82,6 +82,8 @@ export interface ApiServerOptions {
   erc20ContractAddress?: Address;
   allowDevKeys?: boolean;
   oraclePrivateKey?: Hex;
+  /** Testnet-only key for operator on-chain actions like BatchSettlement.commitClearing */
+  operatorPrivateKey?: Hex;
   /** Test seam: override Google ID-token verification. Production uses OAuth2Client. */
   googleVerifier?: (
     idToken: string,
@@ -431,6 +433,50 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       );
     }
   }
+
+  // Operator on-chain execution client (testnet/prod via OPERATOR_PRIVATE_KEY)
+  const operatorPrivateKey = options.operatorPrivateKey ?? (process.env.OPERATOR_PRIVATE_KEY as Hex | undefined);
+  const chainObj = chainId === 80002 ? polygonAmoy : chainId === 11155111 ? sepolia : foundry;
+  const rpcUrl = process.env.RPC_URL || (chainId === 80002 ? 'https://rpc-amoy.polygon.technology' : 'http://127.0.0.1:8545');
+
+  let operatorAccount: ReturnType<typeof privateKeyToAccount> | null = null;
+  if (operatorPrivateKey) {
+    try {
+      operatorAccount = privateKeyToAccount(operatorPrivateKey);
+    } catch (err: any) {
+      console.warn('[CoreAPI] Invalid OPERATOR_PRIVATE_KEY provided');
+    }
+  }
+
+  const operatorWalletClient = operatorAccount
+    ? createWalletClient({
+        account: operatorAccount,
+        chain: chainObj,
+        transport: http(rpcUrl),
+      })
+    : null;
+
+  const publicClient = createPublicClient({
+    chain: chainObj,
+    transport: http(rpcUrl),
+  });
+
+  const commitClearingAbi = [
+    {
+      type: 'function',
+      name: 'commitClearing',
+      inputs: [
+        { name: 'zoneId', type: 'uint32' },
+        { name: 'intervalIdx', type: 'uint32' },
+        { name: 'clearingPricePaiseKWh', type: 'uint64' },
+        { name: 'totalVolumeWh', type: 'uint64' },
+        { name: 'ordersMerkleRoot', type: 'bytes32' },
+        { name: 'obligationsMerkleRoot', type: 'bytes32' },
+      ],
+      outputs: [],
+      stateMutability: 'nonpayable',
+    },
+  ] as const;
 
   // P1-17: Restrict CORS origin in production, allow Vite dev and configured FRONTEND_ORIGIN.
   // FRONTEND_ORIGIN is the deployed site (e.g. https://voltmesh-ivory.vercel.app);
@@ -1108,7 +1154,53 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
+    // Role check: if the client requested a specific role, verify against the allowlisted role
+    if (validated.role) {
+      const req = validated.role.trim().toLowerCase();
+      const normalizedReq = (req === 'operator' || req === 'discom')
+        ? 'discom'
+        : (req === 'regulator' || req === 'auditor')
+        ? 'regulator'
+        : req;
+      if (normalizedReq !== resolved.uiRole) {
+        auditLogger.recordSecurityEvent({
+          category: 'AUTHORIZATION',
+          severity: 'HIGH',
+          action: 'GOOGLE_ROLE_MISMATCH',
+          actorWallet: '-',
+          role: resolved.userRole,
+          target: email,
+          result: 'BLOCKED',
+          reason: `Requested role ${validated.role} does not match allowlist privileges for ${email}`,
+          ruleId: 'RULE-004',
+        });
+        return reply.status(403).send({
+          error: 'ROLE_MISMATCH',
+          message: `Google account ${email} is not authorized for requested role "${validated.role}".`,
+        });
+      }
+    }
+
     const address = deriveGoogleAddress(email);
+
+    // Ensure member is registered in governance registry for authorization checks
+    if (!governance.getMember(address)) {
+      const now = Math.floor(Date.now() / 1000);
+      governance.setMember({
+        governanceMemberId: `gov-google-${address.slice(2, 10)}`,
+        organizationId: resolved.userRole === 'OPERATOR' ? 'org-operator' : 'org-regulator',
+        walletAddress: address,
+        role: resolved.userRole === 'OPERATOR' ? 'MARKET_OPERATOR' : 'AUDITOR',
+        status: 'ACTIVE',
+        jurisdiction: 'GRID-ALL',
+        issuedAt: now,
+        expiresAt: now + 365 * 86400,
+        credentialRef: `cred-google-${address.slice(2, 10)}`,
+        createdBy: address,
+        approvedBy: address,
+      });
+    }
+
     const token = app.jwt.sign(
       { sub: address, address, email, name, role: resolved.uiRole, authMethod: 'google' },
       { expiresIn: '24h' },
@@ -1126,7 +1218,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       metadata: { email, role: resolved.uiRole, authMethod: 'google' },
     });
 
-    return { token, role: resolved.uiRole, email, expiresAt, authMethod: 'google' };
+    return { token, role: resolved.uiRole, email, address, expiresAt, authMethod: 'google' };
   };
 
   app.post('/auth/google', handleGoogleAuth);
@@ -2263,6 +2355,29 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       }
     }
 
+    // On-chain commitment execution if operator wallet is configured
+    let onChainTxHash: Hex | null = null;
+    if (operatorWalletClient && settlementContractAddress) {
+      try {
+        onChainTxHash = await operatorWalletClient.writeContract({
+          address: settlementContractAddress,
+          abi: commitClearingAbi,
+          functionName: 'commitClearing',
+          args: [
+            zId,
+            iIdx,
+            result.clearingPricePaiseKWh,
+            result.clearedVolumeWh,
+            result.ordersMerkleRoot as Hex,
+            result.obligationsMerkleRoot as Hex,
+          ],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: onChainTxHash });
+      } catch (err: any) {
+        console.warn(`[CoreAPI] On-chain clearing commit notice: ${err?.message || err}`);
+      }
+    }
+
     const clearingResponse = {
       zoneId: zId,
       intervalIdx: iIdx,
@@ -2271,6 +2386,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       ordersMerkleRoot: result.ordersMerkleRoot,
       obligationsMerkleRoot: result.obligationsMerkleRoot,
       obligationsCount: result.obligations.length,
+      txHash: onChainTxHash,
       obligations: result.obligations.map((o) => ({
         ...o,
         quantityWh: o.quantityWh.toString(),
@@ -2295,11 +2411,81 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         obligationsCount: result.obligations.length,
         ordersMerkleRoot: result.ordersMerkleRoot,
         obligationsMerkleRoot: result.obligationsMerkleRoot,
+        txHash: onChainTxHash,
       },
     });
 
     return clearingResponse;
   });
+
+  // Dedicated Operator On-Chain Clearing Commitment Endpoint
+  const handleCommitClearing = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { zoneId, intervalIdx } = (request.params as { zoneId?: string; intervalIdx?: string }) || {};
+    const body = (request.body as any) || {};
+    const zId = Number(zoneId ?? body.zoneId ?? 1);
+    const iIdx = Number(intervalIdx ?? body.intervalIdx ?? 0);
+
+    if (!operatorWalletClient || !settlementContractAddress) {
+      return reply.status(503).send({
+        error: 'OPERATOR_KEY_NOT_CONFIGURED',
+        message: 'OPERATOR_PRIVATE_KEY or BATCH_SETTLEMENT_ADDRESS is not configured on the server.',
+      });
+    }
+
+    const stored = clearingResults.get(`${zId}:${iIdx}`);
+    const price = body.clearingPricePaiseKWh ? BigInt(body.clearingPricePaiseKWh) : stored ? stored.clearingPricePaiseKWh : null;
+    const volume = body.clearedVolumeWh ? BigInt(body.clearedVolumeWh) : stored ? stored.clearedVolumeWh : null;
+    const ordersRoot = (body.ordersMerkleRoot || (stored ? stored.ordersMerkleRoot : null)) as Hex | null;
+    const obligationsRoot = (body.obligationsMerkleRoot || (stored ? stored.obligationsMerkleRoot : null)) as Hex | null;
+
+    if (price === null || volume === null || !ordersRoot || !obligationsRoot) {
+      return reply.status(400).send({
+        error: 'CLEARING_DATA_MISSING',
+        message: 'No clearing result available to commit on-chain for this zone and interval. Clear the market first.',
+      });
+    }
+
+    try {
+      const hash = await operatorWalletClient.writeContract({
+        address: settlementContractAddress,
+        abi: commitClearingAbi,
+        functionName: 'commitClearing',
+        args: [zId, iIdx, price, volume, ordersRoot, obligationsRoot],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      auditLogger.recordAuditEvent({
+        actorWallet: operatorAccount?.address || 'operator',
+        role: 'MARKET_OPERATOR',
+        action: 'COMMIT_CLEARING_ON_CHAIN',
+        resourceType: 'BATCH_SETTLEMENT',
+        resourceId: `zone-${zId}-interval-${iIdx}`,
+        zoneId: zId,
+        reason: 'Operator committed market clearing on-chain to BatchSettlement.sol',
+        status: 'SUCCESS',
+        metadata: {
+          txHash: hash,
+          blockNumber: receipt.blockNumber.toString(),
+          pricePaiseKWh: price.toString(),
+          volumeWh: volume.toString(),
+        },
+      });
+
+      return {
+        txHash: hash,
+        blockNumber: receipt.blockNumber.toString(),
+        status: receipt.status,
+      };
+    } catch (err: any) {
+      return reply.status(500).send({
+        error: 'ON_CHAIN_COMMIT_FAILED',
+        message: err?.message || 'Failed to commit clearing on-chain.',
+      });
+    }
+  };
+
+  app.post('/api/v1/markets/zones/:zoneId/commit-clearing/:intervalIdx', { preHandler: [authenticate, requireCapability('CLEAR_MARKET')] }, handleCommitClearing);
+  app.post('/api/v1/clearing/commit', { preHandler: [authenticate, requireCapability('CLEAR_MARKET')] }, handleCommitClearing);
 
   app.get('/api/v1/clearing/:zoneId/:intervalIdx', async (request, reply) => {
     const { zoneId, intervalIdx } = request.params as { zoneId: string; intervalIdx: string };

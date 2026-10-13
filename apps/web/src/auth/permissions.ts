@@ -140,7 +140,7 @@ export type Domain = 'DEMO' | 'LIVE';
  * (injected) defaults to LIVE. This mirrors `AccessRegistry.isDemo` on-chain.
  */
 export function resolveSessionDomain(
-  kind?: 'injected' | 'demo' | null,
+  kind?: 'injected' | 'demo' | 'google' | null,
   demoKey?: string | null,
 ): Domain {
   return kind === 'demo' || !!demoKey ? 'DEMO' : 'LIVE';

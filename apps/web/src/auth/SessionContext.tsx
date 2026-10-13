@@ -41,22 +41,26 @@ export const DEMO_ACCOUNTS: Record<DemoKey, { key: Hex; role: Role }> = {
 export interface Session {
   address: Address;
   role: Role;
-  kind: 'injected' | 'demo';
-  walletClient: WalletClient;
+  kind: 'injected' | 'demo' | 'google';
+  walletClient?: WalletClient;
   expiresAt: number;
   token?: string;
   demoKey?: DemoKey;
   chainId?: number;
+  email?: string;
+  authMethod?: 'wallet' | 'google';
 }
 
 interface StoredSession {
   address: Address;
   role: Role;
-  kind: 'injected' | 'demo';
+  kind: 'injected' | 'demo' | 'google';
   expiresAt: number;
   token?: string;
   demoKey?: DemoKey;
   chainId?: number;
+  email?: string;
+  authMethod?: 'wallet' | 'google';
 }
 
 const SESSIONS_STORAGE_KEY = 'voltmesh_sessions';
@@ -130,6 +134,27 @@ function rehydrateSession(stored: StoredSession): Session | null {
         expiresAt: stored.expiresAt,
         token: stored.token,
         chainId: stored.chainId ?? voltmeshChain.id,
+        authMethod: 'wallet',
+      };
+    }
+
+    if (stored.kind === 'google') {
+      let role = stored.role;
+      if (stored.token) {
+        const tokenRole = parseJwtRole(stored.token);
+        if (tokenRole && tokenRole !== stored.role) {
+          role = tokenRole;
+        }
+      }
+      return {
+        address: stored.address,
+        role,
+        kind: 'google',
+        expiresAt: stored.expiresAt,
+        token: stored.token,
+        email: stored.email,
+        authMethod: 'google',
+        chainId: stored.chainId ?? voltmeshChain.id,
       };
     }
   } catch (err) {
@@ -175,6 +200,7 @@ interface SessionCtx {
   pendingAddress: Address | null;
   signInInjected: () => Promise<void>;
   signInDemo: (key: DemoKey) => Promise<void>;
+  signInGoogle: (credential: string, role?: Role) => Promise<void>;
   registerAs: (role: Role) => void; // demo mode only
   switchTo: (address: Address) => void;
   signOut: (address?: Address) => void;
@@ -214,7 +240,21 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: safeStringify(body),
   });
-  if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data && (data.message || data.error)) {
+        msg = data.message || data.error;
+      }
+    } catch {
+      try {
+        const text = await res.text();
+        if (text) msg = text;
+      } catch {}
+    }
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -241,6 +281,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         token: s.token,
         demoKey: s.demoKey,
         chainId: s.chainId,
+        email: s.email,
+        authMethod: s.authMethod,
       }));
       sessionStorage.setItem(SESSIONS_STORAGE_KEY, safeStringify(serializable));
     } catch (err) {
@@ -402,6 +444,40 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [run, verifyIdentity],
   );
 
+  const signInGoogle = useCallback(
+    (credential: string, requestedRole?: Role) =>
+      run(async () => {
+        setStatus('verifying');
+        const res = await post<{
+          token: string;
+          role: Role;
+          email: string;
+          expiresAt?: number;
+          authMethod: string;
+        }>('/auth/google', { credential, role: requestedRole });
+
+        // Generate or retrieve deterministic session address for this Google identity
+        const address = ('0x' + Array.from(new TextEncoder().encode(res.email.toLowerCase()))
+          .reduce((acc, b) => acc + b.toString(16).padStart(2, '0'), '')
+          .padEnd(40, '0')
+          .slice(0, 40)) as Address;
+
+        const sessionObj: Session = {
+          address,
+          role: res.role,
+          kind: 'google',
+          token: res.token,
+          expiresAt: res.expiresAt ?? (Date.now() + 24 * 3600 * 1000),
+          email: res.email,
+          authMethod: 'google',
+          chainId: voltmeshChain.id,
+        };
+
+        addSession(sessionObj);
+      }),
+    [run, addSession],
+  );
+
   // Only for a real wallet that has no role yet, and only in demo builds.
   // Privileged roles (discom, regulator) require on-chain admin assignment and cannot be self-assigned in UI.
   const registerAs = useCallback(
@@ -497,6 +573,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     pendingAddress: pending?.address ?? null,
     signInInjected,
     signInDemo,
+    signInGoogle,
     registerAs,
     switchTo,
     signOut,

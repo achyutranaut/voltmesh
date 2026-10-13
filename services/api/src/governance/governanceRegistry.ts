@@ -140,6 +140,10 @@ export class GovernanceRegistry {
     return this.members.get(wallet.toLowerCase());
   }
 
+  public setMember(member: GovernanceMember): void {
+    this.members.set(member.walletAddress.toLowerCase(), member);
+  }
+
   public getAllMembers(): GovernanceMember[] {
     return Array.from(this.members.values());
   }

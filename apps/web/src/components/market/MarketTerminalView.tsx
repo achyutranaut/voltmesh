@@ -22,8 +22,10 @@ import {
 import { Order, OrderSide, ClearingResult } from '@energy-dex/types';
 import { DetailDrawerData } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
+import { useSession } from '@/auth/SessionContext';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { apiFetch } from '@/lib/api';
 import { toHex, hexToBytes, Hash } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +77,8 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
     confirmDelivery,
     deliveryRecord,
   } = usePipeline();
+
+  const { session } = useSession();
 
   // Order Entry State
   const [side, setSide] = useState<OrderSide>(OrderSide.BUY);
@@ -203,18 +207,38 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
       const ordersRoot = clearingResult.ordersMerkleRoot as Hash;
       const obligationsRoot = clearingResult.obligationsMerkleRoot as Hash;
 
-      const txHash = await commitClearingOnChain(
-        clearingResult.zoneId,
-        clearingResult.intervalIdx,
-        clearingResult.clearingPricePaiseKWh,
-        clearingResult.clearedVolumeWh,
-        ordersRoot,
-        obligationsRoot
-      );
+      let txHash: Hash;
+      if (session?.kind === 'google' || !isConnected) {
+        // Backend signs and sends clearing transaction using OPERATOR_PRIVATE_KEY
+        const res = await apiFetch<{ txHash: Hash }>(
+          `/api/v1/markets/zones/${clearingResult.zoneId}/commit-clearing/${clearingResult.intervalIdx}`,
+          session?.token,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              clearingPricePaiseKWh: clearingResult.clearingPricePaiseKWh.toString(),
+              clearedVolumeWh: clearingResult.clearedVolumeWh.toString(),
+              ordersMerkleRoot: ordersRoot,
+              obligationsMerkleRoot: obligationsRoot,
+            }),
+          }
+        );
+        txHash = res.txHash;
+      } else {
+        txHash = await commitClearingOnChain(
+          clearingResult.zoneId,
+          clearingResult.intervalIdx,
+          clearingResult.clearingPricePaiseKWh,
+          clearingResult.clearedVolumeWh,
+          ordersRoot,
+          obligationsRoot
+        );
+      }
       setClearingTxHash(txHash);
       await executeClearing(clearingResult, txHash);
     } catch (err: any) {
       console.error('Clearing on-chain commit error:', err);
+      setOrderSignError(err?.message || 'Failed to commit clearing on-chain.');
     } finally {
       setIsCommittingOnChain(false);
     }
@@ -836,7 +860,7 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
             <Button
               variant="outline"
               size="sm"
-              disabled={isCommittingOnChain || !isConnected}
+              disabled={isCommittingOnChain || (!isConnected && session?.kind !== 'google')}
               onClick={handleCommitClearingOnChain}
               className="text-xs font-bold border-emerald-800/80 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 cursor-pointer"
             >

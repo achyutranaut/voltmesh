@@ -59,6 +59,9 @@ const DEFAULT_RPC_BY_CHAIN: Record<number, string> = {
 
 export const RPC_URL: string = env.VITE_RPC_URL ?? DEFAULT_RPC_BY_CHAIN[CHAIN_ID] ?? '';
 
+/** Google OAuth Client ID for Operator and Regulator login */
+export const GOOGLE_CLIENT_ID: string = env.VITE_GOOGLE_CLIENT_ID ?? '';
+
 /** Chain metadata used to define the chain for wagmi/viem and for the
  *  wallet_addEthereumChain fallback. */
 const CHAIN_META: Record<number, { name: string; currency: NetworkConfig['currency']; explorerUrl?: string }> = {
