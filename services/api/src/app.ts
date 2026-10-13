@@ -1,6 +1,7 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import { OAuth2Client } from 'google-auth-library';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, encodePacked, toHex, createPublicClient, createWalletClient, parseUnits, http } from 'viem';
@@ -81,6 +82,10 @@ export interface ApiServerOptions {
   erc20ContractAddress?: Address;
   allowDevKeys?: boolean;
   oraclePrivateKey?: Hex;
+  /** Test seam: override Google ID-token verification. Production uses OAuth2Client. */
+  googleVerifier?: (
+    idToken: string,
+  ) => Promise<{ email?: string; email_verified?: boolean; name?: string }>;
 }
 
 // Zod Validation Schemas (P1-11)
@@ -323,6 +328,81 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? (allowDevKeys ? defaultSecret : crypto.randomBytes(32).toString('hex'));
 
+  // ---------------------------------------------------------------------------
+  // Google OAuth (Part B)
+  // ---------------------------------------------------------------------------
+  // Roles are ALWAYS derived from server-side email allowlists. A client can
+  // never choose its own role, and the asserted JWT role is never trusted for
+  // authorization — it is re-derived from the allowlist on every request.
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleOAuthClient = googleClientId ? new OAuth2Client(googleClientId) : null;
+
+  const parseEmailList = (raw?: string): Set<string> =>
+    new Set(
+      (raw ?? '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    );
+  const regulatorEmails = parseEmailList(process.env.REGULATOR_EMAILS);
+  const operatorEmails = parseEmailList(process.env.OPERATOR_EMAILS);
+
+  /** Deterministic pseudo-address for a Google identity (session keying only). */
+  const deriveGoogleAddress = (email: string): Address =>
+    ('0x' + keccak256(toHex(email.trim().toLowerCase())).slice(2, 42)) as Address;
+
+  interface GoogleRoleResolution {
+    uiRole: 'regulator' | 'discom';
+    userRole: UserRole;
+    capabilities: ParticipantCapabilities;
+  }
+
+  function resolveGoogleRole(email: string): GoogleRoleResolution | null {
+    const e = email.trim().toLowerCase();
+    if (regulatorEmails.has(e)) {
+      return {
+        uiRole: 'regulator',
+        userRole: 'AUDITOR',
+        capabilities: {
+          canBuy: false,
+          canSell: false,
+          canRegisterDevice: false,
+          canClearMarket: false,
+          canOperate: false,
+          canIssueCredentials: false,
+          canAudit: true,
+        },
+      };
+    }
+    if (operatorEmails.has(e)) {
+      return {
+        uiRole: 'discom',
+        userRole: 'OPERATOR',
+        capabilities: {
+          canBuy: false,
+          canSell: false,
+          canRegisterDevice: false,
+          canClearMarket: true,
+          canOperate: true,
+          canIssueCredentials: true,
+          canAudit: false,
+        },
+      };
+    }
+    return null;
+  }
+
+  const verifyGoogleIdToken =
+    options.googleVerifier ??
+    (async (idToken: string) => {
+      if (!googleOAuthClient || !googleClientId) {
+        throw new Error('GOOGLE_CLIENT_ID is not configured on the server.');
+      }
+      const ticket = await googleOAuthClient.verifyIdToken({ idToken, audience: googleClientId });
+      const p = ticket.getPayload();
+      return { email: p?.email, email_verified: p?.email_verified, name: p?.name };
+    });
+
   const app = Fastify({ logger: false });
   app.setErrorHandler((error: any, request, reply) => {
     const isClientErr = error.name === 'ZodError' || error.name === 'SyntaxError' || error.statusCode === 400;
@@ -512,6 +592,28 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
           error: 'TOKEN_REVOKED',
           message: 'Session has been invalidated due to credential or role update. Please sign in again.',
         });
+      }
+
+      // Google OAuth sessions: the role is re-derived server-side from the email
+      // allowlist. The JWT's asserted role and any client value are ignored.
+      if ((payload as any).authMethod === 'google') {
+        const email = (payload as any).email as string | undefined;
+        const resolved = email ? resolveGoogleRole(email) : null;
+        if (!resolved) {
+          return reply.status(401).send({
+            error: 'GOOGLE_SESSION_UNAUTHORIZED',
+            message: 'This Google account is no longer authorized for a privileged role. Please sign in again.',
+          });
+        }
+        (request as any).authenticatedUser = {
+          address: lower,
+          role: resolved.userRole,
+          capabilities: resolved.capabilities,
+          email,
+          authMethod: 'google',
+          tokenVersion: payload.tokenVersion ?? currentVer,
+        };
+        return;
       }
 
       // Authoritative Governance Membership resolution
@@ -940,6 +1042,95 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   };
 
   app.post('/auth/verify', handleAuthVerify);
+
+  // ---------------------------------------------------------------------------
+  // Google OAuth login (Part B)
+  // ---------------------------------------------------------------------------
+  // Verifies a Google ID token and issues a VoltMesh JWT. The role is assigned
+  // ONLY from server-side allowlists (REGULATOR_EMAILS / OPERATOR_EMAILS). Any
+  // client-provided role field is accepted by the schema but deliberately ignored.
+  const GoogleAuthSchema = z.object({
+    credential: z.string().min(1, 'credential is required'),
+    role: z.string().optional(),
+  });
+
+  const handleGoogleAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+    const validated = validateBody(GoogleAuthSchema, request.body, reply);
+    if (!validated) return;
+
+    if (!googleClientId) {
+      return reply.status(503).send({
+        error: 'GOOGLE_AUTH_NOT_CONFIGURED',
+        message: 'GOOGLE_CLIENT_ID is not configured on the server.',
+      });
+    }
+
+    let email: string | undefined;
+    let name: string | undefined;
+    try {
+      const payload = await verifyGoogleIdToken(validated.credential);
+      email = payload.email;
+      name = payload.name;
+      if (!payload.email_verified) {
+        return reply.status(403).send({
+          error: 'GOOGLE_EMAIL_NOT_VERIFIED',
+          message: 'Google account email is not verified.',
+        });
+      }
+    } catch (err: any) {
+      // Covers invalid token AND audience (aud) mismatch.
+      return reply.status(401).send({
+        error: 'GOOGLE_TOKEN_INVALID',
+        message: err?.message ?? 'Google token verification failed.',
+      });
+    }
+
+    if (!email) {
+      return reply.status(400).send({ error: 'GOOGLE_EMAIL_MISSING', message: 'Google account did not return an email.' });
+    }
+
+    const resolved = resolveGoogleRole(email);
+    if (!resolved) {
+      auditLogger.recordSecurityEvent({
+        category: 'AUTHORIZATION',
+        severity: 'HIGH',
+        action: 'GOOGLE_LOGIN_DENIED',
+        actorWallet: '-',
+        role: 'PARTICIPANT',
+        target: email,
+        result: 'BLOCKED',
+        reason: `Google account ${email} is not on any privileged allowlist`,
+        ruleId: 'RULE-004',
+      });
+      return reply.status(403).send({
+        error: 'GOOGLE_EMAIL_NOT_ALLOWED',
+        message: 'This Google account is not authorized for a privileged role.',
+      });
+    }
+
+    const address = deriveGoogleAddress(email);
+    const token = app.jwt.sign(
+      { sub: address, address, email, name, role: resolved.uiRole, authMethod: 'google' },
+      { expiresIn: '24h' },
+    );
+    const expiresAt = Date.now() + 24 * 3600 * 1000;
+
+    auditLogger.recordAuditEvent({
+      actorWallet: address,
+      role: resolved.userRole,
+      action: 'GOOGLE_LOGIN',
+      resourceType: 'IDENTITY',
+      resourceId: email,
+      status: 'SUCCESS',
+      reason: `Google OAuth login for ${email} as ${resolved.uiRole}`,
+      metadata: { email, role: resolved.uiRole, authMethod: 'google' },
+    });
+
+    return { token, role: resolved.uiRole, email, expiresAt, authMethod: 'google' };
+  };
+
+  app.post('/auth/google', handleGoogleAuth);
+  app.post('/api/v1/auth/google', handleGoogleAuth);
 
   // ---------------------------------------------------------------------------
   // 1. Authentication (SIWE) (P1-16)

@@ -33,6 +33,7 @@ import { ParticipantCapabilities } from '@energy-dex/types';
 import { useSession } from '../auth/SessionContext';
 import { can } from '../auth/permissions';
 import { safeStringify } from '../lib/json';
+import { getPublicClient as getPublicClientWithFallback } from '../lib/viemClient';
 
 const ALL_CONTRACT_ABIS = Object.values(deploymentArtifacts.contracts).flatMap(
   (c: any) => c.abi || []
@@ -510,12 +511,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [txHistory, setTxHistory] = useState<TransactionRecord[]>([]);
   const [onChainActivity, setOnChainActivity] = useState<OnChainActivityItem[]>([]);
 
-  // Public client connected to the configured VoltMesh network RPC
+  // Public client connected to the configured VoltMesh network RPC.
+  // Uses a fallback transport (primary VITE_RPC_URL + public endpoints) so a
+  // single RPC outage does not break reads.
   const getPublicClient = useCallback(() => {
-    return createPublicClient({
-      chain: voltmeshChain,
-      transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
-    });
+    return getPublicClientWithFallback(voltmeshChain);
   }, []);
 
   // Helper to record on-chain activity

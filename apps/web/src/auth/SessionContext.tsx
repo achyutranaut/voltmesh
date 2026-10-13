@@ -2,11 +2,12 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import {
-  createWalletClient, custom, http, verifyMessage,
+  createWalletClient, http, verifyMessage,
   type Address, type Hex, type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { voltmeshChain, API_URL as API } from '@/config/contracts';
+import { voltmeshChain, USE_LOCAL, API_URL as API } from '@/config/contracts';
+import { getInjectedWalletClient, ensureCorrectChain, friendlySignError } from '@/lib/viemClient';
 import { Action, Role, TabId, can as canDo, canView as canSee, normalizeRole } from './permissions';
 import { safeStringify } from '@/lib/utils';
 
@@ -14,8 +15,11 @@ import { safeStringify } from '@/lib/utils';
 /* Config                                                              */
 /* ------------------------------------------------------------------ */
 
+/** Demo/test accounts are only ever available when running against the local
+ *  devnet (VITE_USE_LOCAL=true). Production and remote testnet builds never
+ *  expose the hardcoded Anvil keys. */
 export const DEMO_MODE =
-  import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true';
+  USE_LOCAL && (import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true');
 
 const SESSION_TTL_MS = 60 * 60 * 1000;
 
@@ -117,12 +121,7 @@ function rehydrateSession(stored: StoredSession): Session | null {
         }
       }
 
-      const eth = typeof window !== 'undefined' ? (window as any).ethereum : null;
-      const walletClient = createWalletClient({
-        account: stored.address,
-        chain: voltmeshChain,
-        transport: eth ? custom(eth) : http(),
-      });
+      const walletClient = getInjectedWalletClient(stored.address, voltmeshChain);
       return {
         address: stored.address,
         role,
@@ -217,27 +216,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
   return res.json() as Promise<T>;
-}
-
-async function ensureChain(eth: any) {
-  const chainIdHex = `0x${voltmeshChain.id.toString(16)}`;
-  try {
-    await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] });
-  } catch (err: any) {
-    if (err?.code !== 4902) throw err;
-    await eth.request({
-      method: 'wallet_addEthereumChain',
-      params: [{
-        chainId: chainIdHex,
-        chainName: voltmeshChain.name,
-        nativeCurrency: voltmeshChain.nativeCurrency,
-        rpcUrls: voltmeshChain.rpcUrls.default.http,
-        blockExplorerUrls: voltmeshChain.blockExplorers?.default?.url
-          ? [voltmeshChain.blockExplorers.default.url]
-          : undefined,
-      }],
-    });
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -376,11 +354,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await fn();
     } catch (err: any) {
       setStatus('error');
-      let msg = err?.message ?? 'Sign-in failed.';
-      if (err?.code === 4001) {
-        msg = 'Request cancelled in the wallet.';
-      } else if (err?.name === 'TypeError' && err?.message === 'Failed to fetch') {
+      let msg: string;
+      if (err?.name === 'TypeError' && err?.message === 'Failed to fetch') {
         msg = `Failed to connect to API at ${API || '(VITE_BACKEND_URL not set)'}. Ensure the backend service is running.`;
+      } else {
+        msg = friendlySignError(err);
       }
       setError(msg);
     }
@@ -399,12 +377,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (err?.code === 4001) throw err; // wallets without this method fall through
         }
         const [address] = (await eth.request({ method: 'eth_requestAccounts' })) as Address[];
-        await ensureChain(eth);
-        const walletClient = createWalletClient({
-          account: address,
-          chain: voltmeshChain,
-          transport: custom(eth),
-        });
+
+        // Confirm the wallet is on the target network before signing. On failure
+        // we surface a clear "Switch to <network>" message instead of a raw error.
+        const chainCheck = await ensureCorrectChain(voltmeshChain);
+        if (!chainCheck.ok) throw new Error(chainCheck.message);
+
+        const walletClient = getInjectedWalletClient(address, voltmeshChain);
         await verifyIdentity({ address, kind: 'injected', walletClient });
       }),
     [run, verifyIdentity],
