@@ -16,8 +16,7 @@ import { DetailDrawerData } from '@/types/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import deploymentArtifacts from '@/contracts/deployments.json';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL, getContract } from '@/config/contracts';
 import { createPublicClient, http, Address } from 'viem';
 
 const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
@@ -42,7 +41,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
   const contracts: ContractRecord[] = [
     {
       name: 'EpochOracle',
-      address: deploymentArtifacts.contracts.EpochOracle.address,
+      address: getContract('EpochOracle', DEFAULT_CHAIN_ID)?.address ?? '',
       role: '1-of-N Quorum Merkle Epoch Roots (Devnet)',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -51,7 +50,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'Escrow',
-      address: deploymentArtifacts.contracts.Escrow.address,
+      address: getContract('Escrow', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Collateral Custody & Delivery Freezing',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -60,7 +59,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'BatchSettlement',
-      address: deploymentArtifacts.contracts.BatchSettlement.address,
+      address: getContract('BatchSettlement', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Atomic T+1 Batch Netting & Cash Payouts',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -69,7 +68,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'CertificateRegistry',
-      address: deploymentArtifacts.contracts.CertificateRegistry.address,
+      address: getContract('CertificateRegistry', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Granular Attribute Certificates (ERC-1155)',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -78,7 +77,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'RetirementRegistry',
-      address: deploymentArtifacts.contracts.RetirementRegistry.address,
+      address: getContract('RetirementRegistry', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Nullifier Commitment & Permanent Burn',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -87,7 +86,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'MockERC20',
-      address: deploymentArtifacts.contracts.MockERC20.address,
+      address: getContract('MockERC20', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'vUSD Settlement Stablecoin (6 Decimals)',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -96,7 +95,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'AccessRegistry',
-      address: deploymentArtifacts.contracts.AccessRegistry.address,
+      address: getContract('AccessRegistry', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Role-Based Access Control (RBAC)',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -105,7 +104,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'ParticipantRegistry',
-      address: deploymentArtifacts.contracts.ParticipantRegistry.address,
+      address: getContract('ParticipantRegistry', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Participant Onboarding & Collateral Caps',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -114,7 +113,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     },
     {
       name: 'DeviceRegistry',
-      address: deploymentArtifacts.contracts.DeviceRegistry.address,
+      address: getContract('DeviceRegistry', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'AMI Smart Meter Hardware Key Attestation',
       network: NETWORK_LABEL,
       status: 'DEPLOYED',
@@ -134,6 +133,10 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
       const results: Record<string, { verified: boolean; bytes: number }> = {};
       await Promise.all(
         contracts.map(async (c) => {
+          if (!c.address || !c.address.startsWith('0x') || c.address.length !== 42) {
+            results[c.name] = { verified: false, bytes: 0 };
+            return;
+          }
           try {
             const code = await client.getBytecode({ address: c.address as Address });
             const bytes = code && code.length > 2 ? (code.length - 2) / 2 : 0;
@@ -143,7 +146,9 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
           }
         })
       );
-      if (mounted) setBytecodeStatus(results);
+      if (mounted) {
+        setBytecodeStatus(results);
+      }
     };
 
     verifyBytecode();
@@ -241,7 +246,13 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
                   <span>{c.name}</span>
                 </td>
                 <td className="py-2.5 px-3 text-zinc-300 font-mono text-[11px]">
-                  {c.address.slice(0, 8)}...{c.address.slice(-6)}
+                  {c.address ? (
+                    `${c.address.slice(0, 8)}...${c.address.slice(-6)}`
+                  ) : (
+                    <span className="text-red-400 font-sans text-xs">
+                      Not configured (missing env var)
+                    </span>
+                  )}
                 </td>
                 <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
                   {c.network}
@@ -250,8 +261,11 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
                   {c.role}
                 </td>
                 <td className="py-2.5 px-3 text-center">
-                  <Badge variant={bytecodeStatus[c.name]?.verified ? 'success' : 'secondary'} className="text-[9px] py-0">
-                    ● {bytecodeStatus[c.name]?.verified ? 'DEPLOYED' : 'CONFIGURED'}
+                  <Badge
+                    variant={!c.address ? 'destructive' : bytecodeStatus[c.name]?.verified ? 'success' : 'secondary'}
+                    className="text-[9px] py-0"
+                  >
+                    ● {!c.address ? 'MISSING' : bytecodeStatus[c.name]?.verified ? 'DEPLOYED' : 'CONFIGURED'}
                   </Badge>
                 </td>
                 <td className="py-2.5 px-3 text-right text-emerald-400 font-bold">

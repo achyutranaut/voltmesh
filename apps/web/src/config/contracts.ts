@@ -135,10 +135,17 @@ export const ADDRESS_ENV: Record<string, string> = {
 
 const HEX_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 
-function resolveAddress(name: string): Address | undefined {
+export function resolveAddress(name: string): Address | undefined {
   const fromEnv = env[ADDRESS_ENV[name]];
   if (fromEnv && HEX_ADDRESS.test(fromEnv)) return fromEnv as Address;
-  // Local dev only: fall back to the committed local deployment artifacts.
+
+  // On non-31337 chains (Base Sepolia 84532, Polygon Amoy 80002, Sepolia 11155111):
+  // Addresses come ONLY from VITE_*_ADDRESS env vars. Never fall back to local deployment JSON.
+  if (CHAIN_ID !== 31337) {
+    return undefined;
+  }
+
+  // Local devnet (chain 31337) only: fall back to the committed local deployment artifacts.
   if (USE_LOCAL) {
     const artifact = (deploymentArtifacts.contracts as Record<string, { address?: string }>)[name];
     if (artifact?.address && HEX_ADDRESS.test(artifact.address)) return artifact.address as Address;
@@ -173,24 +180,6 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     contracts,
   },
 };
-
-// Local devnet is additionally addressable when explicitly enabled.
-if (USE_LOCAL && CHAIN_ID !== 31337) {
-  SUPPORTED_NETWORKS[31337] = {
-    chainId: 31337,
-    name: 'VoltMesh Testnet (Local Devnet)',
-    rpcUrl: 'http://127.0.0.1:8545',
-    currency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    contracts: (() => {
-      const out: Record<string, ContractConfig> = {};
-      for (const name of Object.keys(ADDRESS_ENV)) {
-        const artifact = (deploymentArtifacts.contracts as Record<string, { address?: string; abi?: Abi }>)[name];
-        if (artifact?.address) out[name] = { address: artifact.address as Address, abi: (artifact.abi ?? []) as Abi };
-      }
-      return out;
-    })(),
-  };
-}
 
 export const DEFAULT_CHAIN_ID = CHAIN_ID;
 
@@ -250,17 +239,17 @@ export function getConfigErrors(): string[] {
     errors.push('VITE_RPC_URL is not set.');
   }
 
-  if (!USE_LOCAL) {
+  if (CHAIN_ID !== 31337) {
     for (const name of Object.keys(ADDRESS_ENV)) {
       if (!resolveAddress(name)) {
-        errors.push(`${ADDRESS_ENV[name]} is missing or invalid (required for ${name}).`);
+        errors.push(`${ADDRESS_ENV[name]} is missing or invalid (required for ${name} on chain ${CHAIN_ID}).`);
       }
     }
   } else {
-    // Even in local mode we need the core contracts to render anything useful.
-    for (const name of ['AccessRegistry', 'ParticipantRegistry', 'MockERC20', 'Escrow', 'BatchSettlement']) {
+    // Local devnet (31337) checks: verify addresses resolved from env or deployments.json
+    for (const name of Object.keys(ADDRESS_ENV)) {
       if (!resolveAddress(name)) {
-        errors.push(`Local ${name} address could not be resolved (check deployments.json).`);
+        errors.push(`Local ${name} address could not be resolved (set ${ADDRESS_ENV[name]} or check deployments.json).`);
       }
     }
   }

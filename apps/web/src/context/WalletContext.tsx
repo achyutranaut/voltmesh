@@ -44,8 +44,11 @@ export const EIP712_DOMAIN = {
   name: 'VoltMesh Energy Exchange',
   version: '1',
   chainId: BigInt(DEFAULT_CHAIN_ID),
-  verifyingContract: deploymentArtifacts.contracts.BatchSettlement.address as Address,
-} as const;
+  get verifyingContract(): Address {
+    const c = getContract('BatchSettlement', DEFAULT_CHAIN_ID);
+    return (c?.address ?? '0x0000000000000000000000000000000000000000') as Address;
+  },
+};
 
 export const EIP712_TYPES = {
   EnergyOrder: [
@@ -1356,9 +1359,22 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
 
     try {
+      const batchSettlement = getContract('BatchSettlement', DEFAULT_CHAIN_ID);
+      const verifyingContract = batchSettlement?.address;
+      if (!verifyingContract) {
+        throw new Error(
+          `BatchSettlement contract address not configured for chain ${DEFAULT_CHAIN_ID}. Set VITE_BATCH_SETTLEMENT_ADDRESS in environment.`
+        );
+      }
+
       const signature = await (walletClient as any).signTypedData({
         account: address,
-        domain: EIP712_DOMAIN,
+        domain: {
+          name: 'VoltMesh Energy Exchange',
+          version: '1',
+          chainId: BigInt(DEFAULT_CHAIN_ID),
+          verifyingContract: verifyingContract as Address,
+        },
         types: EIP712_TYPES,
         primaryType: 'EnergyOrder',
         message,

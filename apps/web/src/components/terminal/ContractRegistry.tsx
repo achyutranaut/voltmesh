@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { FileCode2, ExternalLink, Copy, Check, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import deploymentArtifacts from '@/contracts/deployments.json';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL, getContract } from '@/config/contracts';
 
 const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
 import { createPublicClient, http, Address } from 'viem';
@@ -28,7 +27,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
   const contracts: ContractRecord[] = [
     {
       name: 'EpochOracle',
-      address: deploymentArtifacts.contracts.EpochOracle.address,
+      address: getContract('EpochOracle', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Consensus Merkle Epoch Roots & Leaf Verification',
       network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
@@ -40,7 +39,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
     },
     {
       name: 'Escrow',
-      address: deploymentArtifacts.contracts.Escrow.address,
+      address: getContract('Escrow', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Collateral Custody & Delivery Freezing',
       network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
@@ -54,7 +53,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
     },
     {
       name: 'BatchSettlement',
-      address: deploymentArtifacts.contracts.BatchSettlement.address,
+      address: getContract('BatchSettlement', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Uniform Call Auction Netting & Escrow Payouts',
       network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
@@ -66,7 +65,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
     },
     {
       name: 'EnergyToken (MockERC20)',
-      address: deploymentArtifacts.contracts.MockERC20.address,
+      address: getContract('MockERC20', DEFAULT_CHAIN_ID)?.address ?? '',
       role: 'Settlement Currency & Collateral Denomination',
       network: NETWORK_LABEL,
       version: 'v1.0.0-rc1',
@@ -90,6 +89,10 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
     const checkBytecode = async () => {
       const results: Record<string, { verified: boolean; bytes: number }> = {};
       for (const c of contracts) {
+        if (!c.address || !c.address.startsWith('0x') || c.address.length !== 42) {
+          results[c.name] = { verified: false, bytes: 0 };
+          continue;
+        }
         try {
           const code = await client.getBytecode({ address: c.address as Address });
           if (code && code !== '0x') {
@@ -212,20 +215,28 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
 
                     <td className="py-2.5 px-3">
                       <div className="flex items-center space-x-1.5 font-mono text-xs text-zinc-300">
-                        <span>
-                          {c.address.slice(0, 6)}...{c.address.slice(-4)}
-                        </span>
-                        <button
-                          onClick={(e) => copyToClipboard(c.address, e)}
-                          className="p-1 text-zinc-500 hover:text-white transition-colors"
-                          title="Copy address"
-                        >
-                          {copiedAddress === c.address ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
+                        {c.address ? (
+                          <>
+                            <span>
+                              {c.address.slice(0, 6)}...{c.address.slice(-4)}
+                            </span>
+                            <button
+                              onClick={(e) => copyToClipboard(c.address, e)}
+                              className="p-1 text-zinc-500 hover:text-white transition-colors"
+                              title="Copy address"
+                            >
+                              {copiedAddress === c.address ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-red-400 font-sans text-xs">
+                            Not configured (missing env var)
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -238,28 +249,38 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
                     </td>
 
                     <td className="py-2.5 px-3 text-center">
-                      <span
-                        className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
-                          status?.verified
-                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
-                            : 'bg-zinc-900 text-zinc-400 border border-white/[0.07]'
-                        }`}
-                      >
-                        {status?.verified ? 'Bytecode live' : 'Deployed'}
-                      </span>
+                      {!c.address ? (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-red-950/60 text-red-400 border border-red-700/60">
+                          Missing
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
+                            status?.verified
+                              ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                              : 'bg-zinc-900 text-zinc-400 border border-white/[0.07]'
+                          }`}
+                        >
+                          {status?.verified ? 'Bytecode live' : 'Configured'}
+                        </span>
+                      )}
                     </td>
 
                     <td className="py-2.5 px-3 text-right">
-                      <a
-                        href={getExplorerAddressUrl(c.address, DEFAULT_CHAIN_ID)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center text-xs text-zinc-400 hover:text-white"
-                      >
-                        <span>View</span>
-                        <ExternalLink className="w-3 h-3 ml-1" />
-                      </a>
+                      {c.address ? (
+                        <a
+                          href={getExplorerAddressUrl(c.address, DEFAULT_CHAIN_ID)}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center text-xs text-zinc-400 hover:text-white"
+                        >
+                          <span>View</span>
+                          <ExternalLink className="w-3 h-3 ml-1" />
+                        </a>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
                     </td>
                   </tr>
                 );

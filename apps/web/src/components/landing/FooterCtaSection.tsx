@@ -1,8 +1,7 @@
 import React from 'react';
 import { Terminal, FileText, ArrowRight, ShieldCheck, Github, ExternalLink } from 'lucide-react';
 import { VoltMeshLogo } from '../brand/VoltMeshLogo';
-import deploymentArtifacts from '../../contracts/deployments.json';
-import { DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getContract } from '@/config/contracts';
 
 interface FooterCtaSectionProps {
   onEnterTerminal: () => void;
@@ -70,10 +69,14 @@ export const FooterCtaSection: React.FC<FooterCtaSectionProps> = ({ onEnterTermi
           <div>
             <div className="text-white font-semibold text-xs mb-2">SMART CONTRACTS (CHAIN {DEFAULT_CHAIN_ID})</div>
             <ul className="space-y-1.5 text-zinc-400 text-[11px] font-mono">
-              <li>EpochOracle.sol @ {deploymentArtifacts.contracts.EpochOracle.address.slice(0, 8)}...{deploymentArtifacts.contracts.EpochOracle.address.slice(-6)}</li>
-              <li>Escrow.sol @ {deploymentArtifacts.contracts.Escrow.address.slice(0, 8)}...{deploymentArtifacts.contracts.Escrow.address.slice(-6)}</li>
-              <li>BatchSettlement.sol @ {deploymentArtifacts.contracts.BatchSettlement.address.slice(0, 8)}...{deploymentArtifacts.contracts.BatchSettlement.address.slice(-6)}</li>
-              <li>CertificateRegistry.sol @ {deploymentArtifacts.contracts.CertificateRegistry.address.slice(0, 8)}...{deploymentArtifacts.contracts.CertificateRegistry.address.slice(-6)}</li>
+              {(['EpochOracle', 'Escrow', 'BatchSettlement', 'CertificateRegistry'] as const).map((name) => {
+                const addr = getContract(name, DEFAULT_CHAIN_ID)?.address;
+                return (
+                  <li key={name}>
+                    {name}.sol @ {addr ? `${addr.slice(0, 8)}...${addr.slice(-6)}` : 'unconfigured'}
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
