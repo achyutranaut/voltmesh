@@ -575,7 +575,7 @@ export async function executeRefreshBalances({
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { session, signOut } = useSession();
+  const { session, signOut, updateSessionRole } = useSession();
   const hasRealWallet = isRealWalletConnected(session);
   const address = hasRealWallet && session?.address ? (session.address as Address) : null;
   const walletClient = hasRealWallet ? session?.walletClient : undefined;
@@ -621,7 +621,18 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [rolesLoading, setRolesLoading] = useState<boolean>(false);
   const [rolesError, setRolesError] = useState<string | null>(null);
 
-  // When session address, token, or role changes, clear cached balances, activeTx, and onChainActivity
+  // Synchronize on-chain detectedRole with SessionContext so session and terminal always match on-chain truth
+  useEffect(() => {
+    if (session?.kind === 'injected' && session.address && detectedRole) {
+      if (detectedRole === 'seller' || detectedRole === 'buyer' || detectedRole === 'discom' || detectedRole === 'regulator') {
+        if (session.role !== detectedRole) {
+          updateSessionRole(session.address, detectedRole);
+        }
+      }
+    }
+  }, [session?.kind, session?.address, session?.role, detectedRole, updateSessionRole]);
+
+  // When session address or token changes, clear cached balances, activeTx, and onChainActivity
   useEffect(() => {
     setEthBalance(0n);
     setTokenBalance(0n);
@@ -632,7 +643,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setRolesError(null);
     setActiveTx(null);
     setOnChainActivity([]);
-  }, [session?.address, session?.token, session?.role]);
+  }, [session?.address, session?.token]);
 
   const capabilities: ParticipantCapabilities = React.useMemo(() => {
     if (session?.role) {

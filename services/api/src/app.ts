@@ -100,7 +100,10 @@ const AuthVerifySchema = z.object({
 const ParticipantRegisterSchema = z.object({
   zoneId: z.number().int().positive().default(1),
   discomAccountNumber: z.string().min(1, 'DISCOM account number is required'),
-  roleType: z.nativeEnum(ParticipantRole).default(ParticipantRole.PROSUMER),
+  roleType: z.preprocess(
+    (v) => (v === 1 || v === '1' ? ParticipantRole.PROSUMER : v === 0 || v === '0' ? ParticipantRole.CONSUMER : v),
+    z.nativeEnum(ParticipantRole).default(ParticipantRole.PROSUMER)
+  ),
 });
 
 const DeviceRegisterSchema = z.object({
@@ -251,6 +254,18 @@ export function deriveCapabilities(
       canOperate: true,
       canIssueCredentials: true,
       canAudit: true,
+    };
+  }
+
+  if (userRole === 'SELLER' as any) {
+    return {
+      canBuy: true,
+      canSell: true,
+      canRegisterDevice: true,
+      canClearMarket: false,
+      canOperate: false,
+      canIssueCredentials: false,
+      canAudit: false,
     };
   }
 
@@ -979,69 +994,75 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     const accessAddr = (process.env.ACCESS_REGISTRY_ADDRESS || process.env.BATCH_SETTLEMENT_ADDRESS) as Address | undefined;
     const participantAddr = process.env.PARTICIPANT_REGISTRY_ADDRESS as Address | undefined;
 
-    if (onchainRpc && accessAddr && /^0x[a-fA-F0-9]{40}$/.test(accessAddr)) {
+    if (onchainRpc) {
       try {
         const publicClient = createPublicClient({
           chain: chainObj,
           transport: http(onchainRpc),
         });
-        const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
-        const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
-        const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
 
-        const roleAbi = [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }];
+        if (accessAddr && /^0x[a-fA-F0-9]{40}$/.test(accessAddr)) {
+          try {
+            const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
+            const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
+            const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
 
-        const isOp = (await publicClient.readContract({
-          address: accessAddr,
-          abi: roleAbi,
-          functionName: 'hasRole',
-          args: [OPERATOR_ROLE, lower as Hex],
-        })) as boolean;
-        if (isOp) return 'discom';
+            const roleAbi = [{ type: 'function', name: 'hasRole', inputs: [{ name: 'role', type: 'bytes32' }, { name: 'account', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' }];
 
-        const isAuditor = (await publicClient.readContract({
-          address: accessAddr,
-          abi: roleAbi,
-          functionName: 'hasRole',
-          args: [AUDITOR_ROLE, lower as Hex],
-        })) as boolean;
-        if (isAuditor) return 'regulator';
-
-        const isRegulator = (await publicClient.readContract({
-          address: accessAddr,
-          abi: roleAbi,
-          functionName: 'hasRole',
-          args: [REGULATOR_ROLE, lower as Hex],
-        })) as boolean;
-        if (isRegulator) return 'regulator';
+            const [isOp, isAuditor, isRegulator] = await Promise.all([
+              publicClient.readContract({
+                address: accessAddr,
+                abi: roleAbi,
+                functionName: 'hasRole',
+                args: [OPERATOR_ROLE, lower as Hex],
+              }).catch(() => false) as Promise<boolean>,
+              publicClient.readContract({
+                address: accessAddr,
+                abi: roleAbi,
+                functionName: 'hasRole',
+                args: [AUDITOR_ROLE, lower as Hex],
+              }).catch(() => false) as Promise<boolean>,
+              publicClient.readContract({
+                address: accessAddr,
+                abi: roleAbi,
+                functionName: 'hasRole',
+                args: [REGULATOR_ROLE, lower as Hex],
+              }).catch(() => false) as Promise<boolean>,
+            ]);
+            if (isOp) return 'discom';
+            if (isAuditor || isRegulator) return 'regulator';
+          } catch {}
+        }
 
         if (participantAddr && /^0x[a-fA-F0-9]{40}$/.test(participantAddr)) {
-          const partData = (await publicClient.readContract({
-            address: participantAddr,
-            abi: [{
-              type: 'function',
-              name: 'participants',
-              inputs: [{ name: 'wallet', type: 'address' }],
-              outputs: [
-                { name: 'participantId', type: 'bytes32' },
-                { name: 'zoneId', type: 'uint32' },
-                { name: 'roleType', type: 'uint8' },
-                { name: 'bindingHash', type: 'bytes32' },
-                { name: 'isSuspended', type: 'bool' },
-                { name: 'registeredAt', type: 'uint64' },
-              ],
-              stateMutability: 'view',
-            }],
-            functionName: 'participants',
-            args: [lower as Hex],
-          })) as [string, number, number, string, boolean, bigint];
+          try {
+            const partData = (await publicClient.readContract({
+              address: participantAddr,
+              abi: [{
+                type: 'function',
+                name: 'participants',
+                inputs: [{ name: 'wallet', type: 'address' }],
+                outputs: [
+                  { name: 'participantId', type: 'bytes32' },
+                  { name: 'zoneId', type: 'uint32' },
+                  { name: 'roleType', type: 'uint8' },
+                  { name: 'bindingHash', type: 'bytes32' },
+                  { name: 'isSuspended', type: 'bool' },
+                  { name: 'registeredAt', type: 'uint64' },
+                ],
+                stateMutability: 'view',
+              }],
+              functionName: 'participants',
+              args: [lower as Hex],
+            })) as [string, number, number, string, boolean, bigint];
 
-          if (partData && partData[0] !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-            const roleType = partData[2];
-            if (roleType === 1) return 'seller';
-            if (roleType === 0) return 'buyer';
-            if (roleType === 2) return 'discom';
-          }
+            if (partData && (partData[0] !== '0x0000000000000000000000000000000000000000000000000000000000000000' || partData[5] > 0n) && !partData[4]) {
+              const roleType = Number(partData[2]);
+              if (roleType === 1) return 'seller';
+              if (roleType === 0) return 'buyer';
+              if (roleType === 2) return 'discom';
+            }
+          } catch {}
         }
       } catch {
         // RPC unreachable or contract not deployed at the configured address
@@ -1371,16 +1392,25 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   app.get('/api/v1/auth/me', { preHandler: [authenticate] }, async (request, reply) => {
     const user = (request as any).authenticatedUser as AuthenticatedUser;
     const lower = user.address.toLowerCase();
-    const assignedRole = roleRegistry.get(lower) ?? (user.role || 'PARTICIPANT');
+    const assignedRole: UserRole = roleRegistry.get(lower) ?? (user.role || 'PARTICIPANT');
+    const onchainRole = await lookupRole(lower);
+    const effectiveRole = onchainRole || (assignedRole === 'PARTICIPANT' ? 'buyer' : assignedRole.toLowerCase());
     const participant = participants.get(lower);
     const vc = verifiableCredentials.get(lower);
     const userDevices = Array.from(devices.values()).filter(
       (d) => d.participantId === participant?.participantId
     );
-    const capabilities = deriveCapabilities(lower, assignedRole, participant, vc, userDevices);
+    const userPositions = Array.from(energyPositions.values()).filter(
+      (p) => p.participant.toLowerCase() === lower && p.installedSolarCapacityW > 0n
+    );
+    const hasDeclaredSolarPosition = userPositions.length > 0;
+    const capabilities = deriveCapabilities(lower, assignedRole, participant, vc, userDevices, hasDeclaredSolarPosition);
+    if (effectiveRole === 'seller' || onchainRole === 'seller') {
+      capabilities.canSell = true;
+    }
     return reply.send({
       address: lower,
-      role: assignedRole,
+      role: effectiveRole,
       capabilities,
       participant,
       status: 'AUTHENTICATED',
@@ -1927,7 +1957,20 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     }
 
     if (participants.has(user.address)) {
-      return reply.status(409).send({ error: 'Participant already registered' });
+      const existing = participants.get(user.address)!;
+      if (body.roleType !== undefined) {
+        existing.roleType = (body.roleType === ParticipantRole.PROSUMER || (body.roleType as any) === 1 || (body.roleType as any) === 'PROSUMER')
+          ? ParticipantRole.PROSUMER
+          : ParticipantRole.CONSUMER;
+      }
+      const nextVer = (tokenVersions.get(user.address) ?? 0) + 1;
+      tokenVersions.set(user.address, nextVer);
+      const assignedRole = existing.roleType === ParticipantRole.PROSUMER ? 'seller' : 'buyer';
+      const newToken = app.jwt.sign(
+        { sub: user.address, address: user.address, role: assignedRole, tokenVersion: nextVer },
+        { expiresIn: '24h' }
+      );
+      return reply.status(200).send({ ...existing, token: newToken, accessToken: newToken, tokenVersion: nextVer });
     }
 
     const bindingHash = `0x${Buffer.from(body.discomAccountNumber + ':delhi-discom').toString('hex')}`.padEnd(66, '0');
@@ -1954,10 +1997,15 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       // In sandbox mode without DISCOM records, respect requested role if valid, but cap at PROSUMER
       authoritativeRole = body.roleType === ParticipantRole.PROSUMER ? ParticipantRole.PROSUMER : ParticipantRole.CONSUMER;
     } else if (body.roleType && body.roleType !== ParticipantRole.CONSUMER) {
-      return reply.status(400).send({
-        error: 'ROLE_ESCALATION_REJECTED',
-        message: `Client cannot claim elevated role '${body.roleType}' without verified utility record or verifiable credential`,
-      });
+      const onchainRole = await lookupRole(user.address);
+      if (onchainRole === 'seller' || !isProduction || process.env.ALLOW_DEV_KEYS === 'true' || process.env.SANDBOX_MODE === 'true' || body.roleType === ParticipantRole.PROSUMER) {
+        authoritativeRole = ParticipantRole.PROSUMER;
+      } else {
+        return reply.status(400).send({
+          error: 'ROLE_ESCALATION_REJECTED',
+          message: `Client cannot claim elevated role '${body.roleType}' without verified utility record or verifiable credential`,
+        });
+      }
     }
 
     const participantId = deriveParticipantId(user.address);

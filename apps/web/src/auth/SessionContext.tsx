@@ -2,12 +2,12 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import {
-  createWalletClient, http, verifyMessage,
+  createWalletClient, http, verifyMessage, keccak256, toHex,
   type Address, type Hex, type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { voltmeshChain, CHAIN_ID, API_URL as API, USE_LOCAL } from '@/config/contracts';
-import { getInjectedWalletClient, ensureCorrectChain, friendlySignError } from '@/lib/viemClient';
+import { voltmeshChain, CHAIN_ID, API_URL as API, USE_LOCAL, getContract } from '@/config/contracts';
+import { getInjectedWalletClient, ensureCorrectChain, friendlySignError, getPublicClient as getPublicClientWithFallback } from '@/lib/viemClient';
 import { Action, Role, TabId, can as canDo, canView as canSee, normalizeRole } from './permissions';
 import { safeStringify } from '@/lib/utils';
 
@@ -128,8 +128,12 @@ function rehydrateSession(stored: StoredSession): Session | null {
       if (stored.token) {
         const tokenRole = parseJwtRole(stored.token);
         if (tokenRole && tokenRole !== stored.role) {
-          console.warn(`Role mismatch in sessionStorage: stored=${stored.role}, token=${tokenRole}. Enforcing token role.`);
-          role = tokenRole;
+          if (stored.role === 'seller' && tokenRole === 'buyer') {
+            console.warn(`Preserving stored seller role over tokenRole=buyer`);
+          } else {
+            console.warn(`Role mismatch in sessionStorage: stored=${stored.role}, token=${tokenRole}. Enforcing token role.`);
+            role = tokenRole;
+          }
         }
       }
 
@@ -210,6 +214,7 @@ interface SessionCtx {
   signInDemo: (key: DemoKey) => Promise<void>;
   signInGoogle: (credential: string, role?: Role) => Promise<void>;
   registerAs: (role: Role) => void; // demo mode only
+  updateSessionRole: (address: Address, role: Role) => void;
   switchTo: (address: Address) => void;
   signOut: (address?: Address) => void;
   cancelPending: () => void;
@@ -339,6 +344,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const profile = await res.json();
           const resolvedRole = normalizeRole(profile.role, profile.capabilities);
           if (resolvedRole && resolvedRole !== s.role) {
+            // Never downgrade an explicit 'seller' session to 'buyer' via generic participant endpoint
+            if (s.role === 'seller' && resolvedRole === 'buyer') {
+              return;
+            }
             setSessions((prev) =>
               prev.map((item) => (same(item.address, s.address) ? { ...item, role: resolvedRole } : item))
             );
@@ -349,6 +358,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     });
   }, [sessionTokenSignatures]);
+
+  const updateSessionRole = useCallback((address: Address, role: Role) => {
+    setSessions((prev) =>
+      prev.map((item) => (same(item.address, address) ? { ...item, role } : item))
+    );
+  }, []);
 
   const addSession = useCallback((s: Session) => {
     setSessions((prev) => [...prev.filter((p) => !same(p.address, s.address)), s]);
@@ -384,12 +399,60 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const v = await post<{ role?: Role; token: string; expiresAt?: number }>(
           '/auth/verify', { address: ident.address, message, signature },
         );
-        role = v.role ?? null;
+        role = v.role ? normalizeRole(v.role) : null;
         token = v.token;
         expiresAt = v.expiresAt ?? expiresAt;
       } else {
         const ok = await verifyMessage({ address: ident.address, message, signature });
         if (!ok) throw new Error('The signature did not match this wallet.');
+      }
+
+      if (!role) {
+        // Authoritative on-chain check via AccessRegistry & ParticipantRegistry before falling back to unregistered
+        try {
+          const publicClient = getPublicClientWithFallback(voltmeshChain);
+          const accessContract = getContract('AccessRegistry', voltmeshChain.id);
+          const participantContract = getContract('ParticipantRegistry', voltmeshChain.id);
+
+          if (accessContract) {
+            const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
+            const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
+            const isOp = await publicClient.readContract({
+              address: accessContract.address,
+              abi: accessContract.abi,
+              functionName: 'hasRole',
+              args: [OPERATOR_ROLE, ident.address],
+            }).catch(() => false);
+            if (isOp) role = 'discom';
+            else {
+              const isReg = await publicClient.readContract({
+                address: accessContract.address,
+                abi: accessContract.abi,
+                functionName: 'hasRole',
+                args: [REGULATOR_ROLE, ident.address],
+              }).catch(() => false);
+              if (isReg) role = 'regulator';
+            }
+          }
+
+          if (!role && participantContract) {
+            const pRecord = (await publicClient.readContract({
+              address: participantContract.address,
+              abi: participantContract.abi,
+              functionName: 'participants',
+              args: [ident.address],
+            }).catch(() => null)) as [string, number, number, string, boolean, bigint] | null;
+
+            if (pRecord && (pRecord[5] > 0n || pRecord[0] !== '0x0000000000000000000000000000000000000000000000000000000000000000') && !pRecord[4]) {
+              const rType = Number(pRecord[2]);
+              if (rType === 1) role = 'seller';
+              else if (rType === 0) role = 'buyer';
+              else if (rType === 2) role = 'discom';
+            }
+          }
+        } catch (e) {
+          console.warn('On-chain role lookup during verifyIdentity note:', e);
+        }
       }
 
       if (!role) {
@@ -512,7 +575,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
               {
                 zoneId: 1,
                 discomAccountNumber: 'CA-' + pending.address.slice(2, 10).toUpperCase(),
-                roleType: role === 'seller' ? 1 : 0,
+                roleType: role === 'seller' ? 'PROSUMER' : 'CONSUMER',
               },
               token
             );
@@ -628,6 +691,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     signInDemo,
     signInGoogle,
     registerAs,
+    updateSessionRole,
     switchTo,
     signOut,
     cancelPending,

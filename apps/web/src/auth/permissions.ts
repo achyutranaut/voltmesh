@@ -71,7 +71,8 @@ export function normalizeRole(rawRole?: string | null, capabilities?: { canSell?
   if (lower === 'participant') {
     // If capabilities are available, check if prosumer/seller
     if (capabilities?.canSell) return 'seller';
-    return 'buyer';
+    if (capabilities?.canBuy) return 'buyer';
+    return null;
   }
   return null;
 }
