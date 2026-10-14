@@ -8,8 +8,11 @@ import {
   Clock,
   ArrowRight,
   RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import { usePipeline, PIPELINE_ORDER, STAGE_CONFIG } from '@/context/PipelineContext';
+import { useWallet } from '@/context/WalletContext';
+import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { PipelineStageId } from '@/types/pipeline';
 import { NavigationTab } from '@/types/ui';
 import { Button } from '@/components/ui/button';
@@ -40,6 +43,7 @@ export const ProofPipeline: React.FC<ProofPipelineProps> = ({
     retryStage,
     resetPipeline,
   } = usePipeline();
+  const { chainId } = useWallet();
 
   const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
   const [showActiveDetail, setShowActiveDetail] = useState<boolean>(false);
@@ -254,6 +258,20 @@ export const ProofPipeline: React.FC<ProofPipelineProps> = ({
               <p className="text-xs text-zinc-400">
                 {currentStage.statusMessage}
               </p>
+              {currentStage.txHash && currentStage.txHash !== '0x' && (
+                <div className="flex items-center space-x-1.5 text-xs text-zinc-300 pt-1">
+                  <span className="text-zinc-500 font-mono">Tx Hash:</span>
+                  <a
+                    href={getExplorerTxUrl(currentStage.txHash, chainId ?? DEFAULT_CHAIN_ID)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-code text-xs text-emerald-400 hover:text-emerald-300 flex items-center"
+                  >
+                    <span>{currentStage.txHash.slice(0, 10)}...{currentStage.txHash.slice(-8)}</span>
+                    <ExternalLink className="w-3 h-3 ml-1" />
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">

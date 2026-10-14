@@ -181,7 +181,30 @@ export interface PipelineContextType {
 
 const PipelineContext = createContext<PipelineContextType | undefined>(undefined);
 
-const STORAGE_KEY_PREFIX = 'voltmesh_flow_pipeline_v1_';
+const STORAGE_KEY_PREFIX = 'voltmesh_flow_pipeline_v1_slot_';
+
+export const createInitialStages = (): Record<PipelineStageId, StageDetail> => {
+  const initial: Record<PipelineStageId, StageDetail> = {} as any;
+  PIPELINE_ORDER.forEach((id, idx) => {
+    const cfg = STAGE_CONFIG[id];
+    initial[id] = {
+      id,
+      num: cfg.num,
+      title: cfg.title,
+      shortLabel: cfg.shortLabel,
+      sublabel: cfg.sublabel,
+      tab: cfg.tab,
+      sourceType: cfg.sourceType,
+      prerequisiteId: cfg.prerequisiteId,
+      status: idx === 0 ? 'READY' : 'LOCKED',
+      statusMessage:
+        idx === 0
+          ? 'Awaiting AMI meter emission'
+          : `Waiting for ${STAGE_CONFIG[cfg.prerequisiteId!].shortLabel}`,
+    };
+  });
+  return initial;
+};
 
 export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [flow, setFlow] = useState<PipelineFlowIdentity>(() => ({
@@ -202,33 +225,12 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [deliveryRecord, setDeliveryRecord] = useState<DeliveryVerificationRecord | null>(null);
 
   // Initialize all 8 stages with explicit state
-  const [stages, setStages] = useState<Record<PipelineStageId, StageDetail>>(() => {
-    const initial: Record<PipelineStageId, StageDetail> = {} as any;
-    PIPELINE_ORDER.forEach((id, idx) => {
-      const cfg = STAGE_CONFIG[id];
-      initial[id] = {
-        id,
-        num: cfg.num,
-        title: cfg.title,
-        shortLabel: cfg.shortLabel,
-        sublabel: cfg.sublabel,
-        tab: cfg.tab,
-        sourceType: cfg.sourceType,
-        prerequisiteId: cfg.prerequisiteId,
-        status: idx === 0 ? 'READY' : 'LOCKED',
-        statusMessage:
-          idx === 0
-            ? 'Awaiting AMI meter emission'
-            : `Waiting for ${STAGE_CONFIG[cfg.prerequisiteId!].shortLabel}`,
-      };
-    });
-    return initial;
-  });
+  const [stages, setStages] = useState<Record<PipelineStageId, StageDetail>>(() => createInitialStages());
 
   const [selectedStageId, setSelectedStageId] = useState<PipelineStageId>('METER');
 
-  // Persistence Key
-  const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}${flow.flowId}`, [flow.flowId]);
+  // Persistence Key - strictly keyed by zone and slot index (Task B)
+  const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}z${flow.zoneId}_s${flow.intervalIdx}`, [flow.zoneId, flow.intervalIdx]);
 
   // Public Client for authentic on-chain receipt verification
   const publicClient = useMemo(() => {
@@ -247,26 +249,41 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   // ---------------------------------------------------------------------------
   useEffect(() => {
     try {
+      const currentSlot = Math.floor(Date.now() / 1000 / 900);
+      // Clean up legacy unkeyed storage key if present
+      localStorage.removeItem('voltmesh_flow_pipeline_v1_');
+
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.flow) {
+        // Only rehydrate if the saved flow belongs strictly to currentSlot
+        if (parsed.flow && parsed.flow.intervalIdx === currentSlot) {
           setFlow((prev) => ({ ...prev, ...parsed.flow }));
-        }
-        if (parsed.oracleQuorum) {
-          setOracleQuorum(parsed.oracleQuorum);
-        }
-        if (parsed.deliveryRecord) {
-          setDeliveryRecord({
-            ...parsed.deliveryRecord,
-            obligationsWh: BigInt(parsed.deliveryRecord.obligationsWh || '0'),
-            meteredGenerationWh: BigInt(parsed.deliveryRecord.meteredGenerationWh || '0'),
-            netDeliveryWh: BigInt(parsed.deliveryRecord.netDeliveryWh || '0'),
-            shortfallWh: BigInt(parsed.deliveryRecord.shortfallWh || '0'),
-          });
-        }
-        if (parsed.stages) {
-          setStages(parsed.stages);
+          if (parsed.oracleQuorum) {
+            setOracleQuorum(parsed.oracleQuorum);
+          }
+          if (parsed.deliveryRecord) {
+            setDeliveryRecord({
+              ...parsed.deliveryRecord,
+              obligationsWh: BigInt(parsed.deliveryRecord.obligationsWh || '0'),
+              meteredGenerationWh: BigInt(parsed.deliveryRecord.meteredGenerationWh || '0'),
+              netDeliveryWh: BigInt(parsed.deliveryRecord.netDeliveryWh || '0'),
+              shortfallWh: BigInt(parsed.deliveryRecord.shortfallWh || '0'),
+            });
+          }
+          if (parsed.stages) {
+            const rehydratedStages = { ...parsed.stages };
+            // Task C: Do not trust a local "completed" flag for stages 03 and 04.
+            // Derivation for stages 03 and 04 comes strictly from the chain in syncPipelineFromChain.
+            if (rehydratedStages.MERKLE?.status === 'COMPLETED') {
+              rehydratedStages.MERKLE = {
+                ...rehydratedStages.MERKLE,
+                status: 'LOCKED',
+                statusMessage: 'Verifying on-chain commitment with EpochOracle.sol...',
+              };
+            }
+            setStages(rehydratedStages);
+          }
         }
       }
     } catch (e) {
@@ -388,47 +405,23 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
           // read below surface any real error.
         }
 
-        // 1. Read EpochOracle.getEpoch(zone, interval)
+        // 1. Read EpochOracle.getEpoch(zone, interval) strictly for current interval - NO historical lookback (Task B & C)
         const rawEpoch = await publicClient.readContract({
           address: oracleConfig.address,
           abi: oracleConfig.abi,
           functionName: 'getEpoch',
           args: [zone, interval],
         });
-        let epochRecord = normalizeEpochRecord(rawEpoch);
+        const epochRecord = normalizeEpochRecord(rawEpoch);
 
-        let isEpochFinalized =
+        const isEpochFinalized = Boolean(
           epochRecord &&
           epochRecord.finalizedAt > 0n &&
-          epochRecord.merkleRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000';
+          epochRecord.merkleRoot &&
+          epochRecord.merkleRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000'
+        );
 
-        // If target interval is not yet finalized, check previous intervals (e.g. within 10 slots)
-        if (!isEpochFinalized && interval > 1) {
-          for (let offset = 1; offset <= 10; offset++) {
-            if (interval - offset <= 0) break;
-            try {
-              const rawPrev = await publicClient.readContract({
-                address: oracleConfig.address,
-                abi: oracleConfig.abi,
-                functionName: 'getEpoch',
-                args: [zone, interval - offset],
-              });
-              const prevRecord = normalizeEpochRecord(rawPrev);
-              if (
-                prevRecord &&
-                prevRecord.finalizedAt > 0n &&
-                prevRecord.merkleRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000'
-              ) {
-                epochRecord = prevRecord;
-                interval = interval - offset;
-                isEpochFinalized = true;
-                break;
-              }
-            } catch {}
-          }
-        }
-
-        // 2. Read BatchSettlement commitments for this interval
+        // 2. Read BatchSettlement commitments for this interval (must have totalVolumeWh > 0)
         let isClearingCommitted = false;
         if (settlementConfig?.address) {
           try {
@@ -438,7 +431,9 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
               functionName: 'commitments',
               args: [zone, interval],
             })) as any;
-            if (commitment && (commitment[6] > 0n || commitment.committedAt > 0n)) {
+            const committedAt = commitment?.committedAt ?? commitment?.[6] ?? 0n;
+            const totalVolumeWh = commitment?.totalVolumeWh ?? commitment?.[3] ?? 0n;
+            if (committedAt > 0n && totalVolumeWh > 0n) {
               isClearingCommitted = true;
             }
           } catch {}
@@ -461,7 +456,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
           } catch {}
         }
 
-        if (isEpochFinalized) {
+        if (isEpochFinalized && epochRecord) {
           setStages((prev) => {
             const next = { ...prev };
             if (next.METER.status !== 'COMPLETED') {
@@ -531,6 +526,59 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
             epochRoot: epochRecord.merkleRoot,
             updatedAt: Date.now(),
           }));
+        } else {
+          // Task C: If epoch is NOT finalized on-chain for this slot, Merkle root and subsequent stages MUST NOT be completed!
+          setStages((prev) => {
+            if (
+              prev.MERKLE.status === 'COMPLETED' ||
+              prev.CLEARING.status === 'COMPLETED' ||
+              prev.DELIVERY.status === 'COMPLETED' ||
+              prev.SETTLEMENT.status === 'COMPLETED' ||
+              prev.CERTIFICATE.status === 'COMPLETED'
+            ) {
+              const next = { ...prev };
+              if (next.MERKLE.status === 'COMPLETED') {
+                next.MERKLE = {
+                  ...next.MERKLE,
+                  status: next.ORACLE.status === 'COMPLETED' ? 'READY' : 'LOCKED',
+                  statusMessage: next.ORACLE.status === 'COMPLETED' ? 'Ready to compute RFC 6962 tree and commit on-chain' : 'Waiting for Oracle',
+                  data: undefined,
+                };
+              }
+              if (next.CLEARING.status === 'COMPLETED') {
+                next.CLEARING = {
+                  ...next.CLEARING,
+                  status: 'LOCKED',
+                  statusMessage: 'Waiting for Merkle',
+                  txHash: undefined,
+                  data: undefined,
+                };
+              }
+              if (next.DELIVERY.status === 'COMPLETED') {
+                next.DELIVERY = {
+                  ...next.DELIVERY,
+                  status: 'LOCKED',
+                  statusMessage: 'Waiting for Clearing',
+                };
+              }
+              if (next.SETTLEMENT.status === 'COMPLETED') {
+                next.SETTLEMENT = {
+                  ...next.SETTLEMENT,
+                  status: 'LOCKED',
+                  statusMessage: 'Waiting for Delivery',
+                };
+              }
+              if (next.CERTIFICATE.status === 'COMPLETED') {
+                next.CERTIFICATE = {
+                  ...next.CERTIFICATE,
+                  status: 'LOCKED',
+                  statusMessage: 'Waiting for Settlement',
+                };
+              }
+              return next;
+            }
+            return prev;
+          });
         }
       } catch (err) {
         console.warn('Failed to sync pipeline from chain:', err);
@@ -545,6 +593,48 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
       syncPipelineFromChain();
     }, 5000);
     return () => clearInterval(interval);
+  }, [syncPipelineFromChain]);
+
+  // Task B: Slot rollover watcher on timer (1000ms) and visibilitychange
+  useEffect(() => {
+    const handleRollover = () => {
+      const nowSlot = Math.floor(Date.now() / 1000 / 900);
+      setFlow((prevFlow) => {
+        if (prevFlow.intervalIdx !== nowSlot) {
+          // When the slot changes, every stage for the new slot starts pending.
+          setStages(createInitialStages());
+          setOracleQuorum(DEFAULT_ORACLE_NODES.map((n) => ({ ...n, signed: false })));
+          setDeliveryRecord(null);
+          setSelectedStageId('METER');
+          setTimeout(() => {
+            syncPipelineFromChain(nowSlot, prevFlow.zoneId);
+          }, 0);
+          return {
+            ...prevFlow,
+            intervalIdx: nowSlot,
+            flowId: '',
+            matchedQuantityWh: 0n,
+            clearingPricePaiseKWh: 0n,
+            clearingTxHash: undefined,
+            updatedAt: Date.now(),
+          };
+        }
+        return prevFlow;
+      });
+    };
+
+    const rolloverTimer = setInterval(handleRollover, 1000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        handleRollover();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(rolloverTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [syncPipelineFromChain]);
 
   const syncActiveInterval = useCallback(
@@ -658,10 +748,15 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   // 3. WORKFLOW STATE TRANSITIONS (Section 1, 6, 8, 9-16)
   // ---------------------------------------------------------------------------
 
-  // Stage 01: Meter Reading
+  // Stage 01: Meter Reading (Task C: strictly for current slot)
   const recordMeterReading = useCallback(
     (envelope: AttestationEnvelope, isSimulated: boolean = true) => {
       const slot = Number(envelope.payload.intervalIdx);
+      const currentSlot = Math.floor(Date.now() / 1000 / 900);
+      if (slot !== currentSlot) {
+        console.warn(`[pipeline] Ignored meter reading for non-current slot: ${slot} (current: ${currentSlot})`);
+        return;
+      }
       setFlow((prev) => ({
         ...prev,
         intervalIdx: slot,
@@ -692,9 +787,15 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
     []
   );
 
-  // Stage 02: Attestation Verification
+  // Stage 02: Attestation Verification (Task C: strictly for current slot)
   const verifyAttestation = useCallback(
     (envelope: AttestationEnvelope, isValid: boolean) => {
+      const slot = Number(envelope.payload.intervalIdx);
+      const currentSlot = Math.floor(Date.now() / 1000 / 900);
+      if (slot !== currentSlot) {
+        console.warn(`[pipeline] Ignored attestation verification for non-current slot: ${slot} (current: ${currentSlot})`);
+        return;
+      }
       setStages((prev) => {
         if (prev.METER.status !== 'COMPLETED') {
           console.warn('Cannot verify attestation: Meter reading not completed.');
@@ -886,41 +987,47 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
     [publicClient]
   );
 
-  // Stage 05: Call Market Clearing (Section 13)
+  // Stage 05: Call Market Clearing (Section 13, Task D)
   const executeClearing = useCallback(
     async (clearingResult: ClearingResult, txHash?: Hash) => {
       if (stages.MERKLE.status !== 'COMPLETED') {
         throw new Error('Cannot execute clearing: Canonical Merkle root not completed.');
       }
 
-      if (txHash) {
+      if (!clearingResult || clearingResult.clearedVolumeWh <= 0n) {
+        throw new Error('Cannot execute clearing: Matched volume must be greater than zero.');
+      }
+
+      if (!txHash) {
+        throw new Error('Cannot complete clearing: On-chain transaction hash is required.');
+      }
+
+      setStages((prev) => ({
+        ...prev,
+        CLEARING: {
+          ...prev.CLEARING,
+          status: 'AWAITING_CONFIRMATION',
+          txHash,
+          statusMessage: `Commitment tx submitted: ${txHash.slice(0, 10)}...`,
+        },
+      }));
+
+      try {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        if (receipt.status !== 'success') {
+          throw new Error('Clearing commitment transaction reverted.');
+        }
+      } catch (err: any) {
         setStages((prev) => ({
           ...prev,
           CLEARING: {
             ...prev.CLEARING,
-            status: 'AWAITING_CONFIRMATION',
-            txHash,
-            statusMessage: `Commitment tx submitted: ${txHash.slice(0, 10)}...`,
+            status: 'FAILED',
+            error: err?.message || 'On-chain commitment failed.',
+            statusMessage: 'Clearing commit failed',
           },
         }));
-
-        try {
-          const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-          if (receipt.status !== 'success') {
-            throw new Error('Clearing commitment transaction reverted.');
-          }
-        } catch (err: any) {
-          setStages((prev) => ({
-            ...prev,
-            CLEARING: {
-              ...prev.CLEARING,
-              status: 'FAILED',
-              error: err?.message || 'On-chain commitment failed.',
-              statusMessage: 'Clearing commit failed',
-            },
-          }));
-          throw err;
-        }
+        throw err;
       }
 
       const priceRupees = (Number(clearingResult.clearingPricePaiseKWh) / 100).toFixed(2);

@@ -1,3 +1,4 @@
+import * as React from 'react';
 import {
   createPublicClient,
   createWalletClient,
@@ -6,6 +7,7 @@ import {
   http,
   type Address,
   type Chain,
+  type PublicClient,
 } from 'viem';
 import { voltmeshChain, RPC_URL, DEFAULT_CHAIN_ID } from '@/config/contracts';
 
@@ -54,35 +56,277 @@ export function getInjectedWalletClient(account: Address, chain: Chain = voltmes
 }
 
 /* ------------------------------------------------------------------ */
-/* Public (read-only) client with RPC fallback                          */
+/* Public (read-only) client with resilient RPC fallback                */
 /* ------------------------------------------------------------------ */
 
-/** Additional public RPCs used only for reads if the primary fails. */
-const FALLBACK_RPCS: Record<number, string[]> = {
-  84532: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'],
-  80002: ['https://polygon-amoy-bor-rpc.publicnode.com', 'https://rpc.ankr.com/polygon_amoy'],
-  11155111: ['https://ethereum-sepolia-rpc.publicnode.com'],
-  31337: ['http://127.0.0.1:8545'],
-};
+export const PUBLIC_BASE_SEPOLIA_RPC = 'https://sepolia.base.org';
+export const POLL_INTERVAL_MS = 20_000;
+export const WALLET_POLL_INTERVAL_MS = 20_000;
+export const PIPELINE_POLL_INTERVAL_MS = 20_000;
 
-/** Ordered, de-duplicated RPC list for the configured chain. */
-function rpcList(): string[] {
-  const list = [RPC_URL, ...(FALLBACK_RPCS[DEFAULT_CHAIN_ID] ?? [])].filter(
-    (u): u is string => typeof u === 'string' && u.length > 0,
-  );
-  return Array.from(new Set(list));
+/** Determines whether a URL is syntactically valid HTTP/HTTPS endpoint. */
+export function isValidRpcUrl(url: unknown): boolean {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** Returns the primary RPC URL from environment if set and non-empty. */
+export function getPrimaryRpcUrl(): string | undefined {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RPC_URL) {
+    return import.meta.env.VITE_RPC_URL;
+  }
+  return undefined;
+}
+
+/** Ordered, resilient RPC endpoint list. Primary VITE_RPC_URL first, then public Base Sepolia backup. */
+export function getResilientRpcList(): string[] {
+  const primary = getPrimaryRpcUrl();
+  const list: string[] = [];
+
+  if (isValidRpcUrl(primary)) {
+    list.push(primary!.trim());
+  }
+
+  // Backup RPC
+  if (!list.includes(PUBLIC_BASE_SEPOLIA_RPC)) {
+    list.push(PUBLIC_BASE_SEPOLIA_RPC);
+  }
+
+  return list;
 }
 
 /**
- * Read-only client. Uses `fallback()` over the configured `VITE_RPC_URL` plus
- * known public endpoints so a single RPC outage does not break the app.
+ * Creates fallback transport with batching, sensible retryDelay, and rank: false.
+ * Tries primary VITE_RPC_URL first and public Base Sepolia backup second.
  */
-export function getPublicClient(chain: Chain = voltmeshChain) {
-  const transports = rpcList().map((url) => http(url, { retryCount: 2, timeout: 10_000 }));
-  return createPublicClient({
-    chain,
-    transport: fallback(transports.length ? transports : [http()]),
+export function createResilientReadTransport(urls: string[] = getResilientRpcList()) {
+  const transports = urls.map((url) =>
+    http(url, {
+      batch: true,
+      retryCount: 2,
+      retryDelay: 1000,
+      timeout: 10_000,
+    })
+  );
+
+  return fallback(transports, {
+    rank: false,
+    retryCount: 2,
+    retryDelay: 1000,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Read Deduplication (Within One Tick)                                 */
+/* ------------------------------------------------------------------ */
+
+const inFlightRequests = new Map<string, Promise<any>>();
+
+export function isReadRpcMethod(method?: string): boolean {
+  if (!method) return false;
+  return (
+    method === 'eth_call' ||
+    method === 'eth_getBalance' ||
+    method === 'eth_getBlockByNumber' ||
+    method === 'eth_blockNumber' ||
+    method === 'eth_getCode' ||
+    method === 'eth_getStorageAt' ||
+    method === 'eth_getTransactionReceipt' ||
+    method === 'eth_estimateGas'
+  );
+}
+
+export function getInFlightRequestCount(): number {
+  return inFlightRequests.size;
+}
+
+export function clearInFlightRequestsForTesting(): void {
+  inFlightRequests.clear();
+}
+
+/** Deduplicates identical reads invoked concurrently within the same tick. */
+export function deduplicateRead<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inFlightRequests.get(key);
+  if (existing) {
+    return existing as Promise<T>;
+  }
+  const promise = fn().finally(() => {
+    queueMicrotask(() => {
+      inFlightRequests.delete(key);
+    });
+  });
+  inFlightRequests.set(key, promise);
+  return promise;
+}
+
+/* ------------------------------------------------------------------ */
+/* Error Logging Rate Limiter & Secret Sanitization                     */
+/* ------------------------------------------------------------------ */
+
+const errorLogTimestamps = new Map<string, number>();
+
+/** Redacts full URLs and endpoints so secrets or RPC URLs are never logged. */
+export function sanitizeRpcError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  return raw.replace(/https?:\/\/[^\s'")]+/gi, '[RPC_URL]');
+}
+
+/** Logs a failed read once per distinct error, then silences repeats for 60 seconds. */
+export function logRpcError(context: string, err: unknown): void {
+  const sanitized = sanitizeRpcError(err);
+  const key = `${context}:${sanitized}`;
+  const now = Date.now();
+  const lastTime = errorLogTimestamps.get(key) ?? 0;
+
+  if (now - lastTime >= 60_000) {
+    errorLogTimestamps.set(key, now);
+    console.warn(`[VoltMesh RPC Error] ${context}: ${sanitized}`);
+  }
+}
+
+export function resetErrorLogsForTesting(): void {
+  errorLogTimestamps.clear();
+}
+
+/* ------------------------------------------------------------------ */
+/* RPC Reachability State & Hook                                        */
+/* ------------------------------------------------------------------ */
+
+type RpcStatusListener = (isUnreachable: boolean) => void;
+const rpcStatusListeners = new Set<RpcStatusListener>();
+let isRpcUnreachableState = false;
+
+export function getIsRpcUnreachable(): boolean {
+  return isRpcUnreachableState;
+}
+
+export function setRpcUnreachable(unreachable: boolean): void {
+  if (isRpcUnreachableState !== unreachable) {
+    isRpcUnreachableState = unreachable;
+    for (const listener of rpcStatusListeners) {
+      try {
+        listener(unreachable);
+      } catch {}
+    }
+  }
+}
+
+export function subscribeRpcStatus(listener: RpcStatusListener): () => void {
+  rpcStatusListeners.add(listener);
+  listener(isRpcUnreachableState);
+  return () => {
+    rpcStatusListeners.delete(listener);
+  };
+}
+
+export function useRpcStatus(): boolean {
+  const [unreachable, setUnreachable] = React.useState(isRpcUnreachableState);
+  React.useEffect(() => {
+    return subscribeRpcStatus(setUnreachable);
+  }, []);
+  return unreachable;
+}
+
+/** Check if background polling should pause (document.hidden). */
+export function shouldPausePolling(): boolean {
+  if (typeof document !== 'undefined' && document.hidden) {
+    return true;
+  }
+  return false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared Public Client Singleton with Batching & Deduplication        */
+/* ------------------------------------------------------------------ */
+
+export function attachDeduplicationAndHealth<T extends PublicClient>(client: T): T {
+  const originalRequest = client.request.bind(client);
+
+  client.request = ((args: any, options?: any) => {
+    if (isReadRpcMethod(args?.method)) {
+      const key = `${args.method}:${JSON.stringify(args.params ?? [])}`;
+      const existing = inFlightRequests.get(key);
+      if (existing) {
+        return existing;
+      }
+
+      const promise = originalRequest(args, options)
+        .then((res: any) => {
+          setRpcUnreachable(false);
+          return res;
+        })
+        .catch((err: any) => {
+          setRpcUnreachable(true);
+          logRpcError(args.method, err);
+          throw err;
+        })
+        .finally(() => {
+          queueMicrotask(() => {
+            inFlightRequests.delete(key);
+          });
+        });
+
+      inFlightRequests.set(key, promise);
+      return promise;
+    }
+
+    return originalRequest(args, options);
+  }) as any;
+
+  return client;
+}
+
+/**
+ * Creates the single shared public client configured with resilient fallback,
+ * batching (multicall + http batching), and tick deduplication.
+ */
+export function createSharedPublicClient(chain: Chain = voltmeshChain): PublicClient {
+  const transport = createResilientReadTransport();
+  const chainWithMulticall: Chain = {
+    ...chain,
+    contracts: {
+      ...chain.contracts,
+      multicall3: {
+        address: '0xca11bde05977b3631167028862be2a173976ca11',
+      },
+    },
+  };
+
+  const client = createPublicClient({
+    chain: chainWithMulticall,
+    transport,
+    batch: {
+      multicall: {
+        batchSize: 1024,
+        wait: 16,
+      },
+    },
+  });
+
+  return attachDeduplicationAndHealth(client);
+}
+
+let sharedPublicClient: PublicClient | null = null;
+
+/**
+ * Returns the ONE shared public client for all reads in the app.
+ */
+export function getPublicClient(chain: Chain = voltmeshChain): PublicClient {
+  if (!sharedPublicClient) {
+    sharedPublicClient = createSharedPublicClient(chain);
+  }
+  return sharedPublicClient;
+}
+
+export function setSharedPublicClient(client: PublicClient | null): void {
+  sharedPublicClient = client;
 }
 
 /* ------------------------------------------------------------------ */

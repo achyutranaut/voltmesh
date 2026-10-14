@@ -32,9 +32,13 @@ import { assertTestnet, assertNoEth } from '../config/network';
 import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
 import { useSession, parseJwtRole } from '../auth/SessionContext';
-import { can, normalizeRole, Role } from '../auth/permissions';
-import { safeStringify } from '../lib/json';
-import { getPublicClient as getPublicClientWithFallback } from '../lib/viemClient';
+import {
+  getPublicClient as getPublicClientWithFallback,
+  POLL_INTERVAL_MS,
+  shouldPausePolling,
+  logRpcError,
+  setRpcUnreachable,
+} from '../lib/viemClient';
 
 const ALL_CONTRACT_ABIS = Object.values(deploymentArtifacts.contracts).flatMap(
   (c: any) => c.abi || []
@@ -406,7 +410,7 @@ export async function executeRefreshBalances({
         })) as bigint;
         setTokenBalance(tokBal);
       } catch (e) {
-        console.warn('Failed to read token balance:', e);
+        logRpcError('readTokenBalance', e);
       }
     }
 
@@ -437,7 +441,7 @@ export async function executeRefreshBalances({
 
         setEscrowBalances({ total: totalBal, locked: lockedBal, free: freeBal });
       } catch (e) {
-        console.warn('Failed to read escrow balances:', e);
+        logRpcError('readEscrowBalances', e);
       }
     }
 
@@ -517,7 +521,7 @@ export async function executeRefreshBalances({
         isOracle = hasOra;
         isRegistrar = hasReg;
       } catch (e) {
-        console.warn('Failed to read access roles:', e);
+        logRpcError('readAccessRoles', e);
         roleReadError = 'Failed to read access roles from AccessRegistry.';
       }
     } else {
@@ -545,7 +549,7 @@ export async function executeRefreshBalances({
           onChainRoleType = Number(pRecord[2]); // 0 = CONSUMER, 1 = PROSUMER, 2 = DISCOM_OPERATOR
         }
       } catch (e) {
-        console.warn('Failed to read participant status:', e);
+        logRpcError('readParticipantStatus', e);
         roleReadError = roleReadError ?? 'Failed to read participant status from ParticipantRegistry.';
       }
     }
@@ -565,8 +569,10 @@ export async function executeRefreshBalances({
     else if (onChainRoleType === 2) resolved = 'discom';
     else if (isAdmin) resolved = 'discom';
     setDetectedRole(resolved);
+    setRpcUnreachable(false);
   } catch (e) {
-    console.warn('Error refreshing blockchain balances:', e);
+    setRpcUnreachable(true);
+    logRpcError('refreshBlockchainBalances', e);
     setRolesError('Failed to read on-chain state. Check your RPC connection.');
     setRolesLoading(false);
   }
@@ -912,8 +918,26 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   useEffect(() => {
     refreshBalances();
-    const interval = setInterval(refreshBalances, 6000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
+      refreshBalances();
+    }, POLL_INTERVAL_MS);
+
+    const onVisibilityChange = () => {
+      if (!shouldPausePolling()) {
+        refreshBalances();
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
   }, [refreshBalances]);
 
   // Connect MetaMask - opens the identity gate

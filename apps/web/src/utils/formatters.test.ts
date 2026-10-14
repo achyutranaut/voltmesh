@@ -18,4 +18,12 @@ describe('formatSlotTimeRangeIST', () => {
     expect(res.timeWindowWithZone).toBe('02:30–02:45 IST');
     expect(res.dateFormatted).toBe('9 Oct 2026');
   });
+
+  it('correctly maps slot 1991133 to 04:45-05:00 IST and provides startTime and endTime', () => {
+    const res = formatSlotTimeRangeIST(1991133);
+    expect(res.startTime).toBe('04:45');
+    expect(res.endTime).toBe('05:00');
+    expect(res.timeWindow).toBe('04:45–05:00');
+    expect(res.timeWindowWithZone).toBe('04:45–05:00 IST');
+  });
 });

@@ -2685,9 +2685,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       }
     }
 
-    // On-chain commitment execution if operator wallet is configured
+    // On-chain commitment execution if operator wallet is configured and volume matched
     let onChainTxHash: Hex | null = null;
-    if (operatorWalletClient && settlementContractAddress) {
+    if (operatorWalletClient && settlementContractAddress && result.clearedVolumeWh > 0n) {
       try {
         onChainTxHash = await operatorWalletClient.writeContract({
           address: settlementContractAddress,
@@ -2768,10 +2768,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     const ordersRoot = (body.ordersMerkleRoot || (stored ? stored.ordersMerkleRoot : null)) as Hex | null;
     const obligationsRoot = (body.obligationsMerkleRoot || (stored ? stored.obligationsMerkleRoot : null)) as Hex | null;
 
-    if (price === null || volume === null || !ordersRoot || !obligationsRoot) {
+    if (price === null || volume === null || volume <= 0n || !ordersRoot || !obligationsRoot) {
       return reply.status(400).send({
         error: 'CLEARING_DATA_MISSING',
-        message: 'No clearing result available to commit on-chain for this zone and interval. Clear the market first.',
+        message: 'No clearing result with matched volume available to commit on-chain for this zone and interval. Clear the market first.',
       });
     }
 

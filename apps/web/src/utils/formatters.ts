@@ -89,6 +89,8 @@ export function truncateHash(hash: string, startChars: number = 6, endChars: num
  * Slot 1990548 -> 02:30-02:45 IST on 9 Oct 2026.
  */
 export function formatSlotTimeRangeIST(slot: number, nowMs: number = Date.now()): {
+  startTime: string;
+  endTime: string;
   timeWindow: string;
   timeWindowWithZone: string;
   dateFormatted: string;
@@ -129,6 +131,8 @@ export function formatSlotTimeRangeIST(slot: number, nowMs: number = Date.now())
   const dateFormatted = dateDtf.format(new Date(startMs));
 
   return {
+    startTime,
+    endTime,
     timeWindow: `${startTime}–${endTime}`,
     timeWindowWithZone: `${startTime}–${endTime} IST`,
     dateFormatted,

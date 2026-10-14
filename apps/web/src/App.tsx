@@ -4,12 +4,14 @@ import { SourceType, AttestationEnvelope, Order, OrderSide, ClearingResult } fro
 import { EpochBuilder } from '@energy-dex/epoch-builder';
 import { clearMarket } from '@energy-dex/clearing';
 import { verifyEd25519 } from '@energy-dex/attestation';
-import { keccak256, encodePacked, pad, stringToHex, createPublicClient, http } from 'viem';
+import { keccak256, encodePacked, pad, stringToHex, createPublicClient, http, Hash } from 'viem';
 import { DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from './config/contracts';
 
 import { NavigationTab, PipelineStage, DetailDrawerData } from './types/ui';
 import { usePipeline } from './context/PipelineContext';
+import { useWallet } from './context/WalletContext';
 import { useSession } from './auth/SessionContext';
+import { apiFetch } from './lib/api';
 import { AccessGate, SessionSwitcher } from './components/auth/AccessGate';
 import { firstAllowedTab, checkOrder, can, canView } from './auth/permissions';
 
@@ -126,11 +128,13 @@ export default function App() {
     syncActiveInterval,
     stages,
   } = usePipeline();
+  const { isConnected, commitClearingOnChain } = useWallet();
 
   // Interval & Simulation State: Monotonic 15-minute interval matching EpochOracle.sol
   const initialMonotonicInterval = Math.floor(Date.now() / 1000 / 900);
   const [currentInterval, setCurrentInterval] = useState<number>(initialMonotonicInterval);
   const [meterError, setMeterError] = useState<string | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
 
   useEffect(() => {
     async function syncOnChainInterval() {
@@ -171,19 +175,38 @@ export default function App() {
     }
     syncOnChainInterval();
 
-    // Advance local monotonic slot every 10 seconds if real-time has rolled over
-    const clockTimer = setInterval(() => {
+    // Task B: Advance local monotonic slot and reset ephemeral slot state
+    const checkClockRollover = () => {
       const realTimeSlot = Math.floor(Date.now() / 1000 / 900);
       setCurrentInterval((prev) => {
         if (prev !== realTimeSlot) {
           syncActiveInterval(realTimeSlot);
+          setLatestEnvelope(null);
+          setEquivocationEnvelope(null);
+          setSigValid(null);
+          setClearingResult(null);
+          setEpochData(null);
+          setMeterError(null);
+          setMarketError(null);
+          setOrders((prevOrders) => prevOrders.filter((o) => o.intervalIdx === realTimeSlot));
           return realTimeSlot;
         }
         return prev;
       });
-    }, 10000);
+    };
 
-    return () => clearInterval(clockTimer);
+    const clockTimer = setInterval(checkClockRollover, 1000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkClockRollover();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(clockTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [syncActiveInterval]);
 
   const [ratedCapacity, setRatedCapacity] = useState<number>(5000);
@@ -261,23 +284,85 @@ export default function App() {
     }
   };
 
-  // 2. Clear Call Market
-  const handleClearMarket = () => {
+  // 2. Clear Call Market (Task D: block empty orders, require volume > 0 and txHash)
+  const handleClearMarket = async () => {
     if (!can(session?.role, 'market.clear')) return;
+    setMarketError(null);
     const now = Math.floor(Date.now() / 1000);
+
+    const slotOrders = orders.filter((o) => o.zoneId === 1 && o.intervalIdx === currentInterval);
+    const bids = slotOrders.filter((o) => o.side === OrderSide.BUY);
+    const asks = slotOrders.filter((o) => o.side === OrderSide.SELL);
+
+    if (bids.length === 0 || asks.length === 0) {
+      setMarketError('No orders to clear for this slot: order book requires at least one bid and one ask.');
+      return;
+    }
+
+    const highestBid = bids.reduce((max, b) => (b.pricePaisePerKWh > max ? b.pricePaisePerKWh : max), 0n);
+    const lowestAsk = asks.reduce((min, a) => (a.pricePaisePerKWh < min ? a.pricePaisePerKWh : min), asks[0].pricePaisePerKWh);
+
+    if (highestBid < lowestAsk) {
+      setMarketError('No orders to clear for this slot: highest bid is below lowest ask. No crossing price exists.');
+      return;
+    }
+
     const result = clearMarket({
       zoneId: 1,
       intervalIdx: currentInterval,
-      orders,
+      orders: slotOrders,
       priceFloorPaiseKWh: 200n,
       priceCapPaiseKWh: 1200n,
       zoneCapacityWh: 1000000n,
       epochSeed: `zone-1-interval-${currentInterval}`,
       gateClosureTimestamp: now - 50,
     });
+
+    if (result.clearedVolumeWh <= 0n || result.obligations.length === 0) {
+      setMarketError('No orders to clear for this slot: no crossing volume could be matched.');
+      return;
+    }
+
     setClearingResult(result);
+
+    // Auto-commit on-chain if operator has Google session or connected wallet (Task D)
     if (canExecuteStage('CLEARING')) {
-      executeClearing(result);
+      if (session?.kind === 'google') {
+        try {
+          const res = await apiFetch<{ txHash: Hash }>(
+            `/api/v1/markets/zones/${result.zoneId}/commit-clearing/${result.intervalIdx}`,
+            session?.token,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                clearingPricePaiseKWh: result.clearingPricePaiseKWh.toString(),
+                clearedVolumeWh: result.clearedVolumeWh.toString(),
+                ordersMerkleRoot: result.ordersMerkleRoot,
+                obligationsMerkleRoot: result.obligationsMerkleRoot,
+              }),
+            }
+          );
+          await executeClearing(result, res.txHash);
+        } catch (err: any) {
+          console.error('Clearing commit error:', err);
+          setMarketError(err?.message || 'Failed to commit clearing on-chain.');
+        }
+      } else if (isConnected) {
+        try {
+          const txHash = await commitClearingOnChain(
+            result.zoneId,
+            result.intervalIdx,
+            result.clearingPricePaiseKWh,
+            result.clearedVolumeWh,
+            result.ordersMerkleRoot as Hash,
+            result.obligationsMerkleRoot as Hash
+          );
+          await executeClearing(result, txHash);
+        } catch (err: any) {
+          console.error('Clearing commit error:', err);
+          setMarketError(err?.message || 'Failed to commit clearing on-chain.');
+        }
+      }
     }
   };
 
@@ -510,6 +595,8 @@ export default function App() {
                 clearingResult={clearingResult}
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
                 onNavigateTab={(tab) => setActiveTab(tab)}
+                marketError={marketError}
+                onClearMarketError={() => setMarketError(null)}
               />
             )}
 

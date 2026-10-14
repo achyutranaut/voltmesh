@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle2, FileCheck, Wallet, ShieldAlert, Info } from 'lucide-react';
 import { SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { formatSlotTimeRangeIST } from '@/utils/formatters';
 
 export interface OrderEntryProps {
   currentInterval: number;
@@ -82,9 +83,8 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
 
   const estimatedNotionalRupees = ((qtyWh * pricePaise) / 100000).toFixed(2);
 
-  const intervalHour = Math.floor(currentInterval / 4) % 24;
-  const intervalMinute = (currentInterval % 4) * 15;
-  const intervalStr = `${String(intervalHour).padStart(2, '0')}:${String(intervalMinute).padStart(2, '0')}`;
+  const slotInfo = formatSlotTimeRangeIST(currentInterval);
+  const intervalStr = slotInfo.startTime;
 
   // Circuit bounds: ₹2.00 to ₹12.00 / kWh (200 - 1200 paise/kWh)
   const isPriceOutOfBounds = pricePaise < 200 || pricePaise > 1200;

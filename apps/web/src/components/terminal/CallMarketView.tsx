@@ -4,8 +4,9 @@ import { DetailDrawerData } from '@/types/ui';
 import { usePipeline } from '@/context/PipelineContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Play, Box, ChevronDown, ChevronUp, CheckCircle2, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { Play, Box, ChevronDown, ChevronUp, CheckCircle2, ArrowRight, ShieldCheck, Zap, AlertCircle } from 'lucide-react';
 import { NavigationTab } from '@/types/ui';
+import { formatSlotTimeRangeIST } from '@/utils/formatters';
 
 import { PriceChart } from './PriceChart';
 import { DepthChart } from './DepthChart';
@@ -31,6 +32,8 @@ export interface CallMarketViewProps {
   clearingResult: ClearingResult | null;
   onSelectDetail: (detail: DetailDrawerData) => void;
   onNavigateTab?: (tab: NavigationTab) => void;
+  marketError?: string | null;
+  onClearMarketError?: () => void;
 }
 
 export const CallMarketView: React.FC<CallMarketViewProps> = ({
@@ -41,6 +44,8 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
   clearingResult,
   onSelectDetail,
   onNavigateTab,
+  marketError,
+  onClearMarketError,
 }) => {
   const {
     canExecuteStage,
@@ -81,9 +86,13 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
     ? Number(clearingResult.clearedVolumeWh).toLocaleString()
     : null;
 
-  const intervalHour = Math.floor(currentInterval / 4) % 24;
-  const intervalMinute = (currentInterval % 4) * 15;
-  const intervalTime = `${String(intervalHour).padStart(2, '0')}:${String(intervalMinute).padStart(2, '0')}`;
+  const slotInfo = formatSlotTimeRangeIST(currentInterval);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const hasCrossingOrders =
+    bids.length > 0 &&
+    asks.length > 0 &&
+    bids[0].pricePaisePerKWh >= asks[0].pricePaisePerKWh;
 
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
@@ -107,7 +116,7 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
             <span className="text-zinc-600">·</span>
             <span>Feeder F04</span>
             <span className="text-zinc-600">·</span>
-            <span className="font-mono">Slot {currentInterval} ({intervalTime} IST)</span>
+            <span className="font-mono">Slot {currentInterval} ({slotInfo.startTime} IST)</span>
           </div>
         </div>
 
@@ -127,7 +136,14 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
             <Button
               variant="default"
               size="sm"
-              onClick={onClearMarket}
+              onClick={() => {
+                if (!hasCrossingOrders) {
+                  setLocalError('No orders to clear for this slot');
+                  return;
+                }
+                setLocalError(null);
+                onClearMarket();
+              }}
               className="text-xs h-8 font-medium cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
             >
               <Play className="w-3 h-3 mr-1 fill-current" />
@@ -140,6 +156,25 @@ export const CallMarketView: React.FC<CallMarketViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Error alert banner */}
+      {(localError || marketError) && (
+        <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/80 text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{localError || marketError}</span>
+          </div>
+          <button
+            onClick={() => {
+              setLocalError(null);
+              onClearMarketError?.();
+            }}
+            className="text-xs text-rose-400 hover:text-rose-200 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Optional 3D Energy Exchange Engine Drawer/Panel */}
       {show3DEngine && (

@@ -75,6 +75,7 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
 
   const {
     stages,
+    flow,
     canExecuteStage,
     getStageBlocker,
     executeClearing,
@@ -355,6 +356,16 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
                 if (b) setOrderSignError(b.reason);
                 return;
               }
+              const slotOrders = orders.filter((o) => o.zoneId === 1 && o.intervalIdx === currentInterval);
+              const slotBids = slotOrders.filter((o) => o.side === OrderSide.BUY);
+              const slotAsks = slotOrders.filter((o) => o.side === OrderSide.SELL);
+              const maxBid = slotBids.reduce((max, b) => (b.pricePaisePerKWh > max ? b.pricePaisePerKWh : max), 0n);
+              const minAsk = slotAsks.reduce((min, a) => (a.pricePaisePerKWh < min ? a.pricePaisePerKWh : min), slotAsks[0]?.pricePaisePerKWh ?? 0n);
+              if (slotBids.length === 0 || slotAsks.length === 0 || maxBid < minAsk) {
+                setOrderSignError('No orders to clear for this slot');
+                return;
+              }
+              setOrderSignError(null);
               onClearMarket();
             }}
             className={`text-xs font-medium cursor-pointer ${
@@ -368,6 +379,22 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Top Error Alert Banner */}
+      {orderSignError && (
+        <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/80 text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{orderSignError}</span>
+          </div>
+          <button
+            onClick={() => setOrderSignError(null)}
+            className="text-xs text-rose-400 hover:text-rose-200 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 1b. DAY-AHEAD MARKET PRODUCT & GATE CLOSURE BANNER                        */}
@@ -879,7 +906,7 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
             )}
           </div>
 
-          {clearingResult && !clearingTxHash && (
+          {clearingResult && !(clearingTxHash || stages.CLEARING.txHash || flow.clearingTxHash) && (
             <Button
               variant="outline"
               size="sm"
@@ -894,17 +921,17 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
             </Button>
           )}
 
-          {clearingTxHash && (
+          {(clearingTxHash || stages.CLEARING.txHash || flow.clearingTxHash) && (
             <div className="flex items-center space-x-1.5 text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2.5 py-1 rounded-sm">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>ON-CHAIN COMMIT CONFIRMED</span>
               <a
-                href={getExplorerTxUrl(clearingTxHash, chainId ?? DEFAULT_CHAIN_ID)}
+                href={getExplorerTxUrl((clearingTxHash || stages.CLEARING.txHash || flow.clearingTxHash) as Hash, chainId ?? DEFAULT_CHAIN_ID)}
                 target="_blank"
                 rel="noreferrer"
                 className="ml-1 text-zinc-300 hover:text-white flex items-center"
               >
-                <span>Tx {clearingTxHash.slice(0, 8)}...</span>
+                <span>Tx {((clearingTxHash || stages.CLEARING.txHash || flow.clearingTxHash) as string).slice(0, 8)}...</span>
                 <ExternalLink className="w-3 h-3 ml-0.5" />
               </a>
             </div>

@@ -3,6 +3,8 @@ import { ClearingResult } from '@energy-dex/types';
 import { DetailDrawerData } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
 import { usePipeline } from '@/context/PipelineContext';
+import { useSession } from '@/auth/SessionContext';
+import { apiFetch } from '@/lib/api';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { Hash } from 'viem';
 import { Button } from '@/components/ui/button';
@@ -18,11 +20,14 @@ export const RecentFills: React.FC<RecentFillsProps> = ({
   onSelectDetail,
 }) => {
   const { isConnected, commitClearingOnChain, chainId } = useWallet();
-  const { executeClearing } = usePipeline();
+  const { executeClearing, stages, flow } = usePipeline();
+  const { session } = useSession();
 
   const [isCommitting, setIsCommitting] = useState(false);
   const [txHash, setTxHash] = useState<Hash | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
+
+  const effectiveTxHash = txHash || stages.CLEARING.txHash || (flow.clearingTxHash as Hash | undefined);
 
   const handleCommitOnChain = async () => {
     if (!clearingResult || !clearingResult.ordersMerkleRoot || !clearingResult.obligationsMerkleRoot) {
@@ -36,18 +41,36 @@ export const RecentFills: React.FC<RecentFillsProps> = ({
       const ordersRoot = clearingResult.ordersMerkleRoot as Hash;
       const obligationsRoot = clearingResult.obligationsMerkleRoot as Hash;
 
-      const hash = await commitClearingOnChain(
-        clearingResult.zoneId,
-        clearingResult.intervalIdx,
-        clearingResult.clearingPricePaiseKWh,
-        clearingResult.clearedVolumeWh,
-        ordersRoot,
-        obligationsRoot
-      );
+      let hash: Hash;
+      if (session?.kind === 'google' || !isConnected) {
+        const res = await apiFetch<{ txHash: Hash }>(
+          `/api/v1/markets/zones/${clearingResult.zoneId}/commit-clearing/${clearingResult.intervalIdx}`,
+          session?.token,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              clearingPricePaiseKWh: clearingResult.clearingPricePaiseKWh.toString(),
+              clearedVolumeWh: clearingResult.clearedVolumeWh.toString(),
+              ordersMerkleRoot: ordersRoot,
+              obligationsMerkleRoot: obligationsRoot,
+            }),
+          }
+        );
+        hash = res.txHash;
+      } else {
+        hash = await commitClearingOnChain(
+          clearingResult.zoneId,
+          clearingResult.intervalIdx,
+          clearingResult.clearingPricePaiseKWh,
+          clearingResult.clearedVolumeWh,
+          ordersRoot,
+          obligationsRoot
+        );
+      }
       setTxHash(hash);
       await executeClearing(clearingResult, hash);
     } catch (err: any) {
-      setCommitError(err.message || 'On-chain commitment transaction failed.');
+      setCommitError(err?.message || 'On-chain commitment transaction failed.');
     } finally {
       setIsCommitting(false);
     }
@@ -93,11 +116,11 @@ export const RecentFills: React.FC<RecentFillsProps> = ({
           )}
         </div>
 
-        {clearingResult && !txHash && (
+        {clearingResult && !effectiveTxHash && (
           <Button
             variant="outline"
             size="sm"
-            disabled={isCommitting || !isConnected}
+            disabled={isCommitting || (!isConnected && session?.kind !== 'google')}
             onClick={handleCommitOnChain}
             className="text-xs h-7 border-emerald-500/30 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 cursor-pointer"
           >
@@ -106,17 +129,17 @@ export const RecentFills: React.FC<RecentFillsProps> = ({
           </Button>
         )}
 
-        {txHash && (
+        {effectiveTxHash && (
           <div className="flex items-center space-x-1.5 text-xs text-emerald-400">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>On-chain committed</span>
             <a
-              href={getExplorerTxUrl(txHash, chainId ?? DEFAULT_CHAIN_ID)}
+              href={getExplorerTxUrl(effectiveTxHash, chainId ?? DEFAULT_CHAIN_ID)}
               target="_blank"
               rel="noreferrer"
               className="ml-1 text-zinc-300 hover:text-white flex items-center font-code text-xs"
             >
-              <span>{txHash.slice(0, 8)}...</span>
+              <span>{effectiveTxHash.slice(0, 8)}...</span>
               <ExternalLink className="w-3 h-3 ml-0.5" />
             </a>
           </div>
