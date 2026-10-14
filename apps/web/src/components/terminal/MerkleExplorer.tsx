@@ -366,7 +366,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
           <div className="space-y-1">
             <span className="font-semibold text-amber-200">Operator Permission Required to Commit</span>
             <p className="text-amber-300/90 leading-relaxed">
-              You are signed in as <strong className="text-white font-medium">{ROLES[session.role]?.label || session.role}</strong> ({session.address.slice(0, 6)}…{session.address.slice(-4)}). Committing Merkle roots with <code className="text-amber-200">submitEpoch</code> is restricted to the Market Operator (<span className="text-white font-mono">DISCOM: 0x90F7…b906</span>). Switch accounts in the header to commit new roots.
+              You are signed in as <strong className="text-white font-medium">{ROLES[session.role]?.label || session.role}</strong> ({session.email || (session.address ? `${session.address.slice(0, 6)}…${session.address.slice(-4)}` : 'Google Session')}). Committing Merkle roots with <code className="text-amber-200">submitEpoch</code> is restricted to the Market Operator (<span className="text-white font-mono">DISCOM: 0x90F7…b906</span>). Switch accounts in the header to commit new roots.
             </p>
             {discoveredFinalizedSlot !== null && discoveredFinalizedSlot !== selectedInterval && (
               <div className="pt-0.5">

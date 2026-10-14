@@ -16,6 +16,7 @@ import {
   encodePacked,
   toHex,
   decodeErrorResult,
+  isAddress,
 } from 'viem';
 import {
   SUPPORTED_NETWORKS,
@@ -30,8 +31,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { assertTestnet, assertNoEth } from '../config/network';
 import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
-import { useSession } from '../auth/SessionContext';
-import { can } from '../auth/permissions';
+import { useSession, parseJwtRole } from '../auth/SessionContext';
+import { can, normalizeRole, Role } from '../auth/permissions';
 import { safeStringify } from '../lib/json';
 import { getPublicClient as getPublicClientWithFallback } from '../lib/viemClient';
 
@@ -250,13 +251,334 @@ export interface WalletContextType {
   dismissActiveTx: () => void;
 }
 
+export function isRealWalletConnected(
+  session?: { kind?: string; authMethod?: string; address?: string | null } | null
+): boolean {
+  if (!session) return false;
+  if (session.kind === 'google' || session.authMethod === 'google') return false;
+  return !!session.address && isAddress(session.address);
+}
+
+export function resolveGoogleSessionState(
+  session?: { token?: string; role?: Role | string | null } | null
+): {
+  roles: WalletRoles;
+  detectedRole: DetectedRole;
+  participantRoleType: number | null;
+} {
+  const jwtRole = (session?.token ? parseJwtRole(session.token) : null) || (session?.role ? normalizeRole(session.role) : null);
+
+  let isAdmin = false;
+  let isOperator = false;
+  let isRegulator = false;
+  let isAuditor = false;
+  let isParticipant = false;
+  let participantRoleType: number | null = null;
+  let detectedRole: DetectedRole = 'unregistered';
+
+  if (jwtRole === 'discom') {
+    isOperator = true;
+    detectedRole = 'discom';
+  } else if (jwtRole === 'regulator') {
+    isRegulator = true;
+    isAuditor = true;
+    detectedRole = 'regulator';
+  } else if (jwtRole === 'seller') {
+    isParticipant = true;
+    participantRoleType = 1;
+    detectedRole = 'seller';
+  } else if (jwtRole === 'buyer') {
+    isParticipant = true;
+    participantRoleType = 0;
+    detectedRole = 'buyer';
+  }
+
+  return {
+    roles: {
+      isAdmin,
+      isOperator,
+      isRegulator,
+      isAuditor,
+      isOracle: false,
+      isRegistrar: false,
+      isParticipant,
+    },
+    detectedRole,
+    participantRoleType,
+  };
+}
+
+export interface RefreshBalancesParams {
+  session?: {
+    kind?: string;
+    authMethod?: string;
+    token?: string;
+    role?: Role | string | null;
+    address?: string | null;
+  } | null;
+  address?: Address | null;
+  publicClient?: {
+    getBalance: (args: { address: Address }) => Promise<bigint>;
+    readContract: (args: any) => Promise<any>;
+  };
+  setEthBalance: (b: bigint) => void;
+  setTokenBalance: (b: bigint) => void;
+  setEscrowBalances: (b: EscrowBalances) => void;
+  setRoles: (r: WalletRoles) => void;
+  setParticipantRoleType: (t: number | null) => void;
+  setDetectedRole: (d: DetectedRole) => void;
+  setRolesLoading: (l: boolean) => void;
+  setRolesError: (e: string | null) => void;
+}
+
+export async function executeRefreshBalances({
+  session,
+  address,
+  publicClient,
+  setEthBalance,
+  setTokenBalance,
+  setEscrowBalances,
+  setRoles,
+  setParticipantRoleType,
+  setDetectedRole,
+  setRolesLoading,
+  setRolesError,
+}: RefreshBalancesParams): Promise<void> {
+  // 1. Google-authenticated sessions (regulator/operator): take role from backend JWT and skip on-chain reads
+  if (session?.kind === 'google' || session?.authMethod === 'google') {
+    const { roles: googleRoles, detectedRole: googleDetectedRole, participantRoleType: googlePartType } =
+      resolveGoogleSessionState(session);
+    setParticipantRoleType(googlePartType);
+    setRoles(googleRoles);
+    setDetectedRole(googleDetectedRole);
+    setEthBalance(0n);
+    setTokenBalance(0n);
+    setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
+    setRolesLoading(false);
+    setRolesError(null);
+    return;
+  }
+
+  // 2. On-chain role/balance/participant reads run ONLY when a real wallet address (viem isAddress) is connected
+  if (!address || !isAddress(address)) {
+    setEthBalance(0n);
+    setTokenBalance(0n);
+    setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
+    setRoles({
+      isAdmin: false,
+      isOperator: false,
+      isRegulator: false,
+      isAuditor: false,
+      isOracle: false,
+      isRegistrar: false,
+      isParticipant: false,
+    });
+    setParticipantRoleType(null);
+    setDetectedRole(null);
+    setRolesLoading(false);
+    setRolesError(null);
+    return;
+  }
+
+  if (!publicClient) {
+    setRolesLoading(false);
+    return;
+  }
+
+  setRolesLoading(true);
+  setRolesError(null);
+
+  try {
+    // 1. Native ETH balance
+    const ethBal = await publicClient.getBalance({ address });
+    setEthBalance(ethBal);
+
+    // 2. MockERC20 token balance
+    const tokenContract = getContract('MockERC20', DEFAULT_CHAIN_ID);
+    if (tokenContract) {
+      try {
+        const tokBal = (await publicClient.readContract({
+          address: tokenContract.address,
+          abi: tokenContract.abi,
+          functionName: 'balanceOf',
+          args: [address],
+        })) as bigint;
+        setTokenBalance(tokBal);
+      } catch (e) {
+        console.warn('Failed to read token balance:', e);
+      }
+    }
+
+    // 3. Escrow balances
+    const escrowContract = getContract('Escrow', DEFAULT_CHAIN_ID);
+    if (escrowContract) {
+      try {
+        const totalBal = (await publicClient.readContract({
+          address: escrowContract.address,
+          abi: escrowContract.abi,
+          functionName: 'balances',
+          args: [address],
+        })) as bigint;
+
+        const lockedBal = (await publicClient.readContract({
+          address: escrowContract.address,
+          abi: escrowContract.abi,
+          functionName: 'lockedBalances',
+          args: [address],
+        })) as bigint;
+
+        const freeBal = (await publicClient.readContract({
+          address: escrowContract.address,
+          abi: escrowContract.abi,
+          functionName: 'getFreeBalance',
+          args: [address],
+        })) as bigint;
+
+        setEscrowBalances({ total: totalBal, locked: lockedBal, free: freeBal });
+      } catch (e) {
+        console.warn('Failed to read escrow balances:', e);
+      }
+    }
+
+    // 4. Roles from AccessRegistry & ParticipantRegistry (on-chain source of truth)
+    const accessContract = getContract('AccessRegistry', DEFAULT_CHAIN_ID);
+    const participantContract = getContract('ParticipantRegistry', DEFAULT_CHAIN_ID);
+
+    // Normalize the connected address so hasRole comparisons are checksum-safe.
+    let normalized: Address;
+    try {
+      normalized = getAddress(address);
+    } catch {
+      normalized = address;
+    }
+
+    let isAdmin = false;
+    let isOperator = false;
+    let isRegulator = false;
+    let isAuditor = false;
+    let isOracle = false;
+    let isRegistrar = false;
+    let isParticipant = false;
+    let roleReadError: string | null = null;
+
+    if (accessContract) {
+      try {
+        const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hash;
+        const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
+        const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
+        const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
+        const ORACLE_ROLE = keccak256(toHex('ORACLE_ROLE'));
+        const REGISTRAR_ROLE = keccak256(toHex('REGISTRAR_ROLE'));
+
+        const [hasAdmin, hasOp, hasRegulator, hasAuditor, hasOra, hasReg] = await Promise.all([
+          publicClient.readContract({
+            address: accessContract.address,
+            abi: accessContract.abi,
+            functionName: 'hasRole',
+            args: [DEFAULT_ADMIN_ROLE, normalized],
+          }) as Promise<boolean>,
+          publicClient.readContract({
+            address: accessContract.address,
+            abi: accessContract.abi,
+            functionName: 'hasRole',
+            args: [OPERATOR_ROLE, normalized],
+          }) as Promise<boolean>,
+          publicClient.readContract({
+            address: accessContract.address,
+            abi: accessContract.abi,
+            functionName: 'hasRole',
+            args: [REGULATOR_ROLE, normalized],
+          }) as Promise<boolean>,
+          publicClient.readContract({
+            address: accessContract.address,
+            abi: accessContract.abi,
+            functionName: 'hasRole',
+            args: [AUDITOR_ROLE, normalized],
+          }) as Promise<boolean>,
+          publicClient.readContract({
+            address: accessContract.address,
+            abi: accessContract.abi,
+            functionName: 'hasRole',
+            args: [ORACLE_ROLE, normalized],
+          }) as Promise<boolean>,
+          publicClient.readContract({
+            address: accessContract.address,
+            abi: accessContract.abi,
+            functionName: 'hasRole',
+            args: [REGISTRAR_ROLE, normalized],
+          }) as Promise<boolean>,
+        ]);
+
+        isAdmin = hasAdmin;
+        isOperator = hasOp;
+        isRegulator = hasRegulator;
+        isAuditor = hasAuditor;
+        isOracle = hasOra;
+        isRegistrar = hasReg;
+      } catch (e) {
+        console.warn('Failed to read access roles:', e);
+        roleReadError = 'Failed to read access roles from AccessRegistry.';
+      }
+    } else {
+      roleReadError = 'AccessRegistry address is not configured.';
+    }
+
+    let onChainRoleType: number | null = null;
+    if (participantContract) {
+      try {
+        isParticipant = (await publicClient.readContract({
+          address: participantContract.address,
+          abi: participantContract.abi,
+          functionName: 'isRegisteredAndActive',
+          args: [normalized],
+        })) as boolean;
+
+        const pRecord = (await publicClient.readContract({
+          address: participantContract.address,
+          abi: participantContract.abi,
+          functionName: 'participants',
+          args: [normalized],
+        })) as [string, number, number, string, boolean, bigint];
+
+        if (pRecord && pRecord[5] > 0n && !pRecord[4]) {
+          onChainRoleType = Number(pRecord[2]); // 0 = CONSUMER, 1 = PROSUMER, 2 = DISCOM_OPERATOR
+        }
+      } catch (e) {
+        console.warn('Failed to read participant status:', e);
+        roleReadError = roleReadError ?? 'Failed to read participant status from ParticipantRegistry.';
+      }
+    }
+
+    setParticipantRoleType(onChainRoleType);
+    setRoles({ isAdmin, isOperator, isRegulator, isAuditor, isOracle, isRegistrar, isParticipant });
+    setRolesError(roleReadError);
+    setRolesLoading(false);
+
+    // Resolve a single UI role. Precedence mirrors the two-domain model:
+    // oversight (operator/regulator/auditor) first, then participant type.
+    let resolved: DetectedRole = 'unregistered';
+    if (isOperator) resolved = 'discom';
+    else if (isRegulator || isAuditor) resolved = 'regulator';
+    else if (onChainRoleType === 1) resolved = 'seller';
+    else if (onChainRoleType === 0) resolved = 'buyer';
+    else if (onChainRoleType === 2) resolved = 'discom';
+    else if (isAdmin) resolved = 'discom';
+    setDetectedRole(resolved);
+  } catch (e) {
+    console.warn('Error refreshing blockchain balances:', e);
+    setRolesError('Failed to read on-chain state. Check your RPC connection.');
+    setRolesLoading(false);
+  }
+}
+
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { session, signOut } = useSession();
-  const address = session?.address ?? null;
-  const walletClient = session?.walletClient;
-  const isConnected = !!session;
+  const hasRealWallet = isRealWalletConnected(session);
+  const address = hasRealWallet && session?.address ? (session.address as Address) : null;
+  const walletClient = hasRealWallet ? session?.walletClient : undefined;
+  const isConnected = hasRealWallet;
 
   const [participantRoleType, setParticipantRoleType] = useState<number | null>(null);
   const [simulationMode, setSimulationMode] = useState<boolean>(false);
@@ -295,7 +617,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [rolesLoading, setRolesLoading] = useState<boolean>(false);
   const [rolesError, setRolesError] = useState<string | null>(null);
 
-  // When session address changes, clear cached balances, activeTx, and onChainActivity
+  // When session address, token, or role changes, clear cached balances, activeTx, and onChainActivity
   useEffect(() => {
     setEthBalance(0n);
     setTokenBalance(0n);
@@ -306,7 +628,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setRolesError(null);
     setActiveTx(null);
     setOnChainActivity([]);
-  }, [session?.address]);
+  }, [session?.address, session?.token, session?.role]);
 
   const capabilities: ParticipantCapabilities = React.useMemo(() => {
     if (session?.role) {
@@ -558,205 +880,20 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Refresh balances whenever address or chainId changes
   const refreshBalances = useCallback(async () => {
-    if (!address) {
-      setEthBalance(0n);
-      setTokenBalance(0n);
-      setEscrowBalances({ total: 0n, locked: 0n, free: 0n });
-      setRoles({ isAdmin: false, isOperator: false, isRegulator: false, isAuditor: false, isOracle: false, isRegistrar: false, isParticipant: false });
-      setParticipantRoleType(null);
-      setDetectedRole(null);
-      setRolesLoading(false);
-      setRolesError(null);
-      return;
-    }
-
-    setRolesLoading(true);
-    setRolesError(null);
-
-    try {
-      const publicClient = getPublicClient();
-
-      // 1. Native ETH balance
-      const ethBal = await publicClient.getBalance({ address });
-      setEthBalance(ethBal);
-
-      // 2. MockERC20 token balance
-      const tokenContract = getContract('MockERC20', DEFAULT_CHAIN_ID);
-      if (tokenContract) {
-        try {
-          const tokBal = (await publicClient.readContract({
-            address: tokenContract.address,
-            abi: tokenContract.abi,
-            functionName: 'balanceOf',
-            args: [address],
-          })) as bigint;
-          setTokenBalance(tokBal);
-        } catch (e) {
-          console.warn('Failed to read token balance:', e);
-        }
-      }
-
-      // 3. Escrow balances
-      const escrowContract = getContract('Escrow', DEFAULT_CHAIN_ID);
-      if (escrowContract) {
-        try {
-          const totalBal = (await publicClient.readContract({
-            address: escrowContract.address,
-            abi: escrowContract.abi,
-            functionName: 'balances',
-            args: [address],
-          })) as bigint;
-
-          const lockedBal = (await publicClient.readContract({
-            address: escrowContract.address,
-            abi: escrowContract.abi,
-            functionName: 'lockedBalances',
-            args: [address],
-          })) as bigint;
-
-          const freeBal = (await publicClient.readContract({
-            address: escrowContract.address,
-            abi: escrowContract.abi,
-            functionName: 'getFreeBalance',
-            args: [address],
-          })) as bigint;
-
-          setEscrowBalances({ total: totalBal, locked: lockedBal, free: freeBal });
-        } catch (e) {
-          console.warn('Failed to read escrow balances:', e);
-        }
-      }
-
-      // 4. Roles from AccessRegistry & ParticipantRegistry (on-chain source of truth)
-      const accessContract = getContract('AccessRegistry', DEFAULT_CHAIN_ID);
-      const participantContract = getContract('ParticipantRegistry', DEFAULT_CHAIN_ID);
-
-      // Normalize the connected address so hasRole comparisons are checksum-safe.
-      let normalized: Address;
-      try {
-        normalized = getAddress(address);
-      } catch {
-        normalized = address;
-      }
-
-      let isAdmin = false;
-      let isOperator = false;
-      let isRegulator = false;
-      let isAuditor = false;
-      let isOracle = false;
-      let isRegistrar = false;
-      let isParticipant = false;
-      let roleReadError: string | null = null;
-
-      if (accessContract) {
-        try {
-          const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hash;
-          const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
-          const REGULATOR_ROLE = keccak256(toHex('REGULATOR_ROLE'));
-          const AUDITOR_ROLE = keccak256(toHex('AUDITOR_ROLE'));
-          const ORACLE_ROLE = keccak256(toHex('ORACLE_ROLE'));
-          const REGISTRAR_ROLE = keccak256(toHex('REGISTRAR_ROLE'));
-
-          const [hasAdmin, hasOp, hasRegulator, hasAuditor, hasOra, hasReg] = await Promise.all([
-            publicClient.readContract({
-              address: accessContract.address,
-              abi: accessContract.abi,
-              functionName: 'hasRole',
-              args: [DEFAULT_ADMIN_ROLE, normalized],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: accessContract.address,
-              abi: accessContract.abi,
-              functionName: 'hasRole',
-              args: [OPERATOR_ROLE, normalized],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: accessContract.address,
-              abi: accessContract.abi,
-              functionName: 'hasRole',
-              args: [REGULATOR_ROLE, normalized],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: accessContract.address,
-              abi: accessContract.abi,
-              functionName: 'hasRole',
-              args: [AUDITOR_ROLE, normalized],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: accessContract.address,
-              abi: accessContract.abi,
-              functionName: 'hasRole',
-              args: [ORACLE_ROLE, normalized],
-            }) as Promise<boolean>,
-            publicClient.readContract({
-              address: accessContract.address,
-              abi: accessContract.abi,
-              functionName: 'hasRole',
-              args: [REGISTRAR_ROLE, normalized],
-            }) as Promise<boolean>,
-          ]);
-
-          isAdmin = hasAdmin;
-          isOperator = hasOp;
-          isRegulator = hasRegulator;
-          isAuditor = hasAuditor;
-          isOracle = hasOra;
-          isRegistrar = hasReg;
-        } catch (e) {
-          console.warn('Failed to read access roles:', e);
-          roleReadError = 'Failed to read access roles from AccessRegistry.';
-        }
-      } else {
-        roleReadError = 'AccessRegistry address is not configured.';
-      }
-
-      let onChainRoleType: number | null = null;
-      if (participantContract) {
-        try {
-          isParticipant = (await publicClient.readContract({
-            address: participantContract.address,
-            abi: participantContract.abi,
-            functionName: 'isRegisteredAndActive',
-            args: [normalized],
-          })) as boolean;
-
-          const pRecord = (await publicClient.readContract({
-            address: participantContract.address,
-            abi: participantContract.abi,
-            functionName: 'participants',
-            args: [normalized],
-          })) as [string, number, number, string, boolean, bigint];
-
-          if (pRecord && pRecord[5] > 0n && !pRecord[4]) {
-            onChainRoleType = Number(pRecord[2]); // 0 = CONSUMER, 1 = PROSUMER, 2 = DISCOM_OPERATOR
-          }
-        } catch (e) {
-          console.warn('Failed to read participant status:', e);
-          roleReadError = roleReadError ?? 'Failed to read participant status from ParticipantRegistry.';
-        }
-      }
-
-      setParticipantRoleType(onChainRoleType);
-      setRoles({ isAdmin, isOperator, isRegulator, isAuditor, isOracle, isRegistrar, isParticipant });
-      setRolesError(roleReadError);
-      setRolesLoading(false);
-
-      // Resolve a single UI role. Precedence mirrors the two-domain model:
-      // oversight (operator/regulator/auditor) first, then participant type.
-      let resolved: DetectedRole = 'unregistered';
-      if (isOperator) resolved = 'discom';
-      else if (isRegulator || isAuditor) resolved = 'regulator';
-      else if (onChainRoleType === 1) resolved = 'seller';
-      else if (onChainRoleType === 0) resolved = 'buyer';
-      else if (onChainRoleType === 2) resolved = 'discom';
-      else if (isAdmin) resolved = 'discom';
-      setDetectedRole(resolved);
-    } catch (e) {
-      console.warn('Error refreshing blockchain balances:', e);
-      setRolesError('Failed to read on-chain state. Check your RPC connection.');
-      setRolesLoading(false);
-    }
-  }, [address, getPublicClient]);
+    await executeRefreshBalances({
+      session,
+      address,
+      publicClient: getPublicClient(),
+      setEthBalance,
+      setTokenBalance,
+      setEscrowBalances,
+      setRoles,
+      setParticipantRoleType,
+      setDetectedRole,
+      setRolesLoading,
+      setRolesError,
+    });
+  }, [session, address, getPublicClient]);
 
   useEffect(() => {
     refreshBalances();

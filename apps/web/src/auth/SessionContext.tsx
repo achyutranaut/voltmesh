@@ -69,14 +69,19 @@ interface StoredSession {
 const SESSIONS_STORAGE_KEY = 'voltmesh_sessions';
 const ACTIVE_ADDRESS_STORAGE_KEY = 'voltmesh_active_address';
 
-function parseJwtRole(token?: string): Role | null {
+export function parseJwtRole(token?: string): Role | null {
   if (!token) return null;
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    if (payload.role && payload.role !== 'unregistered') {
-      return normalizeRole(payload.role);
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = typeof atob === 'function'
+      ? atob(base64)
+      : Buffer.from(base64, 'base64').toString('utf-8');
+    const payload = JSON.parse(json);
+    const rawRole = payload.role || payload.uiRole || payload.userRole;
+    if (rawRole && rawRole !== 'unregistered') {
+      return normalizeRole(rawRole);
     }
   } catch {}
   return null;
@@ -469,9 +474,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .padEnd(40, '0')
           .slice(0, 40)) as Address;
 
+        const jwtRole = parseJwtRole(res.token);
+        const resolvedRole = jwtRole || res.role;
+
         const sessionObj: Session = {
           address,
-          role: res.role,
+          role: resolvedRole,
           kind: 'google',
           token: res.token,
           expiresAt: res.expiresAt ?? (Date.now() + 24 * 3600 * 1000),
