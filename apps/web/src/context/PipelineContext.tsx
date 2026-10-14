@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
-import { Hash, Address, createPublicClient, http } from 'viem';
+import { Hash, Address } from 'viem';
+import {
+  getPublicClient,
+  POLL_INTERVAL_MS,
+  shouldPausePolling,
+  logRpcError,
+  setRpcUnreachable,
+} from '../lib/viemClient';
 import {
   PipelineStageId,
   StageStatus,
@@ -232,12 +239,9 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Persistence Key - strictly keyed by zone and slot index (Task B)
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}z${flow.zoneId}_s${flow.intervalIdx}`, [flow.zoneId, flow.intervalIdx]);
 
-  // Public Client for authentic on-chain receipt verification
+  // ONE shared Public Client for authentic on-chain receipt verification
   const publicClient = useMemo(() => {
-    return createPublicClient({
-      chain: voltmeshTestnet,
-      transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
-    });
+    return getPublicClient();
   }, []);
 
   // Ensures we only surface the "no contract deployed" diagnostic once instead of
@@ -580,8 +584,11 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
             return prev;
           });
         }
+        setRpcUnreachable(false);
       } catch (err) {
-        console.warn('Failed to sync pipeline from chain:', err);
+        setRpcUnreachable(true);
+        logRpcError('syncPipelineFromChain', err);
+        // CRITICAL: Never mark pipeline stages completed because a read failed!
       }
     },
     [flow.zoneId, flow.intervalIdx, publicClient]
@@ -590,14 +597,31 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     syncPipelineFromChain();
     const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
       syncPipelineFromChain();
-    }, 5000);
-    return () => clearInterval(interval);
+    }, POLL_INTERVAL_MS);
+
+    const onVisibilityChange = () => {
+      if (!shouldPausePolling()) {
+        syncPipelineFromChain();
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
   }, [syncPipelineFromChain]);
 
-  // Task B: Slot rollover watcher on timer (1000ms) and visibilitychange
+  // Task B: Slot rollover watcher on timer and visibilitychange
   useEffect(() => {
     const handleRollover = () => {
+      if (shouldPausePolling()) return;
       const nowSlot = Math.floor(Date.now() / 1000 / 900);
       setFlow((prevFlow) => {
         if (prevFlow.intervalIdx !== nowSlot) {

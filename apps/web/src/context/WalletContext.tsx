@@ -32,6 +32,8 @@ import { assertTestnet, assertNoEth } from '../config/network';
 import deploymentArtifacts from '../contracts/deployments.json';
 import { ParticipantCapabilities } from '@energy-dex/types';
 import { useSession, parseJwtRole } from '../auth/SessionContext';
+import { Role, normalizeRole, can } from '../auth/permissions';
+import { safeStringify } from '../lib/json';
 import {
   getPublicClient as getPublicClientWithFallback,
   POLL_INTERVAL_MS,

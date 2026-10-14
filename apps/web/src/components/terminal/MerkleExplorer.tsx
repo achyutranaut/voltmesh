@@ -23,7 +23,8 @@ import {
 } from 'lucide-react';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet, API_URL } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
-import { Hash, Hex, createPublicClient, http } from 'viem';
+import { Hash, Hex } from 'viem';
+import { getPublicClient, logRpcError } from '@/lib/viemClient';
 import { normalizeEpochRecord, safeStringify } from '@/lib/json';
 import {
   buildDemoEpochReadings,
@@ -90,10 +91,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
     async function checkStatus() {
       if (!oracleConfig?.address) return;
       try {
-        const publicClient = createPublicClient({
-          chain: voltmeshTestnet,
-          transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
-        });
+        const publicClient = getPublicClient();
 
         const rawRecord = await publicClient.readContract({
           address: oracleConfig.address,
@@ -144,7 +142,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
           }
         }
       } catch (e) {
-        console.warn('Failed to query EpochOracle status in MerkleExplorer:', e);
+        logRpcError('MerkleExplorerCheckStatus', e);
       }
     }
     checkStatus();

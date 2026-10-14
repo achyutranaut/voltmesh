@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
-import { createPublicClient, http } from 'viem';
+import { getPublicClient, POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
 import { voltmeshTestnet, DEFAULT_CHAIN_ID, RPC_URL } from '@/config/contracts';
 import { Cpu, Server, Activity, Radio, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import {
@@ -36,12 +36,10 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
   // Live RPC query
   useEffect(() => {
     let mounted = true;
-    const client = createPublicClient({
-      chain: voltmeshTestnet,
-      transport: http(RPC_URL || undefined),
-    });
+    const client = getPublicClient();
 
     const checkRpc = async () => {
+      if (shouldPausePolling()) return;
       const start = performance.now();
       try {
         const block = await client.getBlockNumber();
@@ -64,7 +62,10 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
     };
 
     checkRpc();
-    const interval = setInterval(checkRpc, 10000);
+    const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
+      checkRpc();
+    }, POLL_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(interval);

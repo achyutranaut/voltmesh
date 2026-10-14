@@ -30,7 +30,8 @@ import { useWallet } from '@/context/WalletContext';
 import { useSession } from '@/auth/SessionContext';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet, API_URL } from '@/config/contracts';
 import { OracleNode } from '@energy-dex/oracle-node';
-import { Hash, Hex, createPublicClient, http } from 'viem';
+import { Hash, Hex } from 'viem';
+import { getPublicClient, logRpcError } from '@/lib/viemClient';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -122,10 +123,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
   const checkOnChainStatus = useCallback(async () => {
     if (!oracleConfig?.address) return;
     try {
-      const publicClient = createPublicClient({
-        chain: voltmeshTestnet,
-        transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
-      });
+      const publicClient = getPublicClient();
 
       const rawRecord = await publicClient.readContract({
         address: oracleConfig.address,
@@ -143,7 +141,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
         setOnChainFinalizedAt(null);
       }
     } catch (e) {
-      console.warn('Failed to query EpochOracle status:', e);
+      logRpcError('checkOnChainStatus', e);
     }
   }, [oracleConfig, currentZoneId, currentInterval]);
 
@@ -151,10 +149,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
     async function syncInterval() {
       if (!oracleConfig?.address) return;
       try {
-        const publicClient = createPublicClient({
-          chain: voltmeshTestnet,
-          transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
-        });
+        const publicClient = getPublicClient();
         const onChainInterval = (await publicClient.readContract({
           address: oracleConfig.address,
           abi: oracleConfig.abi,
@@ -164,7 +159,7 @@ export const CanonicalMerkleTree: React.FC<CanonicalMerkleTreeProps> = ({
           setCurrentInterval(Number(onChainInterval));
         }
       } catch (err) {
-        console.warn('Failed to query on-chain currentInterval in CanonicalMerkleTree:', err);
+        logRpcError('syncInterval', err);
       }
     }
     syncInterval();

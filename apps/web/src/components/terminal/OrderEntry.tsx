@@ -202,6 +202,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
       };
 
       onAddOrder(newOrder);
+      refreshBalances().catch(() => {});
       setSuccessNotice(`Order ${newOrder.orderId} signed via EIP-712 and submitted to call market.`);
       setTimeout(() => setSuccessNotice(null), 4000);
     } catch (err: any) {

@@ -25,7 +25,7 @@ import {
   YAxis,
   Tooltip as RechartsTooltip,
 } from 'recharts';
-import { createPublicClient, http } from 'viem';
+import { getPublicClient, POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
 import { voltmeshTestnet, API_URL, USE_LOCAL, RPC_URL } from '@/config/contracts';
 
 interface OperationsViewProps {
@@ -45,12 +45,10 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
 
   useEffect(() => {
     let mounted = true;
-    const client = createPublicClient({
-      chain: voltmeshTestnet,
-      transport: http(RPC_URL || undefined),
-    });
+    const client = getPublicClient();
 
     const checkHealth = async () => {
+      if (shouldPausePolling()) return;
       // 1. Check RPC & Block Number
       try {
         const start = performance.now();
@@ -98,7 +96,10 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
     };
 
     checkHealth();
-    const interval = setInterval(checkHealth, 5000);
+    const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
+      checkHealth();
+    }, POLL_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(interval);

@@ -4,7 +4,8 @@ import { FileCode2, ExternalLink, Copy, Check, ShieldCheck, CheckCircle2 } from 
 import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL, getContract } from '@/config/contracts';
 
 const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
-import { createPublicClient, http, Address } from 'viem';
+import { Address } from 'viem';
+import { getPublicClient } from '@/lib/viemClient';
 
 export interface ContractRecord {
   name: string;
@@ -81,10 +82,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
   // Live bytecode query against RPC
   useEffect(() => {
     let mounted = true;
-    const client = createPublicClient({
-      chain: voltmeshTestnet,
-      transport: http(RPC_URL || undefined),
-    });
+    const client = getPublicClient();
 
     const checkBytecode = async () => {
       const results: Record<string, { verified: boolean; bytes: number }> = {};

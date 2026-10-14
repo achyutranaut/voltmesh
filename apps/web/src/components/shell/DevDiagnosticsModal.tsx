@@ -16,8 +16,6 @@ import {
   Coins,
 } from 'lucide-react';
 import {
-  createPublicClient,
-  http,
   formatEther,
   formatGwei,
   parseUnits,
@@ -26,6 +24,7 @@ import {
   Address,
   Hash,
 } from 'viem';
+import { getPublicClient, POLL_INTERVAL_MS, shouldPausePolling, logRpcError } from '../../lib/viemClient';
 import { useWallet } from '../../context/WalletContext';
 import {
   SUPPORTED_NETWORKS,
@@ -92,10 +91,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
   const fetchDiagnostics = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const publicClient = createPublicClient({
-        chain: voltmeshTestnet,
-        transport: http(rpcUrl),
-      });
+      const publicClient = getPublicClient();
 
       const [block, gp] = await Promise.all([
         publicClient.getBlock({ blockTag: 'latest' }),
@@ -108,17 +104,20 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
       setGasPrice(gp);
       setRpcStatus('CONNECTED');
     } catch (err: any) {
-      console.warn('RPC diagnostics fetch error:', err);
+      logRpcError('fetchDiagnostics', err);
       setRpcStatus('DISCONNECTED');
     } finally {
       setIsRefreshing(false);
     }
-  }, [rpcUrl]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       fetchDiagnostics();
-      const interval = setInterval(fetchDiagnostics, 4000);
+      const interval = setInterval(() => {
+        if (shouldPausePolling()) return;
+        fetchDiagnostics();
+      }, POLL_INTERVAL_MS);
       return () => clearInterval(interval);
     }
   }, [isOpen, fetchDiagnostics]);
@@ -136,10 +135,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
     setEstimationError(null);
 
     try {
-      const publicClient = createPublicClient({
-        chain: voltmeshTestnet,
-        transport: http(rpcUrl),
-      });
+      const publicClient = getPublicClient();
 
       let gas: bigint;
       if (selectedContractKey === 'MockERC20') {
@@ -223,10 +219,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
       }
 
       // 2. Pre-estimate gas
-      const publicClient = createPublicClient({
-        chain: voltmeshTestnet,
-        transport: http(rpcUrl),
-      });
+      const publicClient = getPublicClient();
 
       const estimated = await publicClient.estimateContractGas({
         address: tokenContract.address,

@@ -213,6 +213,7 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
       };
 
       onAddOrder(newOrder);
+      refreshBalances().catch(() => {});
     } catch (err: any) {
       setOrderSignError(err.message || 'EIP-712 signature request was cancelled or failed.');
     } finally {

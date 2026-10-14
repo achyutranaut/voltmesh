@@ -4,8 +4,9 @@ import { SourceType, AttestationEnvelope, Order, OrderSide, ClearingResult } fro
 import { EpochBuilder } from '@energy-dex/epoch-builder';
 import { clearMarket } from '@energy-dex/clearing';
 import { verifyEd25519 } from '@energy-dex/attestation';
-import { keccak256, encodePacked, pad, stringToHex, createPublicClient, http, Hash } from 'viem';
+import { keccak256, encodePacked, pad, stringToHex, Hash } from 'viem';
 import { DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from './config/contracts';
+import { getPublicClient, shouldPausePolling, logRpcError } from './lib/viemClient';
 
 import { NavigationTab, PipelineStage, DetailDrawerData } from './types/ui';
 import { usePipeline } from './context/PipelineContext';
@@ -128,7 +129,7 @@ export default function App() {
     syncActiveInterval,
     stages,
   } = usePipeline();
-  const { isConnected, commitClearingOnChain } = useWallet();
+  const { isConnected, commitClearingOnChain, refreshBalances } = useWallet();
 
   // Interval & Simulation State: Monotonic 15-minute interval matching EpochOracle.sol
   const initialMonotonicInterval = Math.floor(Date.now() / 1000 / 900);
@@ -141,17 +142,15 @@ export default function App() {
       try {
         const oracleConfig = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.contracts.EpochOracle;
         if (!oracleConfig?.address) return;
-        const publicClient = createPublicClient({
-          chain: voltmeshTestnet,
-          transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
-        });
+        const publicClient = getPublicClient();
         // Guard: reading a view on an address with no deployed bytecode returns "0x",
         // surfacing as an opaque ContractFunctionZeroDataError. Skip cleanly instead.
         const code = await publicClient.getCode({ address: oracleConfig.address });
         if (!code || code === '0x') {
-          console.warn(
-            `[app] EpochOracle has no deployed code at ${oracleConfig.address} on chain ${DEFAULT_CHAIN_ID}. ` +
-              `Using locally-derived interval. Deploy contracts or fix VITE_*_ADDRESS / VITE_CHAIN_ID.`
+          logRpcError(
+            'EpochOracleCheck',
+            `EpochOracle has no deployed code at ${oracleConfig.address} on chain ${DEFAULT_CHAIN_ID}. ` +
+              `Using locally-derived interval.`
           );
           return;
         }
@@ -170,13 +169,14 @@ export default function App() {
           );
         }
       } catch (err) {
-        console.warn('Failed to sync on-chain interval in App:', err);
+        logRpcError('syncOnChainInterval', err);
       }
     }
     syncOnChainInterval();
 
     // Task B: Advance local monotonic slot and reset ephemeral slot state
     const checkClockRollover = () => {
+      if (shouldPausePolling()) return;
       const realTimeSlot = Math.floor(Date.now() / 1000 / 900);
       setCurrentInterval((prev) => {
         if (prev !== realTimeSlot) {
@@ -363,6 +363,7 @@ export default function App() {
           setMarketError(err?.message || 'Failed to commit clearing on-chain.');
         }
       }
+      refreshBalances().catch(() => {});
     }
   };
 
