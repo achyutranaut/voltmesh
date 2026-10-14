@@ -19,7 +19,9 @@ pnpm-debug.log*
 contracts/lib/
 contracts/cache/
 contracts/out/
+broadcast/
 contracts/broadcast/
+contracts/deployments/
 
 # Python
 __pycache__/

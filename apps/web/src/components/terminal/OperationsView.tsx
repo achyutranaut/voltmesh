@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { createPublicClient, http } from 'viem';
-import { voltmeshTestnet, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { voltmeshTestnet, DEFAULT_CHAIN_ID, RPC_URL } from '@/config/contracts';
 import { Cpu, Server, Activity, Radio, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -38,7 +38,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
     let mounted = true;
     const client = createPublicClient({
       chain: voltmeshTestnet,
-      transport: http(),
+      transport: http(RPC_URL || undefined),
     });
 
     const checkRpc = async () => {

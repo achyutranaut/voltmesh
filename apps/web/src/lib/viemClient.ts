@@ -59,6 +59,7 @@ export function getInjectedWalletClient(account: Address, chain: Chain = voltmes
 
 /** Additional public RPCs used only for reads if the primary fails. */
 const FALLBACK_RPCS: Record<number, string[]> = {
+  84532: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'],
   80002: ['https://polygon-amoy-bor-rpc.publicnode.com', 'https://rpc.ankr.com/polygon_amoy'],
   11155111: ['https://ethereum-sepolia-rpc.publicnode.com'],
   31337: ['http://127.0.0.1:8545'],

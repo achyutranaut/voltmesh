@@ -26,7 +26,7 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import { createPublicClient, http } from 'viem';
-import { voltmeshTestnet, API_URL, USE_LOCAL } from '@/config/contracts';
+import { voltmeshTestnet, API_URL, USE_LOCAL, RPC_URL } from '@/config/contracts';
 
 interface OperationsViewProps {
   currentInterval: number;
@@ -47,7 +47,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
     let mounted = true;
     const client = createPublicClient({
       chain: voltmeshTestnet,
-      transport: http(),
+      transport: http(RPC_URL || undefined),
     });
 
     const checkHealth = async () => {

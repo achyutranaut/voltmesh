@@ -33,6 +33,7 @@ export interface NetworkConfig {
     decimals: number;
   };
   explorerUrl?: string;
+  blockTime?: number;
   contracts: Record<string, ContractConfig>;
 }
 
@@ -48,10 +49,10 @@ export const CHAIN_ID: number = Number(
 );
 
 /** Backend base URL (supports both the new and legacy variable names). */
-export const API_URL: string =
-  env.VITE_BACKEND_URL ?? env.VITE_API_URL ?? '';
+export const API_URL: string = env.VITE_API_URL ?? '';
 
 const DEFAULT_RPC_BY_CHAIN: Record<number, string> = {
+  84532: 'https://sepolia.base.org',
   80002: 'https://rpc-amoy.polygon.technology',
   31337: 'http://127.0.0.1:8545',
   11155111: 'https://ethereum-sepolia-rpc.publicnode.com',
@@ -64,20 +65,29 @@ export const GOOGLE_CLIENT_ID: string = env.VITE_GOOGLE_CLIENT_ID ?? '';
 
 /** Chain metadata used to define the chain for wagmi/viem and for the
  *  wallet_addEthereumChain fallback. */
-const CHAIN_META: Record<number, { name: string; currency: NetworkConfig['currency']; explorerUrl?: string }> = {
+const CHAIN_META: Record<number, { name: string; currency: NetworkConfig['currency']; explorerUrl?: string; blockTime?: number }> = {
+  84532: {
+    name: 'Base Sepolia',
+    currency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    explorerUrl: 'https://sepolia.basescan.org',
+    blockTime: 2,
+  },
   80002: {
     name: 'Polygon Amoy',
     currency: { name: 'POL', symbol: 'POL', decimals: 18 },
     explorerUrl: 'https://amoy.polygonscan.com',
+    blockTime: 2,
   },
   31337: {
     name: 'VoltMesh Testnet (Local Devnet)',
     currency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    blockTime: 1,
   },
   11155111: {
     name: 'Sepolia',
     currency: { name: 'Sepolia Ether', symbol: 'SEP', decimals: 18 },
     explorerUrl: 'https://sepolia.etherscan.io',
+    blockTime: 12,
   },
 };
 
@@ -159,6 +169,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     rpcUrl: RPC_URL,
     currency: meta.currency,
     explorerUrl: meta.explorerUrl,
+    blockTime: meta.blockTime,
     contracts,
   },
 };
@@ -184,7 +195,22 @@ if (USE_LOCAL && CHAIN_ID !== 31337) {
 export const DEFAULT_CHAIN_ID = CHAIN_ID;
 
 export function getNetworkConfig(chainId: number): NetworkConfig | undefined {
-  return SUPPORTED_NETWORKS[chainId];
+  if (SUPPORTED_NETWORKS[chainId]) {
+    return SUPPORTED_NETWORKS[chainId];
+  }
+  const m = CHAIN_META[chainId];
+  if (m) {
+    return {
+      chainId,
+      name: m.name,
+      rpcUrl: DEFAULT_RPC_BY_CHAIN[chainId] ?? '',
+      currency: m.currency,
+      explorerUrl: m.explorerUrl,
+      blockTime: m.blockTime,
+      contracts: {},
+    };
+  }
+  return undefined;
 }
 
 export function getContract(contractName: string, chainId: number = DEFAULT_CHAIN_ID): ContractConfig | null {
@@ -196,7 +222,7 @@ export function getContract(contractName: string, chainId: number = DEFAULT_CHAI
 }
 
 export function getExplorerTxUrl(txHash: string, chainId: number = DEFAULT_CHAIN_ID): string {
-  const net = SUPPORTED_NETWORKS[chainId];
+  const net = SUPPORTED_NETWORKS[chainId] ?? getNetworkConfig(chainId);
   if (net?.explorerUrl) {
     return `${net.explorerUrl}/tx/${txHash}`;
   }
@@ -205,7 +231,7 @@ export function getExplorerTxUrl(txHash: string, chainId: number = DEFAULT_CHAIN
 }
 
 export function getExplorerAddressUrl(address: string, chainId: number = DEFAULT_CHAIN_ID): string {
-  const net = SUPPORTED_NETWORKS[chainId];
+  const net = SUPPORTED_NETWORKS[chainId] ?? getNetworkConfig(chainId);
   if (net?.explorerUrl) {
     return `${net.explorerUrl}/address/${address}`;
   }
@@ -240,7 +266,7 @@ export function getConfigErrors(): string[] {
   }
 
   if (!API_URL) {
-    errors.push('VITE_BACKEND_URL (or VITE_API_URL) is not set; backend calls will fail.');
+    errors.push('VITE_API_URL is not set; backend calls will fail.');
   }
 
   return errors;

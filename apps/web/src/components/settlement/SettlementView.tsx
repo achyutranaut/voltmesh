@@ -50,6 +50,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     mintTestTokens,
     executeSettlementBatchOnChain,
     chainId,
+    refreshBalances,
   } = useWallet();
 
   const {
@@ -138,6 +139,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
       const parsed = parseUnits(depositAmount, 18);
       const tx = await depositEscrow(parsed);
       setLastTxHash(tx);
+      await refreshBalances();
     } catch (err: any) {
       setActionError(err.message || 'Escrow deposit failed.');
     } finally {
@@ -155,11 +157,18 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     const amt = parseFloat(withdrawAmount);
     if (isNaN(amt) || amt <= 0) return;
 
+    const parsed = parseUnits(withdrawAmount, 18);
+    const free = escrowBalances?.free ?? 0n;
+    if (parsed > free) {
+      setActionError(`Withdrawal amount (${parseFloat(formatUnits(parsed, 18)).toFixed(2)} vUSD) exceeds available free balance (${parseFloat(formatUnits(free, 18)).toFixed(2)} vUSD).`);
+      return;
+    }
+
     try {
       setIsWithdrawing(true);
-      const parsed = parseUnits(withdrawAmount, 18);
       const tx = await withdrawEscrow(parsed);
       setLastTxHash(tx);
+      await refreshBalances();
     } catch (err: any) {
       setActionError(err.message || 'Escrow withdrawal failed.');
     } finally {
@@ -718,9 +727,18 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
 
           <form onSubmit={handleWithdraw} className="space-y-3">
             <div>
-              <label className="text-[11px] text-zinc-400 block mb-1 font-sans">
-                Amount (vUSD)
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] text-zinc-400 font-sans">
+                  Amount (vUSD)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setWithdrawAmount(formatUnits(escrowBalances.free, 18))}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono underline cursor-pointer"
+                >
+                  Withdraw Free Earnings ({parseFloat(formatUnits(escrowBalances.free, 18)).toFixed(2)} vUSD)
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   type="number"

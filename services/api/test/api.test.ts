@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { privateKeyToAccount } from 'viem/accounts';
 import { buildApiServer } from '../src/app.js';
 import { ParticipantRole, SourceType, OrderSide } from '@energy-dex/types';
 
@@ -451,6 +452,104 @@ describe('Modular Monolith API Server', () => {
       const data = JSON.parse(res.payload);
       expect(data.provider).toBe('CompositeMarketService');
       expect(data.healthy).toBe(true);
+    });
+  });
+
+  describe('Chain ID Allowlist & Network Guard (84532 Base Sepolia)', () => {
+    const dummyContracts = {
+      settlementContractAddress: '0x1111111111111111111111111111111111111111' as const,
+      oracleContractAddress: '0x2222222222222222222222222222222222222222' as const,
+      erc20ContractAddress: '0x3333333333333333333333333333333333333333' as const,
+    };
+
+    it('accepts Base Sepolia (chain ID 84532) on startup', async () => {
+      const server = buildApiServer({
+        chainId: 84532,
+        ...dummyContracts,
+      });
+      await server.ready();
+      const res = await server.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).toBe(200);
+      await server.close();
+    });
+
+    it('rejects Ethereum Mainnet (chain ID 1) with fatal error', () => {
+      expect(() =>
+        buildApiServer({
+          chainId: 1,
+          ...dummyContracts,
+        })
+      ).toThrow(/FATAL: Chain ID 1 is not allowed/);
+    });
+
+    it('rejects Base Mainnet (chain ID 8453) with fatal error', () => {
+      expect(() =>
+        buildApiServer({
+          chainId: 8453,
+          ...dummyContracts,
+        })
+      ).toThrow(/FATAL: Chain ID 8453 is not allowed/);
+    });
+
+    it('continues to accept existing allowed testnets (31337, 11155111, 80002)', async () => {
+      for (const cid of [31337, 11155111, 80002]) {
+        const server = buildApiServer({
+          chainId: cid,
+          ...dummyContracts,
+        });
+        await server.ready();
+        const res = await server.inject({ method: 'GET', url: '/health' });
+        expect(res.statusCode).toBe(200);
+        await server.close();
+      }
+    });
+
+    it('accepts SIWE message matching chain 84532 and rejects mismatched chain', async () => {
+      const server = buildApiServer({
+        chainId: 84532,
+        ...dummyContracts,
+      });
+      await server.ready();
+
+      const testAccount = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+
+      // Mismatched chain returns 401 SIWE_CHAIN_MISMATCH
+      const nonceRes1 = await server.inject({ method: 'GET', url: '/api/v1/auth/nonce' });
+      const { nonce: nonce1 } = JSON.parse(nonceRes1.payload);
+      const msgMismatch = `VoltMesh sign-in\nAddress: ${testAccount.address}\nChain ID: 99999\nNonce: ${nonce1}`;
+      const sigMismatch = await testAccount.signMessage({ message: msgMismatch });
+
+      const resMismatch = await server.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify',
+        payload: {
+          message: msgMismatch,
+          signature: sigMismatch,
+        },
+      });
+      expect(resMismatch.statusCode).toBe(401);
+      const body = JSON.parse(resMismatch.payload);
+      expect(body.error).toBe('SIWE_CHAIN_MISMATCH');
+
+      // Matching chain 84532 is accepted
+      const nonceRes2 = await server.inject({ method: 'GET', url: '/api/v1/auth/nonce' });
+      const { nonce: nonce2 } = JSON.parse(nonceRes2.payload);
+      const msgMatch = `VoltMesh sign-in\nAddress: ${testAccount.address}\nChain ID: 84532\nNonce: ${nonce2}`;
+      const sigMatch = await testAccount.signMessage({ message: msgMatch });
+
+      const resMatch = await server.inject({
+        method: 'POST',
+        url: '/api/v1/auth/verify',
+        payload: {
+          message: msgMatch,
+          signature: sigMatch,
+        },
+      });
+      expect(resMatch.statusCode).toBe(200);
+      const validBody = JSON.parse(resMatch.payload);
+      expect(validBody.accessToken).toBeDefined();
+
+      await server.close();
     });
   });
 });

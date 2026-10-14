@@ -55,13 +55,15 @@ export const TerminalTopBar: React.FC<TerminalTopBarProps> = ({
   };
 
   const networkLabel =
-    chainId === 80002
+    chainId === 84532
+      ? 'Base Sepolia'
+      : chainId === 80002
       ? 'Polygon Amoy'
       : chainId === 11155111
       ? 'Sepolia'
       : chainId === 31337
       ? 'Local Devnet'
-      : 'Polygon Amoy';
+      : 'Base Sepolia';
 
   return (
     <header className="sticky top-0 z-20 flex h-12 w-full items-center justify-between border-b border-white/[0.07] bg-panel/95 px-3 md:px-4 backdrop-blur-md text-zinc-300 font-sans text-xs select-none">

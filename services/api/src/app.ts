@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, encodePacked, toHex, createPublicClient, createWalletClient, parseUnits, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { foundry, sepolia, polygonAmoy } from 'viem/chains';
+import { foundry, sepolia, polygonAmoy, baseSepolia } from 'viem/chains';
 import {
   Participant,
   ParticipantRole,
@@ -413,9 +413,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   });
   const matcher = options.matcher ?? new BatchMatcher();
   const chainId = options.chainId ?? (process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : 31337);
-  const ALLOWED_CHAINS = [31337, 11155111, 80002]; // Anvil devnet, Sepolia, Polygon Amoy
+  const ALLOWED_CHAINS = [31337, 11155111, 80002, 84532]; // Anvil devnet, Sepolia, Polygon Amoy, Base Sepolia
   if (!ALLOWED_CHAINS.includes(chainId)) {
-    throw new Error(`FATAL: Chain ID ${chainId} is not allowed. VoltMesh permits Anvil local devnet (31337), Sepolia (11155111), and Polygon Amoy (80002).`);
+    throw new Error(`FATAL: Chain ID ${chainId} is not allowed. VoltMesh permits Anvil local devnet (31337), Sepolia (11155111), Polygon Amoy (80002), and Base Sepolia (84532).`);
   }
   // Strict network contract address binding: Anvil defaults are strictly permitted ONLY on local chain 31337
   let settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address | undefined);
@@ -436,13 +436,16 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   // Operator on-chain execution client (testnet/prod via OPERATOR_PRIVATE_KEY)
   const operatorPrivateKey = options.operatorPrivateKey ?? (process.env.OPERATOR_PRIVATE_KEY as Hex | undefined);
-  const chainObj = chainId === 80002 ? polygonAmoy : chainId === 11155111 ? sepolia : foundry;
-  const rpcUrl = process.env.RPC_URL || (chainId === 80002 ? 'https://rpc-amoy.polygon.technology' : 'http://127.0.0.1:8545');
+  const chainObj = chainId === 80002 ? polygonAmoy : chainId === 11155111 ? sepolia : chainId === 84532 ? baseSepolia : foundry;
+  const rpcUrl = process.env.RPC_URL || (chainId === 80002 ? 'https://rpc-amoy.polygon.technology' : chainId === 84532 ? 'https://sepolia.base.org' : 'http://127.0.0.1:8545');
 
   let operatorAccount: ReturnType<typeof privateKeyToAccount> | null = null;
   if (operatorPrivateKey) {
     try {
       operatorAccount = privateKeyToAccount(operatorPrivateKey);
+      if (process.env.OPERATOR_ADDRESS && operatorAccount && process.env.OPERATOR_ADDRESS.toLowerCase() !== operatorAccount.address.toLowerCase()) {
+        console.warn(`[CoreAPI] Warning: OPERATOR_ADDRESS (${process.env.OPERATOR_ADDRESS}) does not match address derived from OPERATOR_PRIVATE_KEY (${operatorAccount.address})`);
+      }
     } catch (err: any) {
       console.warn('[CoreAPI] Invalid OPERATOR_PRIVATE_KEY provided');
     }
@@ -774,10 +777,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
         // Demo test accounts in non-production
         if (!isProduction) {
-          if (payload.role === 'seller' || lower === '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc') {
+          if (payload.role === 'seller' || lower === '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65' || lower === '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc') {
             capabilities = { ...capabilities, canSell: true, canBuy: true };
           }
-          if (payload.role === 'buyer' || lower === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8') {
+          if (payload.role === 'buyer' || lower === '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' || lower === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8') {
             capabilities = { ...capabilities, canSell: false, canBuy: true };
           }
         }
@@ -934,13 +937,14 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       if (participant.roleType === ParticipantRole.DISCOM_OPERATOR) return 'discom';
     }
 
-    // 3. Known Demo accounts mapping (Anvil testnet accounts #1-#4) - strictly gated on non-production
+    // 3. Known Demo accounts mapping (Anvil testnet accounts #1-#5) - strictly gated on non-production
     if (!isProduction) {
       const DEMO_ROLES: Record<string, string> = {
-        '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc': 'seller',    // Account #2
-        '0x70997970c51812dc3a010c7d01b50e0d17dc79c8': 'buyer',     // Account #1
-        '0x90f79bf6eb2c4f870365e785982e1f101e93b906': 'discom',    // Account #3
-        '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65': 'regulator', // Account #4
+        '0x70997970c51812dc3a010c7d01b50e0d17dc79c8': 'regulator', // Account #1 (Regulator)
+        '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc': 'discom',    // Account #2 (Operator)
+        '0x90f79bf6eb2c4f870365e785982e1f101e93b906': 'discom',    // Account #3 (Oracle / Dev Operator)
+        '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65': 'seller',    // Account #4 (Seller)
+        '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc': 'buyer',     // Account #5 (Buyer)
       };
       if (DEMO_ROLES[lower]) return DEMO_ROLES[lower];
     }
@@ -956,7 +960,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     if (onchainRpc && accessAddr && /^0x[a-fA-F0-9]{40}$/.test(accessAddr)) {
       try {
         const publicClient = createPublicClient({
-          chain: foundry,
+          chain: chainObj,
           transport: http(onchainRpc),
         });
         const OPERATOR_ROLE = keccak256(toHex('OPERATOR_ROLE'));
@@ -1082,9 +1086,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     }
 
     const role = await lookupRole(lower);
+    const currentVer = tokenVersions.get(lower) ?? 0;
     const expiresAt = Date.now() + 3_600_000;
-    const token = app.jwt.sign({ sub: lower, address: lower, role: role ?? 'unregistered' }, { expiresIn: '1h' });
-    return { role, token, expiresAt };
+    const token = app.jwt.sign({ sub: lower, address: lower, role: role ?? 'unregistered', tokenVersion: currentVer }, { expiresIn: '1h' });
+    return { role, token, expiresAt, tokenVersion: currentVer };
   };
 
   app.post('/auth/verify', handleAuthVerify);
@@ -1227,7 +1232,13 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // ---------------------------------------------------------------------------
   // 1. Authentication (SIWE) (P1-16)
   // ---------------------------------------------------------------------------
-  app.get('/health', async () => ({ status: 'healthy', timestamp: new Date().toISOString() }));
+  app.get('/health', async () => ({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    chainId,
+    // Address derived from OPERATOR_PRIVATE_KEY. The key itself is NEVER logged or returned.
+    operatorAddress: operatorAccount?.address ?? null,
+  }));
 
   app.get('/api/v1/auth/nonce', async () => {
     // P1-16: Cryptographically secure random nonce
@@ -1298,7 +1309,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       const chainMatch = body.message.match(/Chain ID:\s*(\d+)/i) || body.message.match(/Chain:\s*(\d+)/i);
       if (chainMatch) {
         const msgChainId = Number(chainMatch[1]);
-        if (msgChainId !== 31337 && msgChainId !== 11155111 && msgChainId !== 80002 && msgChainId !== chainId) {
+        if (msgChainId !== 31337 && msgChainId !== 11155111 && msgChainId !== 80002 && msgChainId !== 84532 && msgChainId !== chainId) {
           return reply.status(401).send({
             error: 'SIWE_CHAIN_MISMATCH',
             message: `Chain ID ${msgChainId} does not match active chain ${chainId}`,
@@ -1500,8 +1511,8 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // Test-Token Faucet Endpoint (Devnet & Sepolia Faucet)
   // ---------------------------------------------------------------------------
   app.post('/api/v1/faucet/mint', { preHandler: [authenticate] }, async (request, reply) => {
-    // Faucet strictly restricted to testnets (never mainnet 1 / 137)
-    if (chainId === 1 || chainId === 137) {
+    // Faucet strictly restricted to testnets (never mainnet 1 / 137 / 8453)
+    if (chainId === 1 || chainId === 137 || chainId === 8453) {
       return reply.status(403).send({ error: 'FAUCET_FORBIDDEN', message: 'Faucet is not available on production mainnet' });
     }
 
@@ -1522,6 +1533,14 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
     const rawRecipient = validated.recipient || user.address;
     const recipient = rawRecipient.toLowerCase() as Address;
+
+    if (user.role === 'AUDITOR' || governance.isGovernanceWallet(user.address) || governance.isGovernanceWallet(recipient)) {
+      return reply.status(403).send({
+        error: 'OVERSIGHT_ACCOUNT_CANNOT_MINT',
+        message: 'Regulatory and governance oversight accounts cannot mint trading collateral tokens',
+      });
+    }
+
     const maxMintAmount = parseUnits('1000', 18);
     const requestedAmount = validated.amountPaise ? BigInt(validated.amountPaise) : maxMintAmount;
 
@@ -1539,9 +1558,11 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         ? (process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org')
         : chainId === 80002
           ? (process.env.AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology')
-          : (process.env.DEVNET_RPC_URL || 'http://127.0.0.1:8545'));
+          : chainId === 84532
+            ? (process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org')
+            : (process.env.DEVNET_RPC_URL || 'http://127.0.0.1:8545'));
 
-    const chainConfig = chainId === 11155111 ? sepolia : chainId === 80002 ? polygonAmoy : foundry;
+    const chainConfig = chainId === 11155111 ? sepolia : chainId === 80002 ? polygonAmoy : chainId === 84532 ? baseSepolia : foundry;
 
     let deployerKey: Hex | undefined = (process.env.FAUCET_PRIVATE_KEY || process.env.PRIVATE_KEY) as Hex | undefined;
     if (!deployerKey) {
@@ -1718,7 +1739,13 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     bindingHashes.add(bindingHash);
 
     // Invalidate existing token version so capabilities take effect immediately
-    tokenVersions.set(user.address, (tokenVersions.get(user.address) ?? 0) + 1);
+    const nextVer = (tokenVersions.get(user.address) ?? 0) + 1;
+    tokenVersions.set(user.address, nextVer);
+    const assignedRole = authoritativeRole === ParticipantRole.PROSUMER ? 'seller' : 'buyer';
+    const newToken = app.jwt.sign(
+      { sub: user.address, address: user.address, role: assignedRole, tokenVersion: nextVer },
+      { expiresIn: '24h' }
+    );
 
     auditLogger.recordAuditEvent({
       actorWallet: user.address,
@@ -1731,7 +1758,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       metadata: { zoneId: newParticipant.zoneId, discomAccountNumber: body.discomAccountNumber },
     });
 
-    return reply.status(201).send(newParticipant);
+    return reply.status(201).send({ ...newParticipant, token: newToken, accessToken: newToken, tokenVersion: nextVer });
   });
 
   app.get('/api/v1/participants/me', { preHandler: [authenticate] }, async (request, reply) => {
@@ -1790,12 +1817,20 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     devices.set(body.deviceId, device);
 
     // Invalidate tokens so newly gained capabilities take effect immediately
-    tokenVersions.set(user.address, (tokenVersions.get(user.address) ?? 0) + 1);
+    const nextVer = (tokenVersions.get(user.address) ?? 0) + 1;
+    tokenVersions.set(user.address, nextVer);
+    const newToken = app.jwt.sign(
+      { sub: user.address, address: user.address, role: 'seller', tokenVersion: nextVer },
+      { expiresIn: '24h' }
+    );
 
     return reply.status(201).send({
       ...device,
       ratedCapacityW: device.ratedCapacityW.toString(),
       signerPublicKey: Buffer.from(device.signerPublicKey).toString('hex'),
+      token: newToken,
+      accessToken: newToken,
+      tokenVersion: nextVer,
     });
   });
 
@@ -2798,6 +2833,12 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   app.post('/api/v1/schedules', { preHandler: [authenticate] }, async (request, reply) => {
     const user = (request as any).authenticatedUser as AuthenticatedUser;
+    if (user.role === 'AUDITOR' || governance.isGovernanceWallet(user.address)) {
+      return reply.status(403).send({
+        error: 'OVERSIGHT_ACCOUNT_READ_ONLY',
+        message: 'Regulatory and governance oversight accounts have read-only access and cannot submit energy schedules',
+      });
+    }
     const validated = validateBody(EnergyScheduleCreateSchema, request.body, reply);
     if (!validated) return;
     const body = validated;
@@ -2877,6 +2918,12 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   app.post('/api/v1/energy/positions/declare', { preHandler: [authenticate] }, async (request, reply) => {
     const user = (request as any).authenticatedUser as AuthenticatedUser;
+    if (user.role === 'AUDITOR' || governance.isGovernanceWallet(user.address)) {
+      return reply.status(403).send({
+        error: 'OVERSIGHT_ACCOUNT_READ_ONLY',
+        message: 'Regulatory and governance oversight accounts have read-only access and cannot declare energy positions',
+      });
+    }
     const validated = validateBody(EnergyPositionDeclareSchema, request.body, reply);
     if (!validated) return;
     const body = validated;
@@ -3682,7 +3729,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       case '2':
       case 'GOVERNANCE_TRADE_BUY': {
         // ATTACK 2: Regulator attempts BUY order
-        const regWallet = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+        const regWallet = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
         const conflict = governance.checkTradingConflict(regWallet, OrderSide.BUY);
         auditLogger.recordSecurityEvent({
           category: 'CONFLICT_OF_INTEREST',
@@ -3838,7 +3885,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
       case 7: {
         // ATTACK 7: Regulator attempts to withdraw settlement funds
-        const regWallet = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+        const regWallet = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
         auditLogger.recordSecurityEvent({
           category: 'AUTHORIZATION',
           severity: 'HIGH',

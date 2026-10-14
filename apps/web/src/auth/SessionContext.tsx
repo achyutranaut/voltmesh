@@ -6,7 +6,7 @@ import {
   type Address, type Hex, type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { voltmeshChain, USE_LOCAL, API_URL as API } from '@/config/contracts';
+import { voltmeshChain, CHAIN_ID, API_URL as API, USE_LOCAL } from '@/config/contracts';
 import { getInjectedWalletClient, ensureCorrectChain, friendlySignError } from '@/lib/viemClient';
 import { Action, Role, TabId, can as canDo, canView as canSee, normalizeRole } from './permissions';
 import { safeStringify } from '@/lib/utils';
@@ -15,23 +15,26 @@ import { safeStringify } from '@/lib/utils';
 /* Config                                                              */
 /* ------------------------------------------------------------------ */
 
-/** Demo/test accounts are only ever available when running against the local
- *  devnet (VITE_USE_LOCAL=true). Production and remote testnet builds never
- *  expose the hardcoded Anvil keys. */
+/** Demo/test accounts (hardcoded Anvil keys) are only exposed when the app is
+ *  built for the local devnet (VITE_CHAIN_ID === 31337). Production and remote
+ *  testnet builds (e.g. Polygon Amoy 80002, Base Sepolia 84532) never surface them. */
 export const DEMO_MODE =
-  USE_LOCAL && (import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true');
+  CHAIN_ID === 31337 && (USE_LOCAL || import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true');
 
 const SESSION_TTL_MS = 60 * 60 * 1000;
 
 export type DemoKey = 'seller' | 'buyer' | 'discom' | 'regulator';
 
-// Anvil's public dev accounts #1-#4. Account #0 is left alone for the deployer.
-// These keys are public and worthless outside a local devnet.
+// Anvil's public dev accounts #1-#5. Account #0 is left alone for the deployer.
+// Account 1: Regulator (0x7099...9C8)
+// Account 2: Operator / Discom (0x3C44...3BC)
+// Account 4: Seller (0x15d3...A65)
+// Account 5: Buyer (0x9965...4dF)
 export const DEMO_ACCOUNTS: Record<DemoKey, { key: Hex; role: Role }> = {
-  seller:    { key: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a', role: 'seller' },
-  buyer:     { key: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d', role: 'buyer' },
-  discom:    { key: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6', role: 'discom' },
-  regulator: { key: '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a', role: 'regulator' },
+  seller:    { key: '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a', role: 'seller' },
+  buyer:     { key: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba', role: 'buyer' },
+  discom:    { key: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a', role: 'discom' },
+  regulator: { key: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d', role: 'regulator' },
 };
 
 /* ------------------------------------------------------------------ */
@@ -234,10 +237,14 @@ function buildMessage(address: Address, nonce: string, issuedAt: number, expires
   ].join('\n');
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: safeStringify(body),
   });
   if (!res.ok) {
@@ -266,7 +273,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const initialAuth = useMemo(() => loadInitialAuth(), []);
   const [sessions, setSessions] = useState<Session[]>(initialAuth.sessions);
   const [activeAddress, setActiveAddress] = useState<Address | null>(initialAuth.activeAddress);
-  const [pending, setPending] = useState<(Identity & { expiresAt: number }) | null>(null);
+  const [pending, setPending] = useState<(Identity & { expiresAt: number; token?: string }) | null>(null);
   const [status, setStatus] = useState<GateStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -381,7 +388,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (!role) {
-        setPending({ ...ident, expiresAt });
+        setPending({ ...ident, expiresAt, token });
         setStatus('unregistered');
         return;
       }
@@ -398,7 +405,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setStatus('error');
       let msg: string;
       if (err?.name === 'TypeError' && err?.message === 'Failed to fetch') {
-        msg = `Failed to connect to API at ${API || '(VITE_BACKEND_URL not set)'}. Ensure the backend service is running.`;
+        msg = `Failed to connect to API at ${API || '(VITE_API_URL not set)'}. Ensure the backend service is running.`;
       } else {
         msg = friendlySignError(err);
       }
@@ -478,18 +485,56 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [run, addSession],
   );
 
-  // Only for a real wallet that has no role yet, and only in demo builds.
-  // Privileged roles (discom, regulator) require on-chain admin assignment and cannot be self-assigned in UI.
+  // Registers a wallet as an economic trading participant (buyer or seller).
+  // Privileged roles (discom, regulator) require Google OAuth with allowlisted email or on-chain authorization.
   const registerAs = useCallback(
-    (role: Role) => {
-      if (!DEMO_MODE || !pending) return;
-      const allowPrivileged = import.meta.env.VITE_ALLOW_PRIVILEGED_SELF_ASSIGN === 'true';
-      if ((role === 'discom' || role === 'regulator') && !allowPrivileged) {
+    async (role: Role) => {
+      if (!pending) return;
+      if (role === 'discom' || role === 'regulator') {
         setStatus('error');
-        setError('Privileged roles (Market Operator / Regulator) require on-chain authorization by the admin.');
+        setError('Privileged roles (Market Operator / Regulator) require Google OAuth with allowlisted email or on-chain authorization.');
         return;
       }
-      addSession({ ...pending, role });
+      try {
+        let token = pending.token;
+        if (API && token) {
+          try {
+            const regRes = await post<{ token?: string; accessToken?: string; participantId: string }>(
+              '/api/v1/participants/register',
+              {
+                zoneId: 1,
+                discomAccountNumber: 'CA-' + pending.address.slice(2, 10).toUpperCase(),
+                roleType: role === 'seller' ? 1 : 0,
+              },
+              token
+            );
+            if (regRes?.token || regRes?.accessToken) {
+              token = regRes.token || regRes.accessToken;
+            }
+            if (role === 'seller') {
+              const devRes = await post<{ token?: string; accessToken?: string }>(
+                '/api/v1/devices/register',
+                {
+                  deviceId: 'meter-' + pending.address.slice(2, 10).toLowerCase(),
+                  meterSerialNumber: 'MTR-' + pending.address.slice(2, 8).toUpperCase(),
+                  ratedCapacityW: '5000',
+                  sourceType: 0,
+                },
+                token
+              ).catch(() => null);
+              if (devRes?.token || devRes?.accessToken) {
+                token = devRes.token || devRes.accessToken;
+              }
+            }
+          } catch (e: any) {
+            console.warn('Backend participant registration note:', e);
+          }
+        }
+        addSession({ ...pending, role, token });
+      } catch (err: any) {
+        setStatus('error');
+        setError(err.message || 'Registration failed');
+      }
     },
     [pending, addSession],
   );

@@ -201,31 +201,23 @@ export const AccessGate: React.FC<AccessGateProps> = ({ onEnter, onBack }) => {
                 <div className="p-2.5 rounded-md bg-[#18181b] border border-[#3f3f46] text-[#a1a1aa] break-all font-mono text-[11px]">
                   {s.pendingAddress}
                 </div>
-                {DEMO_MODE ? (
-                  <>
-                    <p className="text-[#a1a1aa] font-sans text-xs">
-                      Signature verified. In demo builds you can register this wallet as a participant:
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['buyer', 'seller'] as Role[]).map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => s.registerAs(r)}
-                          className="p-2.5 text-left rounded-md border border-[#3f3f46] bg-[#18181b] hover:border-emerald-500 hover:bg-[#202024] text-[#f4f4f5] font-medium text-xs transition-all cursor-pointer"
-                        >
-                          {ROLES[r].label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-zinc-500 font-sans mt-1">
-                      Operator and Regulator roles must be authorized on-chain by the admin.
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-[#a1a1aa] font-sans text-xs">
-                    Ask a registry admin to onboard this address, then sign in again.
-                  </p>
-                )}
+                <p className="text-[#a1a1aa] font-sans text-xs">
+                  Signature verified. Register this wallet as an economic trading participant:
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['buyer', 'seller'] as Role[]).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => s.registerAs(r)}
+                      className="p-2.5 text-left rounded-md border border-[#3f3f46] bg-[#18181b] hover:border-emerald-500 hover:bg-[#202024] text-[#f4f4f5] font-medium text-xs transition-all cursor-pointer"
+                    >
+                      {ROLES[r].label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-zinc-500 font-sans mt-1">
+                  Operator and Regulator roles sign in via Google OAuth matching privileged allowlists.
+                </p>
                 <button
                   onClick={s.cancelPending}
                   className="text-[#a1a1aa] hover:text-white text-xs cursor-pointer transition-colors"

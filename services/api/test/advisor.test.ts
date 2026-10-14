@@ -232,7 +232,7 @@ describe('Phase B: Security Advisor & Prompt-Injection Defenses', () => {
     let logger: AuditLogger;
     let governance: GovernanceRegistry;
 
-    const regWallet = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+    const regWallet = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
 
     beforeEach(async () => {
       logger = new AuditLogger();
@@ -352,7 +352,7 @@ describe('Phase B: Security Advisor & Prompt-Injection Defenses', () => {
       });
       await app.ready();
 
-      const regWallet = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+      const regWallet = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
       const regulatorToken = app.jwt.sign({
         address: regWallet,
       });

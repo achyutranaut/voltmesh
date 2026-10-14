@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import deploymentArtifacts from '@/contracts/deployments.json';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL } from '@/config/contracts';
 import { createPublicClient, http, Address } from 'viem';
 
 const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
@@ -127,7 +127,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({ onSelectDetail }) 
     let mounted = true;
     const client = createPublicClient({
       chain: voltmeshTestnet,
-      transport: http(),
+      transport: http(RPC_URL || undefined),
     });
 
     const verifyBytecode = async () => {

@@ -3,7 +3,7 @@ import { Order, OrderSide } from '@energy-dex/types';
 import { useWallet } from '@/context/WalletContext';
 import { useSession } from '@/auth/SessionContext';
 import { allowedSides, can, ROLES } from '@/auth/permissions';
-import { hexToBytes } from 'viem';
+import { hexToBytes, formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle2, FileCheck, Wallet, ShieldAlert, Info } from 'lucide-react';
@@ -34,6 +34,8 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
     tokenBalance,
     connectMetaMask,
     signEnergyOrder,
+    depositEscrow,
+    refreshBalances,
     capabilities,
     simulationMode,
   } = useWallet();
@@ -151,6 +153,31 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
 
     try {
       setIsSigning(true);
+
+      // Core Flow Step 3: Buyer funds a bid: allowance check, free escrow check, approve, deposit ONLY the shortfall, sign/submit order.
+      if (side === OrderSide.BUY) {
+        // Order cost in paise = (qtyWh * pricePaisePerKWh) / 1000.
+        // 1 vUSD = 100 paise = 10^18 wei (so 1 paise = 10^16 wei).
+        // requiredCollateral = qtyWh * pricePaisePerKWh * 10^13 wei.
+        const requiredCollateral = BigInt(qtyWh) * BigInt(pricePaise) * 10_000_000_000_000n;
+        const freeCollateral = escrowBalances?.free ?? 0n;
+
+        if (freeCollateral < requiredCollateral) {
+          const shortfall = requiredCollateral - freeCollateral;
+          if (tokenBalance < shortfall) {
+            setErrorMessage(
+              `Insufficient vUSD balance in wallet (${parseFloat(formatUnits(tokenBalance, 18)).toFixed(2)} vUSD). Need ${parseFloat(formatUnits(shortfall, 18)).toFixed(2)} vUSD more in wallet to fund required escrow collateral.`
+            );
+            return;
+          }
+
+          setSuccessNotice(`Depositing escrow collateral shortfall (${parseFloat(formatUnits(shortfall, 18)).toFixed(2)} vUSD)...`);
+          await depositEscrow(shortfall);
+          await refreshBalances();
+          setSuccessNotice(`Collateral shortfall deposited. Now requesting EIP-712 order signature...`);
+        }
+      }
+
       const { signature, nonce, expiry, maker } = await signEnergyOrder({
         zone: zoneId,
         interval: currentInterval,
@@ -177,7 +204,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
       setSuccessNotice(`Order ${newOrder.orderId} signed via EIP-712 and submitted to call market.`);
       setTimeout(() => setSuccessNotice(null), 4000);
     } catch (err: any) {
-      setErrorMessage(err.message || 'EIP-712 signature request failed or was rejected.');
+      setErrorMessage(err.message || 'Order submission or signature request failed.');
     } finally {
       setIsSigning(false);
     }

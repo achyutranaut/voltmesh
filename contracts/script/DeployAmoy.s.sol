@@ -15,7 +15,7 @@ import "../src/mocks/MockERC20.sol";
 
 /**
  * @title DeployAmoy
- * @notice Deployment for VoltMesh on Polygon Amoy (80002) or Sepolia (11155111).
+ * @notice Deployment for VoltMesh on Polygon Amoy (80002), Sepolia (11155111), or Base Sepolia (84532).
  *         Everything is parameterised via environment variables — no keys or
  *         role addresses are hardcoded.
  *
@@ -47,7 +47,10 @@ contract DeployAmoy is Script {
         uint256 buyerMint = vm.envOr("BUYER_MINT_VUSD", uint256(100_000)) * 1e18;
         uint256 sellerMint = vm.envOr("SELLER_MINT_VUSD", uint256(100_000)) * 1e18;
 
-        require(block.chainid == 80002 || block.chainid == 11155111, "DeployAmoy: target Amoy (80002) or Sepolia (11155111)");
+        require(
+            block.chainid == 80002 || block.chainid == 11155111 || block.chainid == 84532,
+            "DeployAmoy: target Amoy (80002), Sepolia (11155111) or Base Sepolia (84532)"
+        );
         require(deployer != address(0), "deployer required");
 
         vm.startBroadcast(deployerKey);
@@ -133,20 +136,7 @@ contract DeployAmoy is Script {
 
         vm.stopBroadcast();
 
-        // ---- Persist + print -------------------------------------------------
-        string memory json = "deployment";
-        vm.serializeAddress(json, "AccessRegistry", address(access));
-        vm.serializeAddress(json, "ParticipantRegistry", address(participants));
-        vm.serializeAddress(json, "DeviceRegistry", address(devices));
-        vm.serializeAddress(json, "EpochOracle", address(oracle));
-        vm.serializeAddress(json, "MockERC20", address(token));
-        vm.serializeAddress(json, "Escrow", address(escrow));
-        vm.serializeAddress(json, "BatchSettlement", address(settlement));
-        vm.serializeAddress(json, "CertificateRegistry", address(certs));
-        vm.serializeAddress(json, "RetirementRegistry", address(retirement));
-        string memory out = vm.serializeUint(json, "chainId", block.chainid);
-        vm.writeJson(out, "deployments/amoy.json");
-
+        // ---- Console output (source of truth) --------------------------------
         console.log("=== VoltMesh deployed on chain", block.chainid, "===");
         console.log("AccessRegistry:      ", address(access));
         console.log("ParticipantRegistry: ", address(participants));
@@ -161,7 +151,7 @@ contract DeployAmoy is Script {
         console.log("==== COPY INTO VERCEL (frontend) ====");
         console.log("VITE_CHAIN_ID=%s", vm.toString(block.chainid));
         console.log("VITE_RPC_URL=<your amoy rpc url>");
-        console.log("VITE_BACKEND_URL=https://<your-render-service>.onrender.com");
+        console.log("VITE_API_URL=https://<your-railway-service>.up.railway.app");
         console.log("VITE_ACCESS_REGISTRY_ADDRESS=%s", vm.toString(address(access)));
         console.log("VITE_PARTICIPANT_REGISTRY_ADDRESS=%s", vm.toString(address(participants)));
         console.log("VITE_DEVICE_REGISTRY_ADDRESS=%s", vm.toString(address(devices)));
@@ -172,7 +162,7 @@ contract DeployAmoy is Script {
         console.log("VITE_CERTIFICATE_REGISTRY_ADDRESS=%s", vm.toString(address(certs)));
         console.log("VITE_RETIREMENT_REGISTRY_ADDRESS=%s", vm.toString(address(retirement)));
         console.log("");
-        console.log("==== COPY INTO RENDER (backend) ====");
+        console.log("==== COPY INTO RAILWAY (backend) ====");
         console.log("CHAIN_ID=%s", vm.toString(block.chainid));
         console.log("RPC_URL=<your amoy rpc url>");
         console.log("ACCESS_REGISTRY_ADDRESS=%s", vm.toString(address(access)));
@@ -183,6 +173,27 @@ contract DeployAmoy is Script {
         console.log("FRONTEND_ORIGIN=https://voltmesh-ivory.vercel.app");
         console.log("JWT_SECRET=<a random 32+ char secret>");
         console.log("FAUCET_PRIVATE_KEY=<key that owns vUSD mint>");
+
+        // ---- Persist deployment JSON ------------------------------------------
+        string memory json = "deployment";
+        vm.serializeAddress(json, "AccessRegistry", address(access));
+        vm.serializeAddress(json, "ParticipantRegistry", address(participants));
+        vm.serializeAddress(json, "DeviceRegistry", address(devices));
+        vm.serializeAddress(json, "EpochOracle", address(oracle));
+        vm.serializeAddress(json, "MockERC20", address(token));
+        vm.serializeAddress(json, "Escrow", address(escrow));
+        vm.serializeAddress(json, "BatchSettlement", address(settlement));
+        vm.serializeAddress(json, "CertificateRegistry", address(certs));
+        vm.serializeAddress(json, "RetirementRegistry", address(retirement));
+        string memory out = vm.serializeUint(json, "chainId", block.chainid);
+
+        try vm.writeJson(out, "deployments/amoy.json") {
+            console.log("");
+            console.log("Deployment saved to deployments/amoy.json");
+        } catch {
+            console.log("");
+            console.log("Warning: Could not write deployments/amoy.json (use console output above)");
+        }
     }
 }
 

@@ -26,7 +26,7 @@ import { useSession } from '@/auth/SessionContext';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { apiFetch } from '@/lib/api';
-import { toHex, hexToBytes, Hash } from 'viem';
+import { toHex, hexToBytes, Hash, formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -67,6 +67,10 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
     commitClearingOnChain,
     chainId,
     utilityIdentity,
+    escrowBalances,
+    tokenBalance,
+    depositEscrow,
+    refreshBalances,
   } = useWallet();
 
   const {
@@ -165,6 +169,25 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
 
     try {
       setIsSigning(true);
+
+      // Core Flow Step 3: Check free escrow collateral and deposit ONLY shortfall for BUY bids
+      if (side === OrderSide.BUY) {
+        const requiredCollateral = BigInt(qty) * BigInt(price) * 10_000_000_000_000n;
+        const freeCollateral = escrowBalances?.free ?? 0n;
+
+        if (freeCollateral < requiredCollateral) {
+          const shortfall = requiredCollateral - freeCollateral;
+          if (tokenBalance < shortfall) {
+            setOrderSignError(
+              `Insufficient vUSD balance in wallet (${parseFloat(formatUnits(tokenBalance, 18)).toFixed(2)} vUSD). Need ${parseFloat(formatUnits(shortfall, 18)).toFixed(2)} vUSD more in wallet to fund required escrow collateral.`
+            );
+            return;
+          }
+
+          await depositEscrow(shortfall);
+          await refreshBalances();
+        }
+      }
 
       const { signature, nonce, expiry, maker } = await signEnergyOrder({
         zone: 1,

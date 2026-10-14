@@ -14,7 +14,7 @@ describe('Authentication Token Verification & Rejection (Step 4)', () => {
     });
     await app.ready();
 
-    const regWallet = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+    const regWallet = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
     const validToken = app.jwt.sign({
       sub: regWallet,
       address: regWallet,

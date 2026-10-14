@@ -34,6 +34,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     mintTestTokens,
     executeSettlementBatchOnChain,
     chainId,
+    refreshBalances,
   } = useWallet();
 
   const {
@@ -141,6 +142,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
       setIsDepositing(true);
       setActionError(null);
       await depositEscrow(parseUnits(depositAmount, 18));
+      await refreshBalances();
     } catch (err: any) {
       setActionError(err.message || 'Deposit transaction failed');
     } finally {
@@ -150,10 +152,17 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
 
   const handleWithdraw = async () => {
     if (!withdrawAmount || isNaN(Number(withdrawAmount))) return;
+    const parsed = parseUnits(withdrawAmount, 18);
+    const free = escrowBalances?.free ?? 0n;
+    if (parsed > free) {
+      setActionError(`Withdrawal amount (${parseFloat(formatUnits(parsed, 18)).toFixed(2)} vUSD) exceeds free balance (${parseFloat(formatUnits(free, 18)).toFixed(2)} vUSD).`);
+      return;
+    }
     try {
       setIsWithdrawing(true);
       setActionError(null);
-      await withdrawEscrow(parseUnits(withdrawAmount, 18));
+      await withdrawEscrow(parsed);
+      await refreshBalances();
     } catch (err: any) {
       setActionError(err.message || 'Withdrawal transaction failed');
     } finally {

@@ -11,10 +11,10 @@ describe('End-to-End Governance, Role Isolation & Audit Verification (Part 25)',
   // Wallet B: MARKET_OPERATOR
   // Wallet C: BUYER
   // Wallet D: SELLER
-  const walletA_Regulator = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
-  const walletB_Operator = '0x90f79bf6eb2c4f870365e785982e1f101e93b906';
-  const walletC_Buyer = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
-  const walletD_Seller = '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc';
+  const walletA_Regulator = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
+  const walletB_Operator = '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc';
+  const walletC_Buyer = '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc';
+  const walletD_Seller = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
   const adminWallet = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
 
   let tokenA: string;

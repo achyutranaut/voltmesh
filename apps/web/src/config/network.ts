@@ -9,8 +9,8 @@ export const ALLOWED_CHAIN_IDS: number[] = USE_LOCAL
   ? Array.from(new Set([CHAIN_ID, 31337]))
   : [CHAIN_ID];
 
-/** True when the app is targeting a public testnet (e.g. Polygon Amoy 80002). */
-export const IS_TESTNET = CHAIN_ID !== 31337 && CHAIN_ID !== 1;
+/** True when the app is targeting a public testnet (e.g. Polygon Amoy 80002, Base Sepolia 84532). */
+export const IS_TESTNET = CHAIN_ID !== 31337 && CHAIN_ID !== 1 && CHAIN_ID !== 8453;
 
 /**
  * Ensures that write transactions are never executed on unauthorized or mainnet chains.

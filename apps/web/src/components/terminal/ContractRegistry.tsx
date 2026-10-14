@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { FileCode2, ExternalLink, Copy, Check, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import deploymentArtifacts from '@/contracts/deployments.json';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL } from '@/config/contracts';
 
 const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
 import { createPublicClient, http, Address } from 'viem';
@@ -84,7 +84,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
     let mounted = true;
     const client = createPublicClient({
       chain: voltmeshTestnet,
-      transport: http(),
+      transport: http(RPC_URL || undefined),
     });
 
     const checkBytecode = async () => {
@@ -130,7 +130,7 @@ export const ContractRegistry: React.FC<ContractRegistryProps> = ({ onSelectDeta
         variant: status?.verified ? 'success' : 'neutral',
       },
       metrics: [
-        { label: 'Network chain ID', value: '31337' },
+        { label: 'Network chain ID', value: String(DEFAULT_CHAIN_ID) },
         { label: 'Bytecode size', value: status ? `${status.bytes}` : '--', unit: 'bytes' },
       ],
       properties: [

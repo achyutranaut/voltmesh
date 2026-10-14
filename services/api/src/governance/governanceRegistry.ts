@@ -55,8 +55,8 @@ export class GovernanceRegistry {
       approvedBy: adminWallet,
     });
 
-    // 2. Authorized Market Operator (Anvil Account #3)
-    const operatorWallet = '0x90f79bf6eb2c4f870365e785982e1f101e93b906';
+    // 2. Authorized Market Operator (Anvil Account #2)
+    const operatorWallet = '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc';
     this.members.set(operatorWallet, {
       governanceMemberId: 'gov-op-001',
       organizationId: 'org-tpddl-utility',
@@ -71,8 +71,8 @@ export class GovernanceRegistry {
       approvedBy: adminWallet,
     });
 
-    // Secondary Operator for Zone 2 testing
-    const operator2Wallet = '0x8626f6940e2eb28930efb4cef49b2d1f2c9c1199';
+    // Secondary Operator for Zone 2 testing (Anvil Account #3)
+    const operator2Wallet = '0x90f79bf6eb2c4f870365e785982e1f101e93b906';
     this.members.set(operator2Wallet, {
       governanceMemberId: 'gov-op-002',
       organizationId: 'org-tpddl-utility',
@@ -87,8 +87,8 @@ export class GovernanceRegistry {
       approvedBy: adminWallet,
     });
 
-    // 3. State Regulator (Anvil Account #4)
-    const regulatorWallet = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+    // 3. State Regulator (Anvil Account #1)
+    const regulatorWallet = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8';
     this.members.set(regulatorWallet, {
       governanceMemberId: 'gov-reg-001',
       organizationId: 'org-derc-regulatory-commission',

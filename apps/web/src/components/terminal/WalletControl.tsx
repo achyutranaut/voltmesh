@@ -72,7 +72,11 @@ export const WalletControl: React.FC<WalletControlProps> = ({ onOpenModal, compa
 
   const shortAddress = `${address.slice(0, 6)}…${address.slice(-4)}`;
   const networkName =
-    chainId === 11155111
+    chainId === 84532
+      ? 'Base Sepolia'
+      : chainId === 80002
+      ? 'Polygon Amoy'
+      : chainId === 11155111
       ? 'Sepolia'
       : chainId === 31337
       ? 'Local Devnet'
