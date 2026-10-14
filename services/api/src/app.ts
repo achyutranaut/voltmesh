@@ -417,19 +417,31 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   if (!ALLOWED_CHAINS.includes(chainId)) {
     throw new Error(`FATAL: Chain ID ${chainId} is not allowed. VoltMesh permits Anvil local devnet (31337), Sepolia (11155111), Polygon Amoy (80002), and Base Sepolia (84532).`);
   }
-  // Strict network contract address binding: Anvil defaults are strictly permitted ONLY on local chain 31337
-  let settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address | undefined);
-  let oracleContractAddress = options.oracleContractAddress ?? (process.env.EPOCH_ORACLE_ADDRESS as Address | undefined);
-  let erc20ContractAddress = options.erc20ContractAddress ?? (process.env.MOCK_ERC20_ADDRESS as Address | undefined);
+  // Strict network contract address binding.
+  // Contract addresses are sourced ONLY from the environment (or explicit
+  // programmatic options used for tests / dependency injection). There are
+  // intentionally NO hardcoded Anvil defaults: on any non-local network a
+  // missing address is a fatal misconfiguration and fails startup, naming the
+  // exact environment variable that must be set.
+  const settlementContractAddress = options.settlementContractAddress ?? (process.env.BATCH_SETTLEMENT_ADDRESS as Address | undefined);
+  const oracleContractAddress = options.oracleContractAddress ?? (process.env.EPOCH_ORACLE_ADDRESS as Address | undefined);
+  const erc20ContractAddress = options.erc20ContractAddress ?? (process.env.MOCK_ERC20_ADDRESS as Address | undefined);
 
-  if (chainId === 31337) {
-    settlementContractAddress ??= '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318';
-    oracleContractAddress ??= '0x0165878A594ca255338adfa4d48449f69242Eb8F';
-    erc20ContractAddress ??= '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853';
-  } else {
-    if (!settlementContractAddress || !oracleContractAddress || !erc20ContractAddress) {
+  // Report the source of the EpochOracle address (env var name only — never a secret).
+  const oracleAddressSource = options.oracleContractAddress
+    ? 'ApiServerOptions.oracleContractAddress'
+    : 'EPOCH_ORACLE_ADDRESS';
+  console.log(`[CoreAPI] EpochOracle contract address source: ${oracleAddressSource}${oracleContractAddress ? ` → ${oracleContractAddress}` : ' (UNSET)'}`);
+
+  // On non-local networks every core contract address must be explicitly configured.
+  if (chainId !== 31337) {
+    const missing: string[] = [];
+    if (!settlementContractAddress) missing.push('BATCH_SETTLEMENT_ADDRESS');
+    if (!oracleContractAddress) missing.push('EPOCH_ORACLE_ADDRESS');
+    if (!erc20ContractAddress) missing.push('MOCK_ERC20_ADDRESS');
+    if (missing.length > 0) {
       throw new Error(
-        `FATAL: Missing contract addresses on network ${chainId}. BATCH_SETTLEMENT_ADDRESS, EPOCH_ORACLE_ADDRESS, and MOCK_ERC20_ADDRESS must be explicitly provided on non-local networks.`
+        `FATAL: Missing contract address configuration on network ${chainId}. Set the following environment variable(s): ${missing.join(', ')}. Contract addresses must be provided explicitly on non-local networks (hardcoded Anvil fallbacks are not permitted).`
       );
     }
   }
@@ -1374,6 +1386,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     if (!defaultOracleKey) {
       return reply.status(503).send({ error: 'ORACLE_KEY_NOT_CONFIGURED', message: 'Oracle signing key is not configured on this server' });
     }
+    if (!settlementContractAddress) {
+      return reply.status(503).send({ error: 'SETTLEMENT_ADDRESS_NOT_CONFIGURED', message: 'BATCH_SETTLEMENT_ADDRESS must be configured to sign settlement statements' });
+    }
     const user = (request as any).authenticatedUser as AuthenticatedUser;
     const validated = validateBody(OracleSignStatementSchema, request.body, reply);
     if (!validated) return;
@@ -1439,6 +1454,9 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   app.post('/api/v1/oracle/sign-epoch', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM')] }, async (request, reply) => {
     if (!defaultOracleKey) {
       return reply.status(503).send({ error: 'ORACLE_KEY_NOT_CONFIGURED', message: 'Oracle signing key is not configured on this server' });
+    }
+    if (!oracleContractAddress) {
+      return reply.status(503).send({ error: 'ORACLE_ADDRESS_NOT_CONFIGURED', message: 'EPOCH_ORACLE_ADDRESS must be configured to sign epochs' });
     }
     const user = (request as any).authenticatedUser as AuthenticatedUser;
     const validated = validateBody(OracleSignEpochSchema, request.body, reply);
@@ -1548,6 +1566,13 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       return reply.status(400).send({
         error: 'AMOUNT_EXCEEDS_LIMIT',
         message: 'Maximum faucet mint per request is 1,000 vUSD',
+      });
+    }
+
+    if (!erc20ContractAddress) {
+      return reply.status(503).send({
+        error: 'ERC20_ADDRESS_NOT_CONFIGURED',
+        message: 'MOCK_ERC20_ADDRESS must be configured to dispense test tokens on this network',
       });
     }
 
@@ -2037,10 +2062,20 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
           };
 
           let recovered: string | null = null;
-          try {
-            recovered = await recoverEnergyOrderSigner(tempOrder, sigHex, chainId, settlementContractAddress);
-          } catch {
-            // Fallback to EIP-191 plain text verification for legacy test fixtures
+          if (settlementContractAddress) {
+            try {
+              recovered = await recoverEnergyOrderSigner(tempOrder, sigHex, chainId, settlementContractAddress);
+            } catch {
+              // Fallback to EIP-191 plain text verification for legacy test fixtures
+              try {
+                const orderMsg = `VoltMesh Order\nParticipant: ${user.address}\nZone: ${body.zoneId}\nInterval: ${body.intervalIdx}\nSide: ${body.side}\nQuantity: ${body.quantityWh}\nPrice: ${body.pricePaisePerKWh}\nNonce: ${orderNonce.toString()}`;
+                recovered = await recoverMessageAddress({ message: orderMsg, signature: sigHex });
+              } catch {
+                // Signature recovery failed
+              }
+            }
+          } else {
+            // Settlement address not configured: fall back to EIP-191 plain text verification.
             try {
               const orderMsg = `VoltMesh Order\nParticipant: ${user.address}\nZone: ${body.zoneId}\nInterval: ${body.intervalIdx}\nSide: ${body.side}\nQuantity: ${body.quantityWh}\nPrice: ${body.pricePaisePerKWh}\nNonce: ${orderNonce.toString()}`;
               recovered = await recoverMessageAddress({ message: orderMsg, signature: sigHex });

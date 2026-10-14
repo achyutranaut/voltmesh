@@ -9,7 +9,13 @@ describe('Modular Monolith API Server', () => {
   const testWallet = '0x1234567890123456789012345678901234567890';
 
   beforeEach(async () => {
-    app = buildApiServer();
+    // Contract addresses are provided explicitly — the API no longer hardcodes
+    // Anvil fallback addresses (see buildApiServer network binding).
+    app = buildApiServer({
+      settlementContractAddress: '0x1111111111111111111111111111111111111111' as const,
+      oracleContractAddress: '0x2222222222222222222222222222222222222222' as const,
+      erc20ContractAddress: '0x3333333333333333333333333333333333333333' as const,
+    });
     await app.ready();
     authToken = app.jwt.sign({ address: testWallet });
   });

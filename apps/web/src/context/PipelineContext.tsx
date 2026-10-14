@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { Hash, Address, createPublicClient, http } from 'viem';
 import {
   PipelineStageId,
@@ -238,6 +238,10 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   }, []);
 
+  // Ensures we only surface the "no contract deployed" diagnostic once instead of
+  // spamming the console on every 5s sync tick.
+  const missingContractWarned = useRef<Set<string>>(new Set());
+
   // ---------------------------------------------------------------------------
   // 1. REHYDRATE FROM LOCALSTORAGE & ON-CHAIN STATE (Section 20 & 35)
   // ---------------------------------------------------------------------------
@@ -360,6 +364,29 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
         const oracleConfig = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.contracts.EpochOracle;
         const settlementConfig = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.contracts.BatchSettlement;
         if (!oracleConfig?.address) return;
+
+        // Guard: verify the configured addresses actually have deployed bytecode.
+        // Reading a view function on an EOA / empty address returns "0x", which viem
+        // surfaces as an opaque ContractFunctionZeroDataError. Detect that up-front
+        // and emit a single, actionable diagnostic instead of a cryptic decode error.
+        try {
+          const oracleCode = await publicClient.getCode({ address: oracleConfig.address });
+          if (!oracleCode || oracleCode === '0x') {
+            const key = `oracle:${oracleConfig.address}`;
+            if (!missingContractWarned.current.has(key)) {
+              missingContractWarned.current.add(key);
+              console.warn(
+                `[pipeline] EpochOracle has no deployed code at ${oracleConfig.address} on chain ${DEFAULT_CHAIN_ID}. ` +
+                  `Deploy the contracts to this network (or point VITE_*_ADDRESS / VITE_CHAIN_ID at a chain where they exist). ` +
+                  `Skipping on-chain pipeline sync.`
+              );
+            }
+            return;
+          }
+        } catch {
+          // If the code probe itself fails (RPC hiccup), fall through and let the
+          // read below surface any real error.
+        }
 
         // 1. Read EpochOracle.getEpoch(zone, interval)
         const rawEpoch = await publicClient.readContract({

@@ -141,6 +141,7 @@ export interface WalletContextType {
   // Connection state
   address: Address | null;
   chainId: number | null;
+  connectedChainId: number | null;
   isConnected: boolean;
   isCorrectNetwork: boolean;
   isConnecting: boolean;
@@ -588,7 +589,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [error, setError] = useState<string | null>(null);
   const [walletInstalled, setWalletInstalled] = useState<boolean>(false);
 
-  const chainId = session ? (session.kind === 'demo' ? DEFAULT_CHAIN_ID : (injectedChainId ?? null)) : (injectedChainId ?? null);
+  // Active chain for the app is ALWAYS DEFAULT_CHAIN_ID (from VITE_CHAIN_ID),
+  // NEVER derived from the injected wallet's current chain.
+  const chainId = DEFAULT_CHAIN_ID;
+  const connectedChainId = injectedChainId ?? (session?.kind === 'demo' ? DEFAULT_CHAIN_ID : null);
 
   // Cryptographic authority: address is strictly the connected session wallet
   const effectiveAddress = address;
@@ -2013,13 +2017,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setActiveTx(null);
   };
 
-  const isCorrectNetwork = chainId === DEFAULT_CHAIN_ID;
+  const isCorrectNetwork = !hasRealWallet || (connectedChainId === null || connectedChainId === DEFAULT_CHAIN_ID);
 
   return (
     <WalletContext.Provider
       value={{
         address: effectiveAddress,
         chainId,
+        connectedChainId,
         isConnected: !!effectiveAddress,
         isCorrectNetwork,
         isConnecting,

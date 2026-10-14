@@ -37,19 +37,17 @@ export interface NetworkConfig {
   contracts: Record<string, ContractConfig>;
 }
 
-const env = (import.meta.env ?? {}) as Record<string, string | undefined>;
-
 /** Explicit opt-in for the local devnet. Off by default so production never
  *  silently falls back to http://127.0.0.1:8545. */
-export const USE_LOCAL: boolean = env.VITE_USE_LOCAL === 'true';
+export const USE_LOCAL: boolean = import.meta.env.VITE_USE_LOCAL === 'true';
 
-/** Target chain id. Defaults to Polygon Amoy (80002) in production. */
+/** Target chain id. Defaults to Base Sepolia (84532) in production. */
 export const CHAIN_ID: number = Number(
-  env.VITE_CHAIN_ID ?? (USE_LOCAL ? '31337' : '80002')
+  import.meta.env.VITE_CHAIN_ID ?? (USE_LOCAL ? '31337' : '84532')
 );
 
 /** Backend base URL (supports both the new and legacy variable names). */
-export const API_URL: string = env.VITE_API_URL ?? '';
+export const API_URL: string = import.meta.env.VITE_API_URL ?? '';
 
 const DEFAULT_RPC_BY_CHAIN: Record<number, string> = {
   84532: 'https://sepolia.base.org',
@@ -58,10 +56,10 @@ const DEFAULT_RPC_BY_CHAIN: Record<number, string> = {
   11155111: 'https://ethereum-sepolia-rpc.publicnode.com',
 };
 
-export const RPC_URL: string = env.VITE_RPC_URL ?? DEFAULT_RPC_BY_CHAIN[CHAIN_ID] ?? '';
+export const RPC_URL: string = import.meta.env.VITE_RPC_URL ?? DEFAULT_RPC_BY_CHAIN[CHAIN_ID] ?? '';
 
 /** Google OAuth Client ID for Operator and Regulator login */
-export const GOOGLE_CLIENT_ID: string = env.VITE_GOOGLE_CLIENT_ID ?? '';
+export const GOOGLE_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 
 /** Chain metadata used to define the chain for wagmi/viem and for the
  *  wallet_addEthereumChain fallback. */
@@ -133,10 +131,35 @@ export const ADDRESS_ENV: Record<string, string> = {
   RetirementRegistry: 'VITE_RETIREMENT_REGISTRY_ADDRESS',
 };
 
+export function getRawEnvAddress(name: string): string | undefined {
+  switch (name) {
+    case 'AccessRegistry':
+      return import.meta.env.VITE_ACCESS_REGISTRY_ADDRESS;
+    case 'ParticipantRegistry':
+      return import.meta.env.VITE_PARTICIPANT_REGISTRY_ADDRESS;
+    case 'DeviceRegistry':
+      return import.meta.env.VITE_DEVICE_REGISTRY_ADDRESS;
+    case 'EpochOracle':
+      return import.meta.env.VITE_EPOCH_ORACLE_ADDRESS;
+    case 'MockERC20':
+      return import.meta.env.VITE_MOCK_ERC20_ADDRESS;
+    case 'Escrow':
+      return import.meta.env.VITE_ESCROW_ADDRESS;
+    case 'BatchSettlement':
+      return import.meta.env.VITE_BATCH_SETTLEMENT_ADDRESS;
+    case 'CertificateRegistry':
+      return import.meta.env.VITE_CERTIFICATE_REGISTRY_ADDRESS;
+    case 'RetirementRegistry':
+      return import.meta.env.VITE_RETIREMENT_REGISTRY_ADDRESS;
+    default:
+      return undefined;
+  }
+}
+
 const HEX_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 
 export function resolveAddress(name: string): Address | undefined {
-  const fromEnv = env[ADDRESS_ENV[name]];
+  const fromEnv = getRawEnvAddress(name);
   if (fromEnv && HEX_ADDRESS.test(fromEnv)) return fromEnv as Address;
 
   // On non-31337 chains (Base Sepolia 84532, Polygon Amoy 80002, Sepolia 11155111):
@@ -239,18 +262,17 @@ export function getConfigErrors(): string[] {
     errors.push('VITE_RPC_URL is not set.');
   }
 
-  if (CHAIN_ID !== 31337) {
-    for (const name of Object.keys(ADDRESS_ENV)) {
-      if (!resolveAddress(name)) {
-        errors.push(`${ADDRESS_ENV[name]} is missing or invalid (required for ${name} on chain ${CHAIN_ID}).`);
+  for (const name of Object.keys(ADDRESS_ENV)) {
+    const envVar = ADDRESS_ENV[name];
+    const raw = getRawEnvAddress(name);
+    if (!raw) {
+      if (CHAIN_ID !== 31337) {
+        errors.push(`${envVar} is missing (required for ${name} on chain ${CHAIN_ID}).`);
+      } else if (!resolveAddress(name)) {
+        errors.push(`Local ${name} address could not be resolved (set ${envVar} or check deployments.json).`);
       }
-    }
-  } else {
-    // Local devnet (31337) checks: verify addresses resolved from env or deployments.json
-    for (const name of Object.keys(ADDRESS_ENV)) {
-      if (!resolveAddress(name)) {
-        errors.push(`Local ${name} address could not be resolved (set ${ADDRESS_ENV[name]} or check deployments.json).`);
-      }
+    } else if (!HEX_ADDRESS.test(raw)) {
+      errors.push(`${envVar} is malformed ("${raw}" is not a valid 20-byte hex address).`);
     }
   }
 

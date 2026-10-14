@@ -29,6 +29,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
     isConnected,
     isCorrectNetwork,
     chainId,
+    connectedChainId,
     roles,
     escrowBalances,
     tokenBalance,
@@ -213,7 +214,7 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
   // 1. Trading Unavailable State (Wallet connected, but unregistered on-chain)
   if (isConnected && !canBuy && !canSell && !isDisallowedRole) {
     const failureReason = !isCorrectNetwork
-      ? `Wallet is connected to network (${chainId}). Required ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh network'} (Chain ID ${DEFAULT_CHAIN_ID}).`
+      ? `Wallet is connected to network (${connectedChainId ?? chainId}). Required ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh network'} (Chain ID ${DEFAULT_CHAIN_ID}).`
       : !roles.isParticipant
       ? `Address ${address?.slice(0, 8)}...${address?.slice(-6)} is not registered in ParticipantRegistry on chain ${DEFAULT_CHAIN_ID}.`
       : side === OrderSide.BUY && escrowBalances.free === 0n && tokenBalance === 0n

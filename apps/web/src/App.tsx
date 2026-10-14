@@ -139,6 +139,16 @@ export default function App() {
           chain: voltmeshTestnet,
           transport: http(SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl),
         });
+        // Guard: reading a view on an address with no deployed bytecode returns "0x",
+        // surfacing as an opaque ContractFunctionZeroDataError. Skip cleanly instead.
+        const code = await publicClient.getCode({ address: oracleConfig.address });
+        if (!code || code === '0x') {
+          console.warn(
+            `[app] EpochOracle has no deployed code at ${oracleConfig.address} on chain ${DEFAULT_CHAIN_ID}. ` +
+              `Using locally-derived interval. Deploy contracts or fix VITE_*_ADDRESS / VITE_CHAIN_ID.`
+          );
+          return;
+        }
         const onChainInterval = (await publicClient.readContract({
           address: oracleConfig.address,
           abi: oracleConfig.abi,

@@ -29,6 +29,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
   const {
     address,
     chainId,
+    connectedChainId,
     isCorrectNetwork,
     ethBalance,
     tokenBalance,
@@ -303,7 +304,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onOpe
                   }`}
                 />
                 <span className="font-semibold text-white">
-                  {isCorrectNetwork ? (SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? `Chain ${DEFAULT_CHAIN_ID}`) : `Chain ID ${chainId ?? 'Unknown'}`}
+                  {isCorrectNetwork ? (SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? `Chain ${DEFAULT_CHAIN_ID}`) : `Chain ID ${connectedChainId ?? 'Unknown'}`}
                 </span>
               </div>
               <span className={`text-[11px] font-semibold ${isCorrectNetwork ? 'text-emerald-400' : 'text-amber-400'}`}>

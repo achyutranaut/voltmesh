@@ -16,7 +16,7 @@ import { useSession } from '../../auth/SessionContext';
  */
 export const ConfigBanner: React.FC = () => {
   const { session } = useSession();
-  const { isConnected, isCorrectNetwork, chainId, switchNetwork, address, detectedRole, rolesLoading, rolesError } = useWallet();
+  const { isConnected, isCorrectNetwork, chainId, connectedChainId, switchNetwork, address, detectedRole, rolesLoading, rolesError } = useWallet();
   const [switching, setSwitching] = useState(false);
 
   const configErrors = useMemo(() => getConfigErrors(), []);
@@ -68,7 +68,7 @@ export const ConfigBanner: React.FC = () => {
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400" />
             <span>
-              Wrong network (connected to chain <span className="text-amber-100 font-semibold">{chainId ?? 'unknown'}</span>).
+              Wrong network (connected to chain <span className="text-amber-100 font-semibold">{connectedChainId ?? 'unknown'}</span>).
               Transactions are blocked until you switch to <span className="text-amber-100 font-semibold">{netName}</span> (chain {DEFAULT_CHAIN_ID}).
             </span>
           </div>
