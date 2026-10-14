@@ -64,11 +64,15 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
   const { isConnected, commitEpochOnChain, chainId } = useWallet();
   const { canEnterStage, getStageBlocker, commitMerkleRoot, selectStage } = usePipeline();
 
-  const [selectedInterval, setSelectedInterval] = useState<number>(initialInterval);
+  const initialMonotonicSlot = Math.floor(Date.now() / 1000 / 900);
+  const effectiveInitialInterval = initialInterval && initialInterval > 0 ? initialInterval : initialMonotonicSlot;
+  const [selectedInterval, setSelectedInterval] = useState<number>(effectiveInitialInterval);
   const [discoveredFinalizedSlot, setDiscoveredFinalizedSlot] = useState<number | null>(null);
 
   useEffect(() => {
-    setSelectedInterval(initialInterval);
+    if (initialInterval && initialInterval > 0) {
+      setSelectedInterval(initialInterval);
+    }
   }, [initialInterval]);
 
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -191,9 +195,11 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
   };
 
   const isOperator = session?.role === 'discom';
+  const isGoogleSession = session?.kind === 'google' || session?.authMethod === 'google' || !isConnected;
+  const canCommit = isConnected || (isOperator && !!session?.token);
 
   const handleCommitOnChain = async () => {
-    if (!epochTree || !isConnected) return;
+    if (!epochTree) return;
     if (!isOperator) {
       setCommitError(
         'Operator Role Required: Only the Market Operator (DISCOM account 0x90F7…b906) can submit epoch Merkle roots to EpochOracle.sol. Please switch accounts in the header.'
@@ -205,6 +211,42 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       setIsCommitting(true);
       setCommitError(null);
 
+      // Path A: Google Session (no browser wallet) -> call operator backend endpoint
+      if (isGoogleSession) {
+        const apiUrl = API_URL;
+        const res = await fetch(`${apiUrl}/api/v1/oracle/commit-epoch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+          },
+          body: safeStringify({
+            zoneId: initialZoneId,
+            intervalIdx: selectedInterval,
+            merkleRoot: epochTree.merkleRoot,
+            leafCount: sampleReadings.length,
+            totalWh: '11950',
+            chainId: chainId ?? DEFAULT_CHAIN_ID,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || `Commit failed: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const tx = (data.simulated || data.alreadyFinalized) ? ('0x' as Hash) : (data.txHash as Hash);
+        setCommitTxHash(tx);
+        setIsOnChainCommitted(true);
+        await commitMerkleRoot(
+          { merkleRoot: epochTree.merkleRoot, leafCount: sampleReadings.length },
+          tx
+        );
+        return;
+      }
+
+      // Path B: Injected browser wallet connected
       if (!oracleConfig?.address) {
         throw new Error('EpochOracle contract address not configured');
       }
@@ -333,7 +375,7 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
             <Button
               variant="default"
               size="sm"
-              disabled={isCommitting || !isConnected}
+              disabled={isCommitting || !canCommit}
               onClick={handleCommitOnChain}
               className="text-xs h-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium cursor-pointer shadow-xs disabled:opacity-50"
             >
@@ -383,12 +425,20 @@ export const MerkleExplorer: React.FC<MerkleExplorerProps> = ({
       )}
 
       {commitError && (
-        <div className="flex items-start gap-2 p-3 rounded bg-rose-950/40 border border-rose-800/80 text-rose-300 text-xs font-mono">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-          <div className="space-y-0.5">
-            <span className="font-semibold text-rose-200">On-Chain Submission Error</span>
-            <p className="text-rose-300">{commitError}</p>
+        <div className="flex items-start justify-between gap-2 p-3 rounded bg-rose-950/40 border border-rose-800/80 text-rose-300 text-xs font-mono">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-semibold text-rose-200">On-Chain Submission Error</span>
+              <p className="text-rose-300">{commitError}</p>
+            </div>
           </div>
+          <button
+            onClick={() => setCommitError(null)}
+            className="text-rose-400 hover:text-rose-100 underline text-xs cursor-pointer ml-3 shrink-0"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

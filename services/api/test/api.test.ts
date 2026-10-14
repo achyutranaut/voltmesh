@@ -362,6 +362,70 @@ describe('Modular Monolith API Server', () => {
       expect(spoofRes.statusCode).toBe(400);
     });
 
+    it('processes operator requests to commit epoch to EpochOracle', async () => {
+      // 1. Unauthenticated request rejected with 401
+      const unauth = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/commit-epoch',
+        payload: {
+          zoneId: 1,
+          intervalIdx: Math.floor(Date.now() / 1000 / 900),
+          merkleRoot: '0x' + '22'.repeat(32),
+        },
+      });
+      expect(unauth.statusCode).toBe(401);
+
+      // 2. Non-operator role rejected with 403
+      const nonOpToken = app.jwt.sign({ address: '0x1111111111111111111111111111111111111111', role: 'PARTICIPANT' });
+      const forbidden = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/commit-epoch',
+        headers: { authorization: `Bearer ${nonOpToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: Math.floor(Date.now() / 1000 / 900),
+          merkleRoot: '0x' + '22'.repeat(32),
+        },
+      });
+      expect(forbidden.statusCode).toBe(403);
+
+      // 3. Operator succeeds and returns txHash
+      const currentSlot = Math.floor(Date.now() / 1000 / 900);
+      const operatorToken = app.jwt.sign({ address: testWallet, role: 'DISCOM' });
+      const successRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/commit-epoch',
+        headers: { authorization: `Bearer ${operatorToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: currentSlot,
+          merkleRoot: '0x' + '22'.repeat(32),
+          leafCount: 4,
+          totalWh: '11950',
+        },
+      });
+      expect(successRes.statusCode).toBe(200);
+      const data = JSON.parse(successRes.payload);
+      expect(data.txHash).toBeDefined();
+      expect(data.zoneId).toBe(1);
+      expect(data.intervalIdx).toBe(currentSlot);
+      expect(data.merkleRoot).toBe('0x' + '22'.repeat(32));
+
+      // 4. Spoofed chainId is rejected with 400
+      const spoofRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/oracle/commit-epoch',
+        headers: { authorization: `Bearer ${operatorToken}` },
+        payload: {
+          zoneId: 1,
+          intervalIdx: currentSlot,
+          merkleRoot: '0x' + '22'.repeat(32),
+          chainId: 1,
+        },
+      });
+      expect(spoofRes.statusCode).toBe(400);
+    });
+
     it('processes authenticated faucet requests on testnet', async () => {
       // 1. Unauthenticated request to faucet returns 401
       const unauthRes = await app.inject({

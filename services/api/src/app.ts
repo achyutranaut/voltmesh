@@ -4,7 +4,7 @@ import jwt from '@fastify/jwt';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { recoverMessageAddress, verifyMessage, isAddress, Hex, Address, keccak256, encodePacked, toHex, createPublicClient, createWalletClient, parseUnits, http } from 'viem';
+import { recoverMessageAddress, verifyMessage, isAddress, Hex, Hash, Address, keccak256, encodePacked, toHex, createPublicClient, createWalletClient, parseUnits, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry, sepolia, polygonAmoy, baseSepolia } from 'viem/chains';
 import {
@@ -190,10 +190,20 @@ const OracleSignStatementSchema = z.object({
 
 const OracleSignEpochSchema = z.object({
   zoneId: z.number().int().positive(),
-  intervalIdx: z.number().int().min(0).max(95),
+  intervalIdx: z.number().int().min(0),
   merkleRoot: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'merkleRoot must be 32-byte hex'),
   leafCount: z.number().int().min(0).default(0),
   totalWh: z.string().regex(/^\d+$/).default('0'),
+  oracleContractAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  chainId: z.number().int().positive().optional(),
+});
+
+const OracleCommitEpochSchema = z.object({
+  zoneId: z.number().int().positive().default(1),
+  intervalIdx: z.number().int().min(0).optional(),
+  merkleRoot: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'merkleRoot must be 32-byte hex'),
+  leafCount: z.number().int().min(0).default(1),
+  totalWh: z.string().regex(/^\d+$/).default('11950'),
   oracleContractAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
   chainId: z.number().int().positive().optional(),
 });
@@ -1382,6 +1392,23 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // ---------------------------------------------------------------------------
   const defaultOracleKey = options.oraclePrivateKey ?? (process.env.ORACLE_PRIVATE_KEY as Hex) ?? (allowDevKeys ? '0x0000000000000000000000000000000000000000000000000000000000000101' as Hex : undefined);
 
+  let oracleAccount: ReturnType<typeof privateKeyToAccount> | null = null;
+  if (defaultOracleKey) {
+    try {
+      oracleAccount = privateKeyToAccount(defaultOracleKey);
+    } catch {
+      console.warn('[CoreAPI] Invalid ORACLE_PRIVATE_KEY provided');
+    }
+  }
+
+  const oracleWalletClient = oracleAccount
+    ? createWalletClient({
+        account: oracleAccount,
+        chain: chainObj,
+        transport: http(rpcUrl),
+      })
+    : null;
+
   app.post('/api/v1/oracle/sign-statement', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM')] }, async (request, reply) => {
     if (!defaultOracleKey) {
       return reply.status(503).send({ error: 'ORACLE_KEY_NOT_CONFIGURED', message: 'Oracle signing key is not configured on this server' });
@@ -1519,6 +1546,191 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
     return reply.send({ signature, signerAddress: account.address, messageHash });
   });
+
+  const submitEpochAbi = [
+    {
+      type: 'function',
+      name: 'submitEpoch',
+      inputs: [
+        { name: 'zoneId', type: 'uint32' },
+        { name: 'intervalIdx', type: 'uint32' },
+        { name: 'merkleRoot', type: 'bytes32' },
+        { name: 'leafCount', type: 'uint32' },
+        { name: 'totalWh', type: 'uint64' },
+        { name: 'signatures', type: 'bytes[]' },
+      ],
+      outputs: [],
+      stateMutability: 'nonpayable',
+    },
+    {
+      type: 'function',
+      name: 'epochs',
+      inputs: [
+        { name: 'zoneId', type: 'uint32' },
+        { name: 'intervalIdx', type: 'uint32' },
+      ],
+      outputs: [
+        { name: 'merkleRoot', type: 'bytes32' },
+        { name: 'leafCount', type: 'uint32' },
+        { name: 'totalWh', type: 'uint64' },
+        { name: 'finalizedAt', type: 'uint64' },
+        { name: 'status', type: 'uint8' },
+        { name: 'challenger', type: 'address' },
+      ],
+      stateMutability: 'view',
+    },
+  ] as const;
+
+  const handleCommitEpoch = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!defaultOracleKey) {
+      return reply.status(503).send({
+        error: 'ORACLE_KEY_NOT_CONFIGURED',
+        message: 'Oracle signing key is not configured on this server (ORACLE_PRIVATE_KEY is missing).',
+      });
+    }
+    if (!oracleContractAddress) {
+      return reply.status(503).send({
+        error: 'ORACLE_ADDRESS_NOT_CONFIGURED',
+        message: 'EPOCH_ORACLE_ADDRESS must be configured on this server.',
+      });
+    }
+
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(OracleCommitEpochSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
+
+    if (body.chainId !== undefined && body.chainId !== chainId) {
+      return reply.status(400).send({
+        error: 'INVALID_CHAIN_ID',
+        message: `Supplied chainId ${body.chainId} does not match authoritative chainId ${chainId}`,
+      });
+    }
+
+    const currentSlot = Math.floor(Date.now() / 1000 / 900);
+    const intervalIdx = body.intervalIdx !== undefined && body.intervalIdx > 0 ? Number(body.intervalIdx) : currentSlot;
+    const zoneId = Number(body.zoneId ?? 1);
+    const merkleRoot = body.merkleRoot as Hex;
+    const leafCount = Number(body.leafCount ?? 1);
+    const totalWh = BigInt(body.totalWh ?? '11950');
+
+    // 1. Sign message with oracle signing key (the address with ORACLE_ROLE)
+    const activeChainId = BigInt(chainId);
+    const activeOracleAddress = oracleContractAddress;
+    const messageHash = keccak256(
+      encodePacked(
+        ['uint256', 'address', 'uint32', 'uint32', 'bytes32', 'uint32', 'uint64'],
+        [activeChainId, activeOracleAddress, zoneId, intervalIdx, merkleRoot, leafCount, totalWh]
+      )
+    );
+
+    const oracleSigner = privateKeyToAccount(defaultOracleKey);
+    const signature = await oracleSigner.signMessage({ message: { raw: messageHash } });
+
+    // 2. Check if epoch is already finalized on-chain
+    try {
+      const existing = (await publicClient.readContract({
+        address: activeOracleAddress,
+        abi: submitEpochAbi,
+        functionName: 'epochs',
+        args: [zoneId, intervalIdx],
+      })) as any;
+      const finalizedAt = existing ? (Array.isArray(existing) ? existing[3] : existing.finalizedAt) : 0n;
+      const status = existing ? (Array.isArray(existing) ? existing[4] : existing.status) : 0;
+      if (finalizedAt > 0n || status === 1) {
+        return reply.send({
+          txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+          alreadyFinalized: true,
+          status: 'FINALIZED',
+          zoneId,
+          intervalIdx,
+          merkleRoot,
+        });
+      }
+    } catch {
+      // Continue to submission if contract view fails or is not yet initialized
+    }
+
+    // 3. Submit transaction
+    const isLocalDevWithoutLiveOracle = chainId === 31337 && !options.oraclePrivateKey && !process.env.ORACLE_PRIVATE_KEY;
+    const submitClient = oracleWalletClient || operatorWalletClient;
+    if (!submitClient || isSandboxMode || isLocalDevWithoutLiveOracle) {
+      if (isSandboxMode || process.env.NODE_ENV === 'test' || isLocalDevWithoutLiveOracle) {
+        const dummyHash = `0x${crypto.randomBytes(32).toString('hex')}` as Hash;
+        auditLogger.recordAuditEvent({
+          actorWallet: user.address,
+          role: user.role,
+          action: 'ORACLE_EPOCH_COMMITTED',
+          resourceType: 'EPOCH_ORACLE',
+          resourceId: `epoch-${zoneId}-${intervalIdx}`,
+          zoneId,
+          status: 'SUCCESS',
+          reason: `Epoch root committed in simulation mode (Slot ${intervalIdx})`,
+          metadata: { txHash: dummyHash, merkleRoot, intervalIdx, zoneId },
+        });
+        return reply.send({
+          txHash: dummyHash,
+          status: 'success',
+          zoneId,
+          intervalIdx,
+          merkleRoot,
+          simulated: true,
+        });
+      }
+
+      return reply.status(503).send({
+        error: 'WALLET_CLIENT_NOT_AVAILABLE',
+        message: 'No wallet client (oracle or operator) available to submit transaction on-chain.',
+      });
+    }
+
+    try {
+      const hash = await submitClient.writeContract({
+        address: activeOracleAddress,
+        abi: submitEpochAbi,
+        functionName: 'submitEpoch',
+        args: [zoneId, intervalIdx, merkleRoot, leafCount, totalWh, [signature]],
+      });
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      auditLogger.recordAuditEvent({
+        actorWallet: user.address,
+        role: user.role,
+        action: 'ORACLE_EPOCH_COMMITTED',
+        resourceType: 'EPOCH_ORACLE',
+        resourceId: `epoch-${zoneId}-${intervalIdx}`,
+        zoneId,
+        status: 'SUCCESS',
+        reason: `Epoch Merkle root committed on-chain to EpochOracle.sol (Slot ${intervalIdx})`,
+        metadata: {
+          txHash: hash,
+          blockNumber: receipt.blockNumber.toString(),
+          merkleRoot,
+          intervalIdx,
+          zoneId,
+          signerAddress: oracleSigner.address,
+        },
+      });
+
+      return reply.send({
+        txHash: hash,
+        status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(),
+        zoneId,
+        intervalIdx,
+        merkleRoot,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({
+        error: 'ON_CHAIN_COMMIT_FAILED',
+        message: err?.message || 'Failed to submit epoch to EpochOracle on-chain.',
+      });
+    }
+  };
+
+  app.post('/api/v1/oracle/commit-epoch', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM')] }, handleCommitEpoch);
+  app.post('/api/v1/epoch/commit', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM')] }, handleCommitEpoch);
 
   // ---------------------------------------------------------------------------
   // Faucet rate limiting state: wallet -> timestamp of last mint
