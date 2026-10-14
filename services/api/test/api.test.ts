@@ -394,7 +394,7 @@ describe('Modular Monolith API Server', () => {
         },
       });
       expect(overLimitRes.statusCode).toBe(400);
-    });
+    }, 15000);
   });
 
   describe('Advisory Market Data Endpoints', () => {

@@ -187,7 +187,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [flow, setFlow] = useState<PipelineFlowIdentity>(() => ({
     flowId: '',
     zoneId: 1,
-    intervalIdx: 48,
+    intervalIdx: Math.floor(Date.now() / 1000 / 900),
     sellerAddress: '',
     buyerAddress: '',
     sellerOrderId: '',
@@ -357,7 +357,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
     async (targetInterval?: number, targetZone?: number) => {
       const zone = targetZone ?? flow.zoneId ?? 1;
       const currentAbsoluteSlot = Math.floor(Date.now() / 1000 / 900);
-      let interval = targetInterval ?? (flow.intervalIdx && flow.intervalIdx > 0 ? flow.intervalIdx : currentAbsoluteSlot);
+      let interval = targetInterval ?? currentAbsoluteSlot;
       if (!interval) return;
 
       try {
@@ -661,12 +661,18 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Stage 01: Meter Reading
   const recordMeterReading = useCallback(
     (envelope: AttestationEnvelope, isSimulated: boolean = true) => {
+      const slot = Number(envelope.payload.intervalIdx);
+      setFlow((prev) => ({
+        ...prev,
+        intervalIdx: slot,
+        updatedAt: Date.now(),
+      }));
       setStages((prev) => {
         const next = { ...prev };
         next.METER = {
           ...next.METER,
           status: 'COMPLETED',
-          statusMessage: `Reading received: ${envelope.payload.energyWh.toString()} Wh`,
+          statusMessage: `Reading received: ${envelope.payload.energyWh.toString()} Wh (Slot ${slot})`,
           sourceType: isSimulated ? 'SIMULATED' : 'OFF-CHAIN',
           completedAt: Date.now(),
           data: envelope.payload,
@@ -1163,7 +1169,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
     setFlow({
       flowId: id,
       zoneId: 1,
-      intervalIdx: 48,
+      intervalIdx: Math.floor(Date.now() / 1000 / 900),
       sellerAddress: '',
       buyerAddress: '',
       sellerOrderId: '',

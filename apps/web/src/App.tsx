@@ -124,11 +124,13 @@ export default function App() {
     executeClearing,
     canExecuteStage,
     syncActiveInterval,
+    stages,
   } = usePipeline();
 
   // Interval & Simulation State: Monotonic 15-minute interval matching EpochOracle.sol
   const initialMonotonicInterval = Math.floor(Date.now() / 1000 / 900);
   const [currentInterval, setCurrentInterval] = useState<number>(initialMonotonicInterval);
+  const [meterError, setMeterError] = useState<string | null>(null);
 
   useEffect(() => {
     async function syncOnChainInterval() {
@@ -168,7 +170,21 @@ export default function App() {
       }
     }
     syncOnChainInterval();
-  }, []);
+
+    // Advance local monotonic slot every 10 seconds if real-time has rolled over
+    const clockTimer = setInterval(() => {
+      const realTimeSlot = Math.floor(Date.now() / 1000 / 900);
+      setCurrentInterval((prev) => {
+        if (prev !== realTimeSlot) {
+          syncActiveInterval(realTimeSlot);
+          return realTimeSlot;
+        }
+        return prev;
+      });
+    }, 10000);
+
+    return () => clearInterval(clockTimer);
+  }, [syncActiveInterval]);
 
   const [ratedCapacity, setRatedCapacity] = useState<number>(5000);
   const [activeFault, setActiveFault] = useState<SimulatedFault>(SimulatedFault.NONE);
@@ -190,29 +206,58 @@ export default function App() {
 
   // 1. Generate Meter Reading
   const handleGenerateReading = () => {
-    if (!can(session?.role, 'meter.generate')) return;
-    const sim = new MeterSimulator({
-      deviceId: 'meter-delhi-solar-001',
-      zoneId: 1,
-      sourceType: SourceType.SOLAR_PV,
-      ratedCapacityW: BigInt(ratedCapacity),
-    });
+    if (!can(session?.role, 'meter.generate')) {
+      setMeterError(`Role "${session?.role ?? 'anonymous'}" is not authorized to emit meter readings.`);
+      return;
+    }
+    setMeterError(null);
 
-    const res = sim.emitReading(currentInterval, activeFault);
-    if ('original' in res) {
-      setLatestEnvelope(res.original);
-      setEquivocationEnvelope(res.equivocation);
-      const valid = verifyEd25519(res.original.signature, res.original.rawPayloadBytes, res.original.publicKey);
+    try {
+      // Ensure reading is generated for the current monotonic slot
+      const currentSlot = Math.floor(Date.now() / 1000 / 900);
+      setCurrentInterval(currentSlot);
+      syncActiveInterval(currentSlot);
+
+      const sim = new MeterSimulator({
+        deviceId: 'meter-delhi-solar-001',
+        zoneId: 1,
+        sourceType: SourceType.SOLAR_PV,
+        ratedCapacityW: BigInt(ratedCapacity),
+      });
+
+      const res = sim.emitReading(currentSlot, activeFault);
+      if ('original' in res) {
+        setLatestEnvelope(res.original);
+        setEquivocationEnvelope(res.equivocation);
+        const valid = verifyEd25519(res.original.signature, res.original.rawPayloadBytes, res.original.publicKey);
+        setSigValid(valid);
+        recordMeterReading(res.original, true);
+      } else {
+        setLatestEnvelope(res);
+        setEquivocationEnvelope(null);
+        const valid = verifyEd25519(res.signature, res.rawPayloadBytes, res.publicKey);
+        setSigValid(valid);
+        recordMeterReading(res, true);
+      }
+    } catch (err: any) {
+      console.error('Failed to emit meter reading:', err);
+      setMeterError(err?.message || 'Failed to emit meter reading');
+    }
+  };
+
+  const handleVerifyAttestation = () => {
+    if (!latestEnvelope) {
+      setMeterError('No meter reading available to verify.');
+      return;
+    }
+    setMeterError(null);
+    try {
+      const valid = verifyEd25519(latestEnvelope.signature, latestEnvelope.rawPayloadBytes, latestEnvelope.publicKey);
       setSigValid(valid);
-      recordMeterReading(res.original, true);
-      verifyAttestation(res.original, valid);
-    } else {
-      setLatestEnvelope(res);
-      setEquivocationEnvelope(null);
-      const valid = verifyEd25519(res.signature, res.rawPayloadBytes, res.publicKey);
-      setSigValid(valid);
-      recordMeterReading(res, true);
-      verifyAttestation(res, valid);
+      verifyAttestation(latestEnvelope, valid);
+    } catch (err: any) {
+      console.error('Failed to verify attestation:', err);
+      setMeterError(err?.message || 'Failed to verify cryptographic attestation');
     }
   };
 
@@ -480,6 +525,10 @@ export default function App() {
                 equivocationEnvelope={equivocationEnvelope}
                 sigValid={sigValid}
                 onSelectDetail={(detail) => setDetailDrawerData(detail)}
+                error={meterError}
+                onClearError={() => setMeterError(null)}
+                onVerifyAttestation={handleVerifyAttestation}
+                attestationReady={stages.ATTESTATION.status === 'READY'}
               />
             )}
 

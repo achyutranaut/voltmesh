@@ -42,7 +42,7 @@ export const ROLES: Record<Role, RoleInfo> = {
     label: 'Market operator (DISCOM)',
     summary: 'Clears the market, builds epochs, and runs fault drills.',
     tabs: ALL_TABS,
-    actions: ['market.clear', 'epoch.build', 'fault.inject'],
+    actions: ['meter.generate', 'market.clear', 'epoch.build', 'fault.inject'],
   },
   regulator: {
     label: 'Regulator',

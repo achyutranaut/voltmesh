@@ -27,6 +27,10 @@ export interface MetersViewProps {
   equivocationEnvelope: AttestationEnvelope | null;
   sigValid: boolean | null;
   onSelectDetail: (detail: DetailDrawerData) => void;
+  error?: string | null;
+  onClearError?: () => void;
+  onVerifyAttestation?: () => void;
+  attestationReady?: boolean;
 }
 
 export const MetersView: React.FC<MetersViewProps> = ({
@@ -40,6 +44,10 @@ export const MetersView: React.FC<MetersViewProps> = ({
   equivocationEnvelope,
   sigValid,
   onSelectDetail,
+  error,
+  onClearError,
+  onVerifyAttestation,
+  attestationReady,
 }) => {
   const { currentGhi } = useMarketData(1);
 
@@ -147,6 +155,24 @@ export const MetersView: React.FC<MetersViewProps> = ({
 
   return (
     <div className="w-full space-y-6 font-sans text-zinc-300">
+      {/* Error Banner */}
+      {error && (
+        <div className="w-full bg-rose-950/80 border border-rose-700/80 text-rose-200 px-4 py-2.5 rounded-md text-xs font-mono flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{error}</span>
+          </div>
+          {onClearError && (
+            <button
+              onClick={onClearError}
+              className="text-rose-400 hover:text-rose-100 text-xs cursor-pointer ml-3 shrink-0 underline"
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 1. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.07]">
         <div className="space-y-1">
@@ -173,6 +199,18 @@ export const MetersView: React.FC<MetersViewProps> = ({
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Emit meter reading
           </Button>
+
+          {attestationReady && onVerifyAttestation && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onVerifyAttestation}
+              className="text-xs h-8 border-emerald-500/40 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 font-medium cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
+              Verify attestation
+            </Button>
+          )}
         </div>
       </div>
 

@@ -36,6 +36,7 @@ export const ProofPipeline: React.FC<ProofPipelineProps> = ({
     oracleQuorumCount,
     advanceOracleQuorum,
     signAllOracles,
+    verifyAttestation,
     retryStage,
     resetPipeline,
   } = usePipeline();
@@ -256,6 +257,32 @@ export const ProofPipeline: React.FC<ProofPipelineProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {currentStage.id === 'ATTESTATION' && currentStage.status === 'READY' && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    const payload = currentStage.data || {
+                      deviceId: 'meter-delhi-solar-001',
+                      intervalIdx: flow.intervalIdx,
+                      energyWh: 5000n,
+                    };
+                    verifyAttestation(
+                      {
+                        payload,
+                        signature: '0x' + '0'.repeat(128),
+                        publicKey: '0x' + '0'.repeat(64),
+                        rawPayloadBytes: new Uint8Array(),
+                      } as any,
+                      true
+                    );
+                  }}
+                  className="text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer"
+                >
+                  Verify attestation
+                </Button>
+              )}
+
               {currentStage.id === 'ORACLE' && currentStage.status !== 'COMPLETED' && (
                 <div className="flex items-center space-x-2">
                   <Button
