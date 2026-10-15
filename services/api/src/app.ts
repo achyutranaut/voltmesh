@@ -203,8 +203,8 @@ const SettlementExecuteSchema = z.object({
   intervalIdx: z.number().int().nonnegative().optional(),
   dateEpoch: z.number().int().positive().optional(),
   statementRoot: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'statementRoot must be 32-byte hex'),
-  totalCreditsPaise: z.string().regex(/^\d+$/).default('0'),
-  totalDebitsPaise: z.string().regex(/^\d+$/).default('0'),
+  totalCreditsPaise: z.string().regex(/^\d+$/, 'totalCreditsPaise must be a valid numeric string in paise'),
+  totalDebitsPaise: z.string().regex(/^\d+$/, 'totalDebitsPaise must be a valid numeric string in paise'),
 });
 
 const OracleSignEpochSchema = z.object({
@@ -2972,8 +2972,15 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     if (!validated) return;
     const body = validated;
 
+    if (body.totalCreditsPaise === undefined || body.totalDebitsPaise === undefined) {
+      return reply.status(400).send({
+        error: 'MISSING_SETTLEMENT_VALUES',
+        message: 'Both totalCreditsPaise and totalDebitsPaise are required settlement financial values.',
+      });
+    }
+
     let dateEpoch = body.dateEpoch ?? Math.floor(Date.now() / 86400000);
-    const zoneId = body.zoneId;
+    const zoneId = body.zoneId ?? 1;
     const totalCredits = BigInt(body.totalCreditsPaise);
     const totalDebits = BigInt(body.totalDebitsPaise);
 

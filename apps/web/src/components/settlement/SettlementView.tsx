@@ -417,18 +417,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>SETTLEMENT COMPLETED ON-CHAIN</span>
               </div>
-            ) : !canExecuteSettlement(session?.role) ? (
-              <Button
-                variant="default"
-                size="sm"
-                disabled
-                className="bg-white/[0.04] text-zinc-500 font-bold text-xs cursor-not-allowed border border-white/[0.07] opacity-60"
-                title="Only Operator or Regulator can execute settlement"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-                OPERATOR/REGULATOR ONLY
-              </Button>
-            ) : (
+            ) : canExecuteSettlement(session?.role) ? (
               <Button
                 variant="default"
                 size="sm"
@@ -448,7 +437,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
                   </>
                 )}
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
 

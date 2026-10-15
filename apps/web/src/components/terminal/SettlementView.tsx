@@ -287,33 +287,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2.5">
-          {!canExecuteSettlement(session?.role) ? (
-            <Button
-              variant="default"
-              size="sm"
-              disabled
-              className="text-xs h-8 font-medium bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]"
-              title="Only Operator or Regulator can execute settlement"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-              Operator/regulator only
-            </Button>
-          ) : stages.SETTLEMENT.status !== 'COMPLETED' ? (
-            <Button
-              variant="default"
-              size="sm"
-              disabled={isSettlingBatch || (!isConnected && session?.kind !== 'google') || !canExecuteStage('SETTLEMENT')}
-              onClick={handleExecuteSettlement}
-              className={`text-xs h-8 font-medium cursor-pointer ${
-                canExecuteStage('SETTLEMENT')
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-xs'
-                  : 'bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-              {isSettlingBatch ? 'Executing on-chain...' : 'Execute T+1 batch settlement'}
-            </Button>
-          ) : (
+          {stages.SETTLEMENT.status === 'COMPLETED' ? (
             <div className="flex items-center space-x-1.5 text-xs text-emerald-400">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Settlement finalized</span>
@@ -329,7 +303,22 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
                 </a>
               )}
             </div>
-          )}
+          ) : canExecuteSettlement(session?.role) ? (
+            <Button
+              variant="default"
+              size="sm"
+              disabled={isSettlingBatch || (!isConnected && session?.kind !== 'google') || !canExecuteStage('SETTLEMENT')}
+              onClick={handleExecuteSettlement}
+              className={`text-xs h-8 font-medium cursor-pointer ${
+                canExecuteStage('SETTLEMENT')
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-xs'
+                  : 'bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+              {isSettlingBatch ? 'Executing on-chain...' : 'Execute T+1 batch settlement'}
+            </Button>
+          ) : null}
         </div>
       </div>
 
