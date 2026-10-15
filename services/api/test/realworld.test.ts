@@ -454,7 +454,7 @@ describe('Real-World DISCOM P2P Market API Integration', () => {
     expect(postRejectRes.statusCode).toBe(400);
   });
 
-  it('12. Audit Participant Role Authorization (Pure Consumer cannot submit SELL ask)', async () => {
+  it('12. Audit Participant Role Authorization (Pure Consumer can submit SELL ask)', async () => {
     // Issue VC for Pure Consumer (solarCapacityKw = 0)
     await app.inject({
       method: 'POST',
@@ -463,7 +463,7 @@ describe('Real-World DISCOM P2P Market API Integration', () => {
       payload: { consumerNumber: '1008765432' }, // Consumer account
     });
 
-    // Attempt to submit a SELL ask from Pure Consumer
+    // Attempt to submit a SELL ask from Pure Consumer -> allowed for registered accounts
     const sellRes = await app.inject({
       method: 'POST',
       url: '/api/v1/orders',
@@ -477,8 +477,8 @@ describe('Real-World DISCOM P2P Market API Integration', () => {
         expiry: Math.floor(Date.now() / 1000) + 7200,
       },
     });
-    expect(sellRes.statusCode).toBe(403);
+    expect(sellRes.statusCode).toBe(201);
     const body = JSON.parse(sellRes.payload);
-    expect(body.error).toContain('CONSUMER');
+    expect(body.orderId).toBeDefined();
   });
 });

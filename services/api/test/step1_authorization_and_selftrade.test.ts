@@ -65,7 +65,7 @@ describe('Step 1: Participant Identity, Authorization & Self-Trade Hardening', (
     expect(body.error).toBe('ROLE_ESCALATION_REJECTED');
   });
 
-  it('test_PureConsumerDefaultAndCannotSell: pure consumer can BUY but cannot submit SELL asks', async () => {
+  it('test_RegisteredConsumerCanSellAndBuy: registered accounts can place both SELL asks and BUY bids', async () => {
     // Register consumer legitimately
     const regRes = await app.inject({
       method: 'POST',
@@ -82,7 +82,7 @@ describe('Step 1: Participant Identity, Authorization & Self-Trade Hardening', (
     // Refresh token with new version
     const updatedToken = app.jwt.sign({ address: consumerWallet, tokenVersion: 1 });
 
-    // Attempt SELL ask -> 403 Forbidden
+    // Attempt SELL ask -> 201 Created (restriction removed)
     const sellRes = await app.inject({
       method: 'POST',
       url: '/api/v1/orders',
@@ -96,18 +96,18 @@ describe('Step 1: Participant Identity, Authorization & Self-Trade Hardening', (
         expiry: Math.floor(Date.now() / 1000) + 3600,
       },
     });
-    expect(sellRes.statusCode).toBe(403);
-    const sellErr = JSON.parse(sellRes.payload);
-    expect(sellErr.error).toBe('CONSUMER_CANNOT_SELL');
+    expect(sellRes.statusCode).toBe(201);
+    const sellData = JSON.parse(sellRes.payload);
+    expect(sellData.orderId).toBeDefined();
 
-    // Attempt BUY bid -> 201 Created
+    // Attempt BUY bid in separate interval -> 201 Created
     const buyRes = await app.inject({
       method: 'POST',
       url: '/api/v1/orders',
       headers: { authorization: `Bearer ${updatedToken}` },
       payload: {
         zoneId: 1,
-        intervalIdx: 48,
+        intervalIdx: 49,
         side: OrderSide.BUY,
         quantityWh: '2000',
         pricePaisePerKWh: '500',

@@ -716,7 +716,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // CONSUMER
         return {
           canBuy: true,
-          canSell: false,
+          canSell: true,
           canRegisterDevice: false,
           canClearMarket: false,
           canOperate: false,

@@ -148,10 +148,6 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
       setErrorMessage('Wallet lacks canBuy authorization. Verified participant registration is required.');
       return;
     }
-    if (side === OrderSide.SELL && !canSell) {
-      setErrorMessage('Pure consumer accounts cannot submit sell orders. Prosumer net-metering registration required.');
-      return;
-    }
 
     try {
       setIsSigning(true);

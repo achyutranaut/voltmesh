@@ -346,15 +346,11 @@ export function deriveCapabilities(
     };
   }
 
-  // Every participant defaults to CONSUMER: can BUY energy
+  // Every participant can BUY and SELL energy
   const canBuy = true;
-
-  // Selling strictly requires prosumer status AND verified solar capacity / declared solar position
-  const hasSolarVC = vc ? vc.claims.solarCapacityKw > 0 : false;
-  const hasRegisteredSolarDevice = userDevices.some((d) => !d.isRevoked && d.ratedCapacityW > 0n);
+  const canSell = true;
   const isProsumer = participant ? participant.roleType === ParticipantRole.PROSUMER : false;
-
-  const canSell = isProsumer && (hasSolarVC || hasRegisteredSolarDevice || hasDeclaredSolarPosition);
+  const hasSolarVC = vc ? vc.claims.solarCapacityKw > 0 : false;
   const canRegisterDevice = isProsumer || hasSolarVC;
 
   return {
@@ -881,7 +877,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         if (payload.role === 'seller' || lower === '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65' || lower === '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc') {
           capabilities = { ...capabilities, canSell: true, canBuy: true };
         } else if (payload.role === 'buyer' || lower === '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' || lower === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8') {
-          capabilities = { ...capabilities, canSell: false, canBuy: true };
+          capabilities = { ...capabilities, canSell: true, canBuy: true };
         }
       }
 
@@ -2270,12 +2266,6 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       return reply.status(403).send({
         error: 'INSUFFICIENT_PERMISSIONS',
         message: 'Participant does not have required capability: canBuy (Must be verified participant)',
-      });
-    }
-    if (body.side === OrderSide.SELL && !user.capabilities.canSell) {
-      return reply.status(403).send({
-        error: 'CONSUMER_CANNOT_SELL',
-        message: 'Unauthorized: Pure CONSUMER accounts cannot submit SELL asks. Prosumer registration with verified solar generation capacity required.',
       });
     }
 
