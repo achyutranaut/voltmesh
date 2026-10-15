@@ -10,7 +10,7 @@ export type TabId =
 export type Action =
   | 'order.sell' | 'order.buy' | 'escrow.deposit'
   | 'meter.generate' | 'cert.claim' | 'cert.transfer' | 'cert.retire'
-  | 'market.clear' | 'epoch.build' | 'fault.inject';
+  | 'market.clear' | 'epoch.build' | 'fault.inject' | 'settlement.execute';
 
 interface RoleInfo {
   label: string;
@@ -42,13 +42,13 @@ export const ROLES: Record<Role, RoleInfo> = {
     label: 'Market operator (DISCOM)',
     summary: 'Clears the market, builds epochs, and runs fault drills.',
     tabs: ALL_TABS,
-    actions: ['meter.generate', 'market.clear', 'epoch.build', 'fault.inject'],
+    actions: ['meter.generate', 'market.clear', 'epoch.build', 'fault.inject', 'settlement.execute'],
   },
   regulator: {
     label: 'Regulator',
-    summary: 'Read-only audit access to every view.',
+    summary: 'Read-only audit access to every view with settlement execution authority.',
     tabs: ALL_TABS,
-    actions: [],
+    actions: ['settlement.execute'],
   },
 };
 
@@ -75,6 +75,17 @@ export function normalizeRole(rawRole?: string | null, capabilities?: { canSell?
     return null;
   }
   return null;
+}
+
+/**
+ * Shared role-based access check for executing T+1 batch settlement.
+ * Allowed: operator / discom / admin, regulator / auditor.
+ * Disallowed: seller, buyer, anonymous / unauthenticated.
+ */
+export function canExecuteSettlement(role?: Role | string | null): boolean {
+  if (!role) return false;
+  const normalized = normalizeRole(role);
+  return normalized === 'discom' || normalized === 'regulator';
 }
 
 export const can = (role: Role | undefined, action: Action) =>

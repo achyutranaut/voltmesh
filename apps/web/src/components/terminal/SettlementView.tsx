@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { DetailDrawerData, NavigationTab } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
+import { useSession } from '@/auth/SessionContext';
+import { canExecuteSettlement } from '@/auth/permissions';
+import { apiFetch } from '@/lib/api';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
 import { StageLockGate } from './StageLockGate';
 import { SettlementTimeline } from './SettlementTimeline';
@@ -46,14 +49,17 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     selectStage,
   } = usePipeline();
 
+  const { session } = useSession();
   const [depositAmount, setDepositAmount] = useState('100');
   const [withdrawAmount, setWithdrawAmount] = useState('50');
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
   const [isSettlingBatch, setIsSettlingBatch] = useState(false);
-  const [settlementTxHash, setSettlementTxHash] = useState<Hash | null>(null);
+  const [settlementTxHash, setSettlementTxHash] = useState<Hash | null>(stages.SETTLEMENT.txHash ?? null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const activeTxHash = settlementTxHash || stages.SETTLEMENT.txHash;
 
   // Route lock gate check
   const blockerInfo = getStageBlocker('SETTLEMENT');
@@ -224,15 +230,36 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
         ? leaves.reduce((acc, l) => keccak256(encodePacked(['bytes32', 'bytes32'], [acc, l])), leaves[0])
         : keccak256(encodePacked(['uint32', 'uint32'], [1, currentInterval]));
 
-      const tx = await executeSettlementBatchOnChain({
-        zoneId: 1,
-        intervalIdx: currentInterval,
-        statementRoot,
-        totalCreditsPaise,
-        totalDebitsPaise,
-      });
+      let tx: Hash;
+      if (session?.kind === 'google' || !isConnected) {
+        const res = await apiFetch<{ txHash: Hash }>(
+          '/api/v1/settlements/execute',
+          session?.token,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              zoneId: 1,
+              intervalIdx: currentInterval,
+              statementRoot,
+              totalCreditsPaise: totalCreditsPaise.toString(),
+              totalDebitsPaise: totalDebitsPaise.toString(),
+            }),
+          }
+        );
+        tx = res.txHash;
+      } else {
+        tx = await executeSettlementBatchOnChain({
+          zoneId: 1,
+          intervalIdx: currentInterval,
+          statementRoot,
+          totalCreditsPaise,
+          totalDebitsPaise,
+        });
+      }
+
       setSettlementTxHash(tx);
       await executeSettlement(tx);
+      refreshBalances().catch(() => {});
     } catch (err: any) {
       setActionError(err.message || 'Executing settlement batch failed');
     } finally {
@@ -260,11 +287,22 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2.5">
-          {stages.SETTLEMENT.status !== 'COMPLETED' ? (
+          {!canExecuteSettlement(session?.role) ? (
             <Button
               variant="default"
               size="sm"
-              disabled={isSettlingBatch || !isConnected || !canExecuteStage('SETTLEMENT')}
+              disabled
+              className="text-xs h-8 font-medium bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.07]"
+              title="Only Operator or Regulator can execute settlement"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+              Operator/regulator only
+            </Button>
+          ) : stages.SETTLEMENT.status !== 'COMPLETED' ? (
+            <Button
+              variant="default"
+              size="sm"
+              disabled={isSettlingBatch || (!isConnected && session?.kind !== 'google') || !canExecuteStage('SETTLEMENT')}
               onClick={handleExecuteSettlement}
               className={`text-xs h-8 font-medium cursor-pointer ${
                 canExecuteStage('SETTLEMENT')
@@ -279,14 +317,14 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
             <div className="flex items-center space-x-1.5 text-xs text-emerald-400">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Settlement finalized</span>
-              {settlementTxHash && (
+              {activeTxHash && (
                 <a
-                  href={getExplorerTxUrl(settlementTxHash, chainId ?? DEFAULT_CHAIN_ID)}
+                  href={getExplorerTxUrl(activeTxHash, chainId ?? DEFAULT_CHAIN_ID)}
                   target="_blank"
                   rel="noreferrer"
                   className="ml-1 text-zinc-300 hover:text-white flex items-center font-code text-xs"
                 >
-                  <span>{settlementTxHash.slice(0, 8)}...</span>
+                  <span>{activeTxHash.slice(0, 8)}...</span>
                   <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
                 </a>
               )}

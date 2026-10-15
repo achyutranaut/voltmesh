@@ -56,6 +56,9 @@ export const SettlementTable: React.FC<SettlementTableProps> = ({
         <div className="flex items-center space-x-2">
           <span className="font-semibold text-white">Participant netting & reconciliation</span>
           <span className="font-mono text-xs text-zinc-500">({records.length} accounts)</span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-900 text-zinc-400 border border-white/[0.07]">
+            Simulated data
+          </span>
         </div>
         <span className="text-xs text-zinc-500">Click participant to inspect</span>
       </div>

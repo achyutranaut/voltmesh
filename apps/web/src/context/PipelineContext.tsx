@@ -20,6 +20,7 @@ import { voltmeshTestnet, SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID } from '../config
 import { AttestationEnvelope, ClearingResult } from '@energy-dex/types';
 import { safeStringify, normalizeEpochRecord } from '../lib/json';
 import { useSession } from '../auth/SessionContext';
+import { canExecuteSettlement } from '../auth/permissions';
 
 export const PIPELINE_ORDER: PipelineStageId[] = [
   'METER',
@@ -732,7 +733,7 @@ export const PipelineProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (stageId === 'CLEARING' || stageId === 'ORACLE' || stageId === 'MERKLE') {
         if (role !== 'discom') return false;
       } else if (stageId === 'SETTLEMENT') {
-        if (role !== 'discom' && role !== 'seller' && role !== 'buyer') return false;
+        if (!canExecuteSettlement(role)) return false;
       } else if (stageId === 'CERTIFICATE') {
         if (role !== 'seller') return false;
       } else if (stageId === 'METER' || stageId === 'ATTESTATION') {

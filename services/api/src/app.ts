@@ -198,6 +198,15 @@ const OracleSignStatementSchema = z.object({
   chainId: z.number().int().positive().optional(),
 });
 
+const SettlementExecuteSchema = z.object({
+  zoneId: z.number().int().positive().default(1),
+  intervalIdx: z.number().int().nonnegative().optional(),
+  dateEpoch: z.number().int().positive().optional(),
+  statementRoot: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'statementRoot must be 32-byte hex'),
+  totalCreditsPaise: z.string().regex(/^\d+$/).default('0'),
+  totalDebitsPaise: z.string().regex(/^\d+$/).default('0'),
+});
+
 const OracleSignEpochSchema = z.object({
   zoneId: z.number().int().positive(),
   intervalIdx: z.number().int().min(0),
@@ -534,6 +543,42 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       ],
       outputs: [],
       stateMutability: 'nonpayable',
+    },
+  ] as const;
+
+  const postDailyStatementAbi = [
+    {
+      type: 'function',
+      name: 'postDailyStatement',
+      inputs: [
+        { name: 'dateEpoch', type: 'uint32' },
+        { name: 'zoneId', type: 'uint32' },
+        { name: 'statementRoot', type: 'bytes32' },
+        { name: 'totalCreditsPaise', type: 'uint256' },
+        { name: 'totalDebitsPaise', type: 'uint256' },
+        { name: 'oracleSignatures', type: 'bytes[]' },
+      ],
+      outputs: [],
+      stateMutability: 'nonpayable',
+    },
+    {
+      type: 'function',
+      name: 'dailyStatements',
+      inputs: [
+        { name: 'dateEpoch', type: 'uint32' },
+        { name: 'zoneId', type: 'uint32' },
+      ],
+      outputs: [
+        { name: 'dateEpoch', type: 'uint32' },
+        { name: 'zoneId', type: 'uint32' },
+        { name: 'statementRoot', type: 'bytes32' },
+        { name: 'totalCreditsPaise', type: 'uint256' },
+        { name: 'totalDebitsPaise', type: 'uint256' },
+        { name: 'totalCollectedDebitsPaise', type: 'uint256' },
+        { name: 'totalClaimedCreditsPaise', type: 'uint256' },
+        { name: 'postedAt', type: 'uint64' },
+      ],
+      stateMutability: 'view',
     },
   ] as const;
 
@@ -1456,7 +1501,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       })
     : null;
 
-  app.post('/api/v1/oracle/sign-statement', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM')] }, async (request, reply) => {
+  app.post('/api/v1/oracle/sign-statement', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM', 'REGULATOR', 'AUDITOR')] }, async (request, reply) => {
     if (!defaultOracleKey) {
       return reply.status(503).send({ error: 'ORACLE_KEY_NOT_CONFIGURED', message: 'Oracle signing key is not configured on this server' });
     }
@@ -2929,6 +2974,167 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
 
   app.post('/api/v1/markets/zones/:zoneId/commit-clearing/:intervalIdx', { preHandler: [authenticate, requireCapability('CLEAR_MARKET')] }, handleCommitClearing);
   app.post('/api/v1/clearing/commit', { preHandler: [authenticate, requireCapability('CLEAR_MARKET')] }, handleCommitClearing);
+
+  // Dedicated Settlement Execution Endpoint for Operator & Regulator (Google or Wallet session)
+  const handleExecuteSettlement = async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = (request as any).authenticatedUser as AuthenticatedUser;
+    const validated = validateBody(SettlementExecuteSchema, request.body, reply);
+    if (!validated) return;
+    const body = validated;
+
+    let dateEpoch = body.dateEpoch ?? Math.floor(Date.now() / 86400000);
+    const zoneId = body.zoneId;
+    const totalCredits = BigInt(body.totalCreditsPaise);
+    const totalDebits = BigInt(body.totalDebitsPaise);
+
+    // Enforce economic conservation: total debits must cover total credits
+    if (totalDebits < totalCredits) {
+      return reply.status(400).send({
+        error: 'ECONOMIC_CONSERVATION_VIOLATION',
+        message: `Total debits (${totalDebits}) must cover total credits (${totalCredits})`,
+      });
+    }
+
+    // Determine simulation or live execution
+    const isLocalDevWithoutLiveOracle = chainId === 31337 && !options.oraclePrivateKey && !process.env.ORACLE_PRIVATE_KEY;
+    if (!operatorWalletClient || !settlementContractAddress || isSandboxMode || process.env.NODE_ENV === 'test' || isLocalDevWithoutLiveOracle) {
+      if (isSandboxMode || process.env.NODE_ENV === 'test' || isLocalDevWithoutLiveOracle || !operatorWalletClient || !settlementContractAddress) {
+        const dummyHash = `0x${crypto.randomBytes(32).toString('hex')}` as Hash;
+        auditLogger.recordAuditEvent({
+          actorWallet: user.address,
+          role: user.role,
+          action: 'SETTLEMENT_EXECUTED',
+          resourceType: 'BATCH_SETTLEMENT',
+          resourceId: `settlement-${zoneId}-${dateEpoch}`,
+          zoneId,
+          status: 'SUCCESS',
+          reason: `Batch settlement statement posted by ${user.role} (${user.address}) in simulation/test mode`,
+          metadata: {
+            txHash: dummyHash,
+            statementRoot: body.statementRoot,
+            dateEpoch,
+            totalCreditsPaise: totalCredits.toString(),
+            totalDebitsPaise: totalDebits.toString(),
+            simulated: true,
+          },
+        });
+        return reply.send({
+          txHash: dummyHash,
+          status: 'success',
+          dateEpoch,
+          zoneId,
+          statementRoot: body.statementRoot,
+          simulated: true,
+        });
+      }
+    }
+
+    try {
+      // Check existing statement if dateEpoch was auto-generated
+      if (body.dateEpoch === undefined && settlementContractAddress) {
+        try {
+          const existing = (await publicClient.readContract({
+            address: settlementContractAddress,
+            abi: postDailyStatementAbi,
+            functionName: 'dailyStatements',
+            args: [dateEpoch, zoneId],
+          })) as any;
+          if (existing && (existing[7] > 0n || existing.postedAt > 0n)) {
+            let attempts = 0;
+            while (attempts < 5) {
+              attempts++;
+              dateEpoch++;
+              const check = (await publicClient.readContract({
+                address: settlementContractAddress,
+                abi: postDailyStatementAbi,
+                functionName: 'dailyStatements',
+                args: [dateEpoch, zoneId],
+              })) as any;
+              if (!check || (check[7] === 0n && (check.postedAt === 0n || check.postedAt === undefined))) {
+                break;
+              }
+            }
+          }
+        } catch {
+          // Ignore read error on dailyStatements check
+        }
+      }
+
+      // Generate oracle signature using defaultOracleKey if available
+      const oracleSignatures: Hex[] = [];
+      if (defaultOracleKey) {
+        const statementHash = keccak256(
+          encodePacked(
+            ['uint256', 'address', 'uint32', 'uint32', 'bytes32', 'uint256', 'uint256'],
+            [
+              BigInt(chainId),
+              settlementContractAddress!,
+              dateEpoch,
+              zoneId,
+              body.statementRoot as Hex,
+              totalCredits,
+              totalDebits,
+            ]
+          )
+        );
+        const oracleAccount = privateKeyToAccount(defaultOracleKey);
+        const signature = await oracleAccount.signMessage({ message: { raw: statementHash } });
+        oracleSignatures.push(signature);
+      }
+
+      const hash = await operatorWalletClient!.writeContract({
+        address: settlementContractAddress!,
+        abi: postDailyStatementAbi,
+        functionName: 'postDailyStatement',
+        args: [
+          dateEpoch,
+          zoneId,
+          body.statementRoot as Hex,
+          totalCredits,
+          totalDebits,
+          oracleSignatures,
+        ],
+      });
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      auditLogger.recordAuditEvent({
+        actorWallet: user.address,
+        role: user.role,
+        action: 'SETTLEMENT_EXECUTED',
+        resourceType: 'BATCH_SETTLEMENT',
+        resourceId: `settlement-${zoneId}-${dateEpoch}`,
+        zoneId,
+        status: 'SUCCESS',
+        reason: `Batch settlement statement posted on-chain by ${user.role} (${user.address})`,
+        metadata: {
+          txHash: hash,
+          blockNumber: receipt.blockNumber.toString(),
+          statementRoot: body.statementRoot,
+          dateEpoch,
+          totalCreditsPaise: totalCredits.toString(),
+          totalDebitsPaise: totalDebits.toString(),
+        },
+      });
+
+      return reply.send({
+        txHash: hash,
+        status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(),
+        dateEpoch,
+        zoneId,
+        statementRoot: body.statementRoot,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({
+        error: 'ON_CHAIN_SETTLEMENT_FAILED',
+        message: err?.message || 'Failed to post daily statement on-chain.',
+      });
+    }
+  };
+
+  app.post('/api/v1/settlements/execute', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM', 'REGULATOR', 'AUDITOR')] }, handleExecuteSettlement);
+  app.post('/api/v1/settlement/execute', { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM', 'REGULATOR', 'AUDITOR')] }, handleExecuteSettlement);
 
   app.get('/api/v1/clearing/:zoneId/:intervalIdx', async (request, reply) => {
     const { zoneId, intervalIdx } = request.params as { zoneId: string; intervalIdx: string };

@@ -20,6 +20,8 @@ import {
 import { DetailDrawerData, NavigationTab } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
+import { useSession } from '@/auth/SessionContext';
+import { canExecuteSettlement } from '@/auth/permissions';
 import { StageLockGate } from '@/components/terminal/StageLockGate';
 import { formatUnits, parseUnits, Hash, keccak256, encodePacked } from 'viem';
 import { getExplorerTxUrl, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS } from '@/config/contracts';
@@ -65,6 +67,7 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
     flow,
   } = usePipeline();
 
+  const { session } = useSession();
   const [depositAmount, setDepositAmount] = useState<string>('50');
   const [withdrawAmount, setWithdrawAmount] = useState<string>('20');
   const [isDepositing, setIsDepositing] = useState<boolean>(false);
@@ -414,11 +417,22 @@ export const SettlementView: React.FC<SettlementViewProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>SETTLEMENT COMPLETED ON-CHAIN</span>
               </div>
+            ) : !canExecuteSettlement(session?.role) ? (
+              <Button
+                variant="default"
+                size="sm"
+                disabled
+                className="bg-white/[0.04] text-zinc-500 font-bold text-xs cursor-not-allowed border border-white/[0.07] opacity-60"
+                title="Only Operator or Regulator can execute settlement"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                OPERATOR/REGULATOR ONLY
+              </Button>
             ) : (
               <Button
                 variant="default"
                 size="sm"
-                disabled={isExecutingSettlement || !canExecuteStage('SETTLEMENT') || !isConnected}
+                disabled={isExecutingSettlement || !canExecuteStage('SETTLEMENT') || (!isConnected && session?.kind !== 'google')}
                 onClick={handleExecuteSettlementBatch}
                 className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs cursor-pointer shadow disabled:opacity-50"
               >

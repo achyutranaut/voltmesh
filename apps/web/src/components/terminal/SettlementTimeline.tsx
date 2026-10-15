@@ -8,7 +8,7 @@ export const SettlementTimeline: React.FC = () => {
   const isCleared = stages.CLEARING.status === 'COMPLETED';
   const isDeliveryCompleted = stages.DELIVERY.status === 'COMPLETED';
   const isSettlementReady = stages.SETTLEMENT.status === 'READY' || stages.SETTLEMENT.status === 'COMPLETED';
-  const isSettlementClaimed = stages.SETTLEMENT.status === 'COMPLETED';
+  const isSettlementClaimed = stages.SETTLEMENT.status === 'COMPLETED' && !!stages.SETTLEMENT.txHash;
 
   const steps = [
     {
