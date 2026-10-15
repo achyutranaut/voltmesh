@@ -28,6 +28,7 @@ import {
 import { DetailDrawerData } from '@/types/ui';
 import { useSession, DEMO_MODE } from '@/auth/SessionContext';
 import { apiFetch, mapAdvisorError } from '@/lib/api';
+import { POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
 
 export interface SecurityViewProps {
   currentInterval?: number;
@@ -289,7 +290,10 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 10000);
+    const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
+      fetchMetrics();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchMetrics]);
 

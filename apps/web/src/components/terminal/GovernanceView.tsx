@@ -23,6 +23,7 @@ import {
 import { useSession } from '@/auth/SessionContext';
 import { DetailDrawerData } from '@/types/ui';
 import { apiFetch, getApiBaseUrl } from '@/lib/api';
+import { POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
 
 interface GovernanceMember {
   governanceMemberId: string;
@@ -147,7 +148,10 @@ export const GovernanceView: React.FC<GovernanceViewProps> = ({ onSelectDetail }
 
   useEffect(() => {
     refreshData();
-    const interval = setInterval(refreshData, 10000);
+    const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
+      refreshData();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refreshData]);
 

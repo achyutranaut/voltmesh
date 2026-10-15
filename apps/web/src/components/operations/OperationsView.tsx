@@ -26,7 +26,7 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import { getPublicClient, POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
-import { voltmeshTestnet, API_URL, USE_LOCAL, RPC_URL } from '@/config/contracts';
+import { voltmeshTestnet, API_URL, USE_LOCAL } from '@/config/contracts';
 
 interface OperationsViewProps {
   currentInterval: number;

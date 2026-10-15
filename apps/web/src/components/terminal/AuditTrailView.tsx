@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useSession } from '@/auth/SessionContext';
 import { apiFetch } from '@/lib/api';
+import { POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
 import { resolveSessionDomain, type Domain } from '@/auth/permissions';
 
 /**
@@ -144,7 +145,10 @@ export const AuditTrailView: React.FC<AuditTrailViewProps> = ({ onSelectDetail: 
 
   useEffect(() => {
     fetchEvents();
-    const interval = setInterval(fetchEvents, 15000);
+    const interval = setInterval(() => {
+      if (shouldPausePolling()) return;
+      fetchEvents();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchEvents]);
 

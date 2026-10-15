@@ -16,7 +16,7 @@ import { DetailDrawerData } from '@/types/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL, getContract } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, getContract } from '@/config/contracts';
 import { Address } from 'viem';
 import { getPublicClient } from '@/lib/viemClient';
 

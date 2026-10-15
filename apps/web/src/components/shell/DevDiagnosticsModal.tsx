@@ -29,7 +29,6 @@ import { useWallet } from '../../context/WalletContext';
 import {
   SUPPORTED_NETWORKS,
   DEFAULT_CHAIN_ID,
-  RPC_URL,
   voltmeshTestnet,
   getContract,
   getExplorerTxUrl,
@@ -79,7 +78,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isFundingGas, setIsFundingGas] = useState(false);
 
-  const rpcUrl = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.rpcUrl || RPC_URL;
+  const networkName = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name || 'Base Sepolia';
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -161,13 +160,13 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
 
       setLiveGasEstimate(gas);
     } catch (err: any) {
-      console.warn('Estimate gas error:', err);
+      logRpcError('runContractGasEstimate', err);
       setLiveGasEstimate(null);
       setEstimationError(err.shortMessage || err.message || 'Gas estimation reverted');
     } finally {
       setIsEstimatingGas(false);
     }
-  }, [selectedContractKey, address, rpcUrl]);
+  }, [selectedContractKey, address]);
 
   useEffect(() => {
     if (isOpen && isConnected) {
@@ -331,7 +330,7 @@ export const DevDiagnosticsModal: React.FC<DevDiagnosticsModalProps> = ({ isOpen
                 {rpcStatus}
               </span>
             </div>
-            <div className="text-[11px] text-zinc-500 font-mono truncate">{rpcUrl}</div>
+            <div className="text-[11px] text-zinc-500 font-mono truncate">{networkName}</div>
           </div>
 
           {/* Latest Block */}

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ShieldAlert, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
-import { getConfigErrors, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, RPC_URL } from '../../config/contracts';
+import { getConfigErrors, DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS } from '../../config/contracts';
 import { useSession } from '../../auth/SessionContext';
+import { useRpcStatus } from '@/lib/viemClient';
 
 /**
  * Renders blocking banners at the very top of the app:
@@ -18,6 +19,7 @@ export const ConfigBanner: React.FC = () => {
   const { session } = useSession();
   const { isConnected, isCorrectNetwork, chainId, connectedChainId, switchNetwork, address, detectedRole, rolesLoading, rolesError } = useWallet();
   const [switching, setSwitching] = useState(false);
+  const isRpcUnreachable = useRpcStatus();
 
   const configErrors = useMemo(() => getConfigErrors(), []);
   const netName = SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? `Chain ${DEFAULT_CHAIN_ID}`;
@@ -25,6 +27,7 @@ export const ConfigBanner: React.FC = () => {
 
   const roleLabel = (() => {
     if (rolesLoading) return 'detecting…';
+    if (isRpcUnreachable) return 'RPC unreachable, retrying';
     if (rolesError) return 'read error';
     if (!detectedRole) return '—';
     if (detectedRole === 'unregistered') return 'unregistered';
@@ -97,11 +100,18 @@ export const ConfigBanner: React.FC = () => {
           </span>
           <span>
             <span className="text-zinc-500">role</span>{' '}
-            <span className={rolesError ? 'text-red-400' : 'text-emerald-300'}>{roleLabel}</span>
+            <span className={isRpcUnreachable ? 'text-amber-400' : rolesError ? 'text-red-400' : 'text-emerald-300'}>{roleLabel}</span>
           </span>
-          {rolesError && <span className="text-red-400/80">({rolesError})</span>}
+          {isRpcUnreachable ? (
+            <span className="inline-flex items-center gap-1 text-amber-400">
+              <AlertTriangle className="w-3 h-3 text-amber-400" />
+              <span>RPC unreachable, retrying</span>
+            </span>
+          ) : rolesError ? (
+            <span className="text-red-400/80">({rolesError})</span>
+          ) : null}
           <span className="hidden lg:inline">
-            <span className="text-zinc-500">rpc</span> <span className="text-zinc-500">{RPC_URL}</span>
+            <span className="text-zinc-500">network</span> <span className="text-zinc-400">{netName}</span>
           </span>
         </div>
       )}

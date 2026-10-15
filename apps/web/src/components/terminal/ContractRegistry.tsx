@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { FileCode2, ExternalLink, Copy, Check, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, RPC_URL, getContract } from '@/config/contracts';
+import { DEFAULT_CHAIN_ID, getExplorerAddressUrl, voltmeshTestnet, SUPPORTED_NETWORKS, getContract } from '@/config/contracts';
 
 const NETWORK_LABEL = `${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID]?.name ?? 'VoltMesh'} (Chain ${DEFAULT_CHAIN_ID})`;
 import { Address } from 'viem';

@@ -9,7 +9,7 @@ import {
   type Chain,
   type PublicClient,
 } from 'viem';
-import { voltmeshChain, RPC_URL, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { voltmeshChain, DEFAULT_CHAIN_ID } from '@/config/contracts';
 
 /* ------------------------------------------------------------------ */
 /* Injected-provider access                                             */
@@ -458,8 +458,7 @@ export function friendlySignError(err: any): string {
   }
   if (err.code === 'NO_WALLET') return err.message;
   if (err.name === 'TypeError' && /fetch|network|load failed/i.test(err.message ?? '')) {
-    const where = RPC_URL ? ` (${RPC_URL})` : '';
-    return `Could not reach the network RPC${where}. Check your connection or RPC settings and try again.`;
+    return 'Could not reach the network RPC. Check your connection or RPC settings and try again.';
   }
   return err.message ?? 'Sign-in failed. Please try again.';
 }

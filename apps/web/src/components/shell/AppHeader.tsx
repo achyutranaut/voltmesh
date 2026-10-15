@@ -6,6 +6,7 @@ import { WalletModal } from './WalletModal';
 import { DevDiagnosticsModal } from './DevDiagnosticsModal';
 import { VoltMeshBrand } from '@/components/brand/VoltMeshBrand';
 import { DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS } from '../../config/contracts';
+import { useRpcStatus } from '@/lib/viemClient';
 
 interface AppHeaderProps {
   currentInterval: number;
@@ -25,6 +26,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const [istTime, setIstTime] = useState<string>('');
   const [isWalletModalOpen, setIsWalletModalOpen] = useState<boolean>(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState<boolean>(false);
+  const isRpcUnreachable = useRpcStatus();
 
   const {
     address,
@@ -84,6 +86,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <div className="hidden xl:inline text-[11px] text-zinc-500 font-mono">
             {istTime || '12:00:00 IST'}
           </div>
+
+          {/* RPC Unreachable Status Indicator */}
+          {isRpcUnreachable && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>RPC unreachable, retrying</span>
+            </span>
+          )}
 
           {/* Dev Diagnostics Modal Trigger Button */}
           <button

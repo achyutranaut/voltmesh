@@ -5,8 +5,6 @@ import {
   Hash,
   Hex,
   TransactionReceipt,
-  createPublicClient,
-  http,
   formatEther,
   formatUnits,
   parseUnits,
@@ -1277,7 +1275,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         description: opts.description,
         status: 'RPC_UNAVAILABLE',
         timestamp: Date.now(),
-        error: `VoltMesh RPC (${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl}) is unreachable. Check VITE_RPC_URL / your RPC provider.`,
+        error: `VoltMesh RPC for ${SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].name} is unreachable. Check your network connection / RPC provider.`,
       };
       setActiveTx(errRecord);
       setTxHistory((prev) => [errRecord, ...prev.slice(0, 19)]);
@@ -1329,7 +1327,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.error('VoltMesh transaction gas estimation failed', {
         error: estError,
         chainId,
-        rpcUrl: SUPPORTED_NETWORKS[DEFAULT_CHAIN_ID].rpcUrl,
         walletAddress: address,
         contractAddress: opts.address,
         functionName: opts.functionName,
@@ -1691,6 +1688,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       type: 'escrow',
     });
 
+    void refreshBalances().catch(() => {});
+
     return hash;
   };
 
@@ -1713,6 +1712,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       txHash: hash,
       type: 'escrow',
     });
+
+    void refreshBalances().catch(() => {});
 
     return hash;
   };

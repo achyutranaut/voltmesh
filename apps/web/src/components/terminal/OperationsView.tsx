@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DetailDrawerData } from '@/types/ui';
 import { getPublicClient, POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
-import { voltmeshTestnet, DEFAULT_CHAIN_ID, RPC_URL } from '@/config/contracts';
+import { voltmeshTestnet, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { Cpu, Server, Activity, Radio, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import {
   ResponsiveContainer,
