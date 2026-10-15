@@ -4247,29 +4247,40 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
   // ---------------------------------------------------------------------------
   // 16. Security Lab Attack Simulations (Part 20: Attacks 1 through 10)
   // ---------------------------------------------------------------------------
-  app.post('/api/v1/security/simulate-attack', { preHandler: authenticate }, async (request, reply) => {
-    if (process.env.NODE_ENV === 'production') {
-      return reply.status(403).send({
-        error: 'DRILL_DISABLED_IN_PRODUCTION',
-        message: 'Security attack simulation drills are strictly prohibited in production environments',
-      });
-    }
+  app.post(
+    '/api/v1/security/simulate-attack',
+    { preHandler: [authenticate, requireRole('OPERATOR', 'ADMIN', 'DISCOM', 'REGULATOR', 'AUDITOR')] },
+    async (request, reply) => {
+      if (process.env.NODE_ENV === 'production') {
+        return reply.status(403).send({
+          error: 'DRILL_DISABLED_IN_PRODUCTION',
+          message: 'Security attack simulation drills are strictly prohibited in production environments',
+        });
+      }
 
-    const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string; jurisdiction?: string };
-    const isRegulatorOrOperator =
-      user.govRole === 'REGULATOR' ||
-      user.govRole === 'MARKET_OPERATOR' ||
-      user.govRole === 'AUDITOR' ||
-      user.role === 'OPERATOR' ||
-      user.role === 'ADMIN' ||
-      user.role === 'AUDITOR';
+      const user = (request as any).authenticatedUser as AuthenticatedUser & { govRole?: string; jurisdiction?: string };
+      const tokenRole = String((request.user as any)?.role || '').toLowerCase();
+      const isRegulatorOrOperator =
+        user.govRole === 'REGULATOR' ||
+        user.govRole === 'MARKET_OPERATOR' ||
+        user.govRole === 'AUDITOR' ||
+        user.role === 'OPERATOR' ||
+        user.role === 'ADMIN' ||
+        user.role === 'AUDITOR' ||
+        user.role === 'DISCOM' ||
+        (user.role as string) === 'REGULATOR' ||
+        tokenRole === 'regulator' ||
+        tokenRole === 'operator' ||
+        tokenRole === 'discom' ||
+        tokenRole === 'admin' ||
+        tokenRole === 'auditor';
 
-    if (!isRegulatorOrOperator) {
-      return reply.status(403).send({
-        error: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Only regulatory or operator identities may trigger attack simulation drills',
-      });
-    }
+      if (!isRegulatorOrOperator) {
+        return reply.status(403).send({
+          error: 'INSUFFICIENT_PERMISSIONS',
+          message: 'Only regulatory or operator identities may trigger attack simulation drills',
+        });
+      }
 
     const body = (request.body || {}) as { attackId?: number | string; attackType?: string; domain?: string; targetAddress?: string };
     const domain = body.domain || 'DEMO';

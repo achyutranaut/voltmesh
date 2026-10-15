@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { DetailDrawerData } from '@/types/ui';
 import { useSession, DEMO_MODE } from '@/auth/SessionContext';
+import { isOversightRole, normalizeRole } from '@/auth/permissions';
 import { apiFetch, mapAdvisorError } from '@/lib/api';
 import { POLL_INTERVAL_MS, shouldPausePolling } from '@/lib/viemClient';
 
@@ -246,10 +247,10 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const [advisorLoading, setAdvisorLoading] = useState<boolean>(false);
   const [advisorError, setAdvisorError] = useState<string | null>(null);
 
-  const isOversightRole = session?.role === 'regulator' || session?.role === 'discom';
-  // Drills only run in DEMO mode against synthetic state (Phase 6).
+  const normalizedRole = normalizeRole(session?.role);
+  const isRegulatorOrOperator = normalizedRole === 'regulator' || normalizedRole === 'discom';
+  // Drills run against synthetic state in the DEMO domain (Phase 6).
   const inDemoMode = DEMO_MODE || session?.kind === 'demo';
-  const isDrillAllowed = isOversightRole && inDemoMode;
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -302,7 +303,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
     try {
       const data = await apiFetch<any>('/api/v1/security/simulate-attack', session?.token, {
         method: 'POST',
-        body: JSON.stringify({ attackType }),
+        body: JSON.stringify({ attackType, domain: 'DEMO' }),
       });
       
       const simResult: AttackSimulationResult = {
@@ -647,7 +648,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-200 flex items-start gap-2.5">
             <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <span className="font-semibold text-amber-300">Live Code Execution — operator role required:</span> Every trigger button executes real validation logic in the backend pipeline (Noble Ed25519 verification, Merkle proof evaluation, monotonic nonce validation, or Escrow invariant guards). No cosmetic mockups. Drills are restricted to OPERATOR / REGULATOR accounts and run only against DEMO domain state — they never move real escrow or alter live settlement.
+              <span className="font-semibold text-amber-300">Live Code Execution — regulator or operator role required:</span> Every trigger button executes real validation logic in the backend pipeline (Noble Ed25519 verification, Merkle proof evaluation, monotonic nonce validation, or Escrow invariant guards). No cosmetic mockups. Drills are restricted to OPERATOR / REGULATOR accounts and run only against DEMO domain state — they never move real escrow or alter live settlement.
             </div>
           </div>
 
@@ -719,12 +720,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                    {isDrillAllowed ? (
+                  <div className="mt-4 pt-3 border-t border-white/[0.06] space-y-2">
+                    <div className="flex items-center justify-between">
                       <button
                         onClick={() => handleSimulateAttack(vec.id)}
-                        disabled={isLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                        disabled={!isRegulatorOrOperator || isLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!isRegulatorOrOperator ? 'Requires regulator or operator role' : undefined}
                       >
                         {isLoading ? (
                           <>
@@ -738,33 +740,33 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                           </>
                         )}
                       </button>
-                    ) : (
-                      <span className="text-[11px] text-zinc-500 italic">
-                        {!isOversightRole
-                          ? 'Drills restricted to regulator/operator'
-                          : 'Drills run on demo accounts only'}
-                      </span>
-                    )}
 
-                    {res && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleExplainEvent(typeof res.attackId === 'string' ? res.attackId : `sim-${res.attackId}`)}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 font-medium"
-                          title="Explain incident using Security Advisor"
-                        >
-                          <Bot className="w-3.5 h-3.5" />
-                          <span>Explain</span>
-                        </button>
-                        <button
-                          onClick={() => handleInspectAttack(res)}
-                          className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
-                        >
-                          <span>Audit Proof</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
+                      {res && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleExplainEvent(typeof res.attackId === 'string' ? res.attackId : `sim-${res.attackId}`)}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 font-medium"
+                            title="Explain incident using Security Advisor"
+                          >
+                            <Bot className="w-3.5 h-3.5" />
+                            <span>Explain</span>
+                          </button>
+                          <button
+                            onClick={() => handleInspectAttack(res)}
+                            className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                          >
+                            <span>Audit Proof</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] text-zinc-500 italic">
+                      {isRegulatorOrOperator
+                        ? 'Demo domain only: no live escrow or settlement affected'
+                        : 'Requires regulator or operator role'}
+                    </div>
                   </div>
                 </div>
               );
