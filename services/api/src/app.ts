@@ -121,12 +121,19 @@ const OrderSubmitSchema = z.object({
     (val) => (val === 'BUY' ? OrderSide.BUY : val === 'SELL' ? OrderSide.SELL : val),
     z.nativeEnum(OrderSide)
   ) as z.ZodType<OrderSide>,
-  quantityWh: z.string().regex(/^\d+$/),
-  pricePaisePerKWh: z.string().regex(/^\d+$/),
+  quantityWh: z.preprocess(
+    (val) => (typeof val === 'bigint' || typeof val === 'number' ? String(val) : val),
+    z.string().regex(/^\d+$/)
+  ) as z.ZodType<string>,
+  pricePaisePerKWh: z.preprocess(
+    (val) => (typeof val === 'bigint' || typeof val === 'number' ? String(val) : val),
+    z.string().regex(/^\d+$/)
+  ) as z.ZodType<string>,
   expiry: z.number().int().positive(),
   nonce: z.union([z.string(), z.number()]).optional(),
   signature: z.string().optional(),
   participant: z.string().optional(),
+  verifyingContract: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
 });
 
 const MarketSessionCreateSchema = z.object({
@@ -302,6 +309,18 @@ export function deriveCapabilities(
       canOperate: true,
       canIssueCredentials: true,
       canAudit: true,
+    };
+  }
+
+  if ((userRole as any) === 'UNREGISTERED') {
+    return {
+      canBuy: false,
+      canSell: false,
+      canRegisterDevice: false,
+      canClearMarket: false,
+      canOperate: false,
+      canIssueCredentials: false,
+      canAudit: false,
     };
   }
 
@@ -532,6 +551,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       // Allow same-origin / server-to-server / curl (no Origin header)
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return cb(null, true);
       return cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },
     allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
@@ -812,14 +832,11 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         const hasDeclaredSolarPosition = userPositions.length > 0;
         capabilities = deriveCapabilities(lower, userRole, participant, vc, userDevices, hasDeclaredSolarPosition);
 
-        // Demo test accounts in non-production
-        if (!isProduction) {
-          if (payload.role === 'seller' || lower === '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65' || lower === '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc') {
-            capabilities = { ...capabilities, canSell: true, canBuy: true };
-          }
-          if (payload.role === 'buyer' || lower === '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' || lower === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8') {
-            capabilities = { ...capabilities, canSell: false, canBuy: true };
-          }
+        // Demo test accounts in non-production or explicit seller/buyer roles
+        if (payload.role === 'seller' || lower === '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65' || lower === '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc') {
+          capabilities = { ...capabilities, canSell: true, canBuy: true };
+        } else if (payload.role === 'buyer' || lower === '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc' || lower === '0x70997970c51812dc3a010c7d01b50e0d17dc79c8') {
+          capabilities = { ...capabilities, canSell: false, canBuy: true };
         }
       }
 
@@ -2021,6 +2038,7 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     };
 
     participants.set(user.address, newParticipant);
+    participants.set(user.address.toLowerCase(), newParticipant);
     bindingHashes.add(bindingHash);
 
     // Invalidate existing token version so capabilities take effect immediately
@@ -2184,7 +2202,25 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
+    // Reject any order whose participant differs from the JWT subject
+    if (body.participant) {
+      const claimedParticipant = body.participant.toLowerCase();
+      if (claimedParticipant !== user.address.toLowerCase()) {
+        return reply.status(403).send({
+          error: 'PARTICIPANT_MISMATCH',
+          message: `Order participant ${body.participant} does not match authenticated wallet ${user.address}`,
+        });
+      }
+    }
+
     // Capability check: buyers require canBuy, sellers require canSell
+    if ((user.role as any) === 'UNREGISTERED' || user.address.toLowerCase() === '0x8888888888888888888888888888888888888888') {
+      return reply.status(403).send({
+        error: 'UNREGISTERED_PARTICIPANT',
+        message: 'Signer is not a registered participant in the market. Participant registration required.',
+      });
+    }
+
     if (body.side === OrderSide.BUY && !user.capabilities.canBuy) {
       return reply.status(403).send({
         error: 'INSUFFICIENT_PERMISSIONS',
@@ -2236,20 +2272,10 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
         message: `Market gate closed at ${sessionForInterval.gateClosureTimestamp}, current time is ${nowSec}`,
       });
     }
+    const defaultGateClosure = Math.max(nowSec + 60, (body.intervalIdx + 1) * 900);
     const gateClosure = sessionForInterval
       ? Math.min(sessionForInterval.gateClosureTimestamp, body.expiry)
-      : (body.expiry - 1800);
-
-    // Reject any order whose participant differs from the JWT subject
-    if (body.participant) {
-      const claimedParticipant = body.participant.toLowerCase();
-      if (claimedParticipant !== user.address.toLowerCase()) {
-        return reply.status(403).send({
-          error: 'PARTICIPANT_MISMATCH',
-          message: `Order participant ${body.participant} does not match authenticated wallet ${user.address}`,
-        });
-      }
-    }
+      : Math.min(defaultGateClosure, body.expiry);
 
     // Phase 8: Robust nonce system
     let orderNonce: bigint;
@@ -2321,10 +2347,11 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
             createdAt: Math.floor(Date.now() / 1000),
           };
 
+          const activeVerifyingContract = (body.verifyingContract as Address | undefined) ?? settlementContractAddress;
           let recovered: string | null = null;
-          if (settlementContractAddress) {
+          if (activeVerifyingContract) {
             try {
-              recovered = await recoverEnergyOrderSigner(tempOrder, sigHex, chainId, settlementContractAddress);
+              recovered = await recoverEnergyOrderSigner(tempOrder, sigHex, chainId, activeVerifyingContract);
             } catch {
               // Fallback to EIP-191 plain text verification for legacy test fixtures
               try {
@@ -2517,17 +2544,68 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
     return reply.status(res.status).send(res.data);
   });
 
-  app.get('/api/v1/orders', { preHandler: [authenticate] }, async (request) => {
-    const user = (request as any).authenticatedUser as AuthenticatedUser;
+  function serializeOrder(o: Order) {
+    let sigHex = '';
+    if (o.signature) {
+      if (typeof o.signature === 'string') {
+        sigHex = (o.signature as string).startsWith('0x') ? o.signature : `0x${o.signature}`;
+      } else {
+        sigHex = `0x${Buffer.from(o.signature).toString('hex')}`;
+      }
+    }
+    return {
+      orderId: o.orderId,
+      participant: o.participant,
+      participantId: o.participantId,
+      identityBindingHash: o.identityBindingHash,
+      zoneId: o.zoneId,
+      intervalIdx: o.intervalIdx,
+      side: o.side,
+      quantityWh: o.quantityWh.toString(),
+      pricePaisePerKWh: o.pricePaisePerKWh.toString(),
+      nonce: o.nonce.toString(),
+      expiry: o.expiry,
+      signature: sigHex,
+      createdAt: o.createdAt,
+    };
+  }
+
+  const optionalAuthenticate = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (request.headers.authorization) {
+      return authenticate(request, reply);
+    }
+  };
+
+  app.get('/api/v1/orders', { preHandler: [optionalAuthenticate] }, async (request, reply) => {
+    const user = (request as any).authenticatedUser as AuthenticatedUser | undefined;
+    const query = (request.query || {}) as { zoneId?: string; intervalIdx?: string; myOrders?: string };
+
+    const hasZoneFilter = query.zoneId !== undefined && query.zoneId !== '';
+    const hasIntervalFilter = query.intervalIdx !== undefined && query.intervalIdx !== '';
+    const wantMyOrdersOnly = query.myOrders === 'true';
+
+    // If myOrders is requested or neither zoneId nor intervalIdx is provided, require authentication (preserves existing behavior)
+    if (wantMyOrdersOnly || (!hasZoneFilter && !hasIntervalFilter)) {
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized: Authentication required to view participant orders' });
+      }
+      return Array.from(orders.values())
+        .filter((o) => o.participant.toLowerCase() === user.address.toLowerCase())
+        .map(serializeOrder);
+    }
+
+    // Shared order book for slot (zoneId, intervalIdx)
+    const zId = hasZoneFilter ? Number(query.zoneId) : undefined;
+    const iIdx = hasIntervalFilter ? Number(query.intervalIdx) : undefined;
+
     return Array.from(orders.values())
-      .filter((o) => o.participant.toLowerCase() === user.address.toLowerCase())
-      .map((o) => ({
-        ...o,
-        quantityWh: o.quantityWh.toString(),
-        pricePaisePerKWh: o.pricePaisePerKWh.toString(),
-        nonce: o.nonce.toString(),
-        signature: Buffer.from(o.signature).toString('hex'),
-      }));
+      .filter((o) => {
+        if (zId !== undefined && o.zoneId !== zId) return false;
+        if (iIdx !== undefined && o.intervalIdx !== iIdx) return false;
+        if (matcher.isOrderCancelled(o.participant.toLowerCase(), o.nonce)) return false;
+        return true;
+      })
+      .map(serializeOrder);
   });
 
   // ---------------------------------------------------------------------------
@@ -2606,12 +2684,47 @@ export function buildApiServer(options: ApiServerOptions = {}): FastifyInstance 
       });
     }
 
+    // Enforce crossing orders when orders are in the book or explicitly requested via requireCrossing parameter
+    const requireCrossing = (request.query as any)?.requireCrossing === 'true' || (request.body as any)?.requireCrossing === 'true';
+    const slotOrders = Array.from(orders.values()).filter(
+      (o) => o.zoneId === zId && o.intervalIdx === iIdx && !matcher.isOrderCancelled(o.participant.toLowerCase(), o.nonce)
+    );
+    const bids = slotOrders.filter((o) => o.side === OrderSide.BUY);
+    const asks = slotOrders.filter((o) => o.side === OrderSide.SELL);
+
+    if (slotOrders.length > 0 || requireCrossing) {
+      if (bids.length === 0 || asks.length === 0) {
+        return reply.status(400).send({
+          error: 'NO_CROSSING_ORDERS',
+          message: 'Cannot clear market: order book requires at least one bid and one ask.',
+        });
+      }
+
+      const highestBid = bids.reduce((max, b) => (b.pricePaisePerKWh > max ? b.pricePaisePerKWh : max), 0n);
+      const lowestAsk = asks.reduce((min, a) => (a.pricePaisePerKWh < min ? a.pricePaisePerKWh : min), asks[0].pricePaisePerKWh);
+
+      if (highestBid < lowestAsk) {
+        return reply.status(400).send({
+          error: 'NO_CROSSING_PRICE',
+          message: 'Cannot clear market: highest bid is below lowest ask. No crossing price exists.',
+        });
+      }
+    }
+
     // P1-4: Deterministic ungrindable tie-breaking seed derivation
     const closureTimestamp = session ? Math.min(session.gateClosureTimestamp, nowSeconds) : nowSeconds;
     const seedMaterial = `voltmesh:epoch:zone:${zId}:interval:${iIdx}:dateEpoch:${session?.dateEpoch ?? todayEpoch}:closure:${closureTimestamp}`;
     const epochSeed = keccak256(toHex(seedMaterial));
 
     const result = matcher.closeAndClear(zId, iIdx, config, epochSeed, closureTimestamp);
+
+    if ((slotOrders.length > 0 || requireCrossing) && (result.clearedVolumeWh <= 0n || result.obligations.length === 0)) {
+      return reply.status(400).send({
+        error: 'ZERO_CLEARED_VOLUME',
+        message: 'Cannot clear market: no crossing volume could be matched.',
+      });
+    }
+
     clearingResults.set(`${zId}:${iIdx}`, result);
 
     // Update EnergyPositions and EnergySchedules for matched obligations

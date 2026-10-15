@@ -1,11 +1,23 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Address } from 'viem';
+
+vi.mock('../config/contracts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../config/contracts')>();
+  return {
+    ...actual,
+    getContract: vi.fn((name: string) => ({
+      address: '0x1234567890123456789012345678901234567890' as Address,
+      abi: [],
+    })),
+  };
+});
+
 import {
   isRealWalletConnected,
   resolveGoogleSessionState,
   executeRefreshBalances,
 } from './WalletContext';
 import { parseJwtRole } from '../auth/SessionContext';
-import type { Address } from 'viem';
 
 // Helper to create a fake JWT with a JSON payload
 function createMockJwt(payload: Record<string, any>): string {
