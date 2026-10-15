@@ -24,7 +24,7 @@ import { DetailDrawerData } from '@/types/ui';
 import { useWallet } from '@/context/WalletContext';
 import { useSession } from '@/auth/SessionContext';
 import { usePipeline, STAGE_CONFIG } from '@/context/PipelineContext';
-import { getExplorerTxUrl, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { getExplorerTxUrl, DEFAULT_CHAIN_ID, getContract } from '@/config/contracts';
 import { apiFetch } from '@/lib/api';
 import { toHex, hexToBytes, Hash, formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
@@ -198,8 +198,31 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
         pricePaisePerKWh: BigInt(price),
       });
 
+      const verifyingContract = getContract('BatchSettlement', DEFAULT_CHAIN_ID)?.address;
+      const orderPayload = {
+        zoneId: 1,
+        intervalIdx: currentInterval,
+        side: side === OrderSide.BUY ? 0 : 1,
+        quantityWh: qty.toString(),
+        pricePaisePerKWh: price.toString(),
+        expiry,
+        nonce: nonce.toString(),
+        signature,
+        participant: maker,
+        verifyingContract,
+      };
+
+      const res = await apiFetch<{ orderId: string; status: string }>(
+        '/api/v1/orders',
+        session?.token,
+        {
+          method: 'POST',
+          body: JSON.stringify(orderPayload),
+        }
+      );
+
       const newOrder: Order = {
-        orderId: `ord-${side === OrderSide.BUY ? 'b' : 's'}-${Date.now().toString().slice(-4)}`,
+        orderId: res.orderId,
         participant: maker,
         zoneId: 1,
         intervalIdx: currentInterval,
@@ -215,7 +238,7 @@ export const MarketTerminalView: React.FC<MarketTerminalViewProps> = ({
       onAddOrder(newOrder);
       refreshBalances().catch(() => {});
     } catch (err: any) {
-      setOrderSignError(err.message || 'EIP-712 signature request was cancelled or failed.');
+      setOrderSignError(err.message || 'Order submission or signature request failed.');
     } finally {
       setIsSigning(false);
     }

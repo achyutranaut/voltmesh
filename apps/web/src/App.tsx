@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MeterSimulator, SimulatedFault } from '@energy-dex/meter-sim';
 import { SourceType, AttestationEnvelope, Order, OrderSide, ClearingResult } from '@energy-dex/types';
 import { EpochBuilder } from '@energy-dex/epoch-builder';
 import { clearMarket } from '@energy-dex/clearing';
 import { verifyEd25519 } from '@energy-dex/attestation';
-import { keccak256, encodePacked, pad, stringToHex, Hash } from 'viem';
+import { keccak256, encodePacked, pad, stringToHex, Hash, hexToBytes } from 'viem';
 import { DEFAULT_CHAIN_ID, SUPPORTED_NETWORKS, voltmeshTestnet } from './config/contracts';
 import { getPublicClient, shouldPausePolling, logRpcError } from './lib/viemClient';
 
@@ -218,6 +218,71 @@ export default function App() {
   // Market Orders State (Driven by live API / User Wallet Signatures)
   const [orders, setOrders] = useState<Order[]>([]);
 
+  // Shared Order Book Sync (Fetches durable orders from backend API for current slot)
+  const fetchOrders = useCallback(async (slot: number = currentInterval) => {
+    try {
+      const data = await apiFetch<any[]>(
+        `/api/v1/orders?zoneId=1&intervalIdx=${slot}`,
+        session?.token
+      );
+      if (Array.isArray(data)) {
+        const parsedOrders: Order[] = data.map((o) => {
+          let sigBytes: Uint8Array;
+          if (typeof o.signature === 'string' && o.signature.startsWith('0x') && o.signature.length > 2) {
+            sigBytes = hexToBytes(o.signature as `0x${string}`);
+          } else if (o.signature instanceof Uint8Array) {
+            sigBytes = o.signature;
+          } else {
+            sigBytes = new Uint8Array(65);
+          }
+          return {
+            orderId: o.orderId,
+            participant: o.participant,
+            participantId: o.participantId,
+            identityBindingHash: o.identityBindingHash,
+            zoneId: Number(o.zoneId),
+            intervalIdx: Number(o.intervalIdx),
+            side: Number(o.side) as OrderSide,
+            quantityWh: BigInt(o.quantityWh),
+            pricePaisePerKWh: BigInt(o.pricePaisePerKWh),
+            nonce: BigInt(o.nonce),
+            expiry: Number(o.expiry),
+            signature: sigBytes,
+            createdAt: Number(o.createdAt || Math.floor(Date.now() / 1000)),
+          };
+        });
+        setOrders(parsedOrders);
+        return parsedOrders;
+      }
+      return [];
+    } catch (err: any) {
+      console.warn('Failed to fetch shared orders for slot', slot, err?.message);
+      return [];
+    }
+  }, [currentInterval, session?.token]);
+
+  useEffect(() => {
+    fetchOrders(currentInterval);
+
+    const timer = setInterval(() => {
+      if (!shouldPausePolling()) {
+        fetchOrders(currentInterval);
+      }
+    }, 8000);
+
+    const onVisibility = () => {
+      if (!shouldPausePolling()) {
+        fetchOrders(currentInterval);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [currentInterval, fetchOrders]);
+
   const [clearingResult, setClearingResult] = useState<ClearingResult | null>(null);
 
   // Epoch State
@@ -290,7 +355,18 @@ export default function App() {
     setMarketError(null);
     const now = Math.floor(Date.now() / 1000);
 
-    const slotOrders = orders.filter((o) => o.zoneId === 1 && o.intervalIdx === currentInterval);
+    // Refresh backend orders for this slot
+    let activeOrders = orders;
+    try {
+      const fresh = await fetchOrders(currentInterval);
+      if (fresh && fresh.length > 0) {
+        activeOrders = fresh;
+      }
+    } catch (e: any) {
+      console.warn('Could not refresh orders before clearing:', e?.message);
+    }
+
+    const slotOrders = activeOrders.filter((o) => o.zoneId === 1 && o.intervalIdx === currentInterval);
     const bids = slotOrders.filter((o) => o.side === OrderSide.BUY);
     const asks = slotOrders.filter((o) => o.side === OrderSide.SELL);
 
@@ -364,6 +440,7 @@ export default function App() {
         }
       }
       refreshBalances().catch(() => {});
+      fetchOrders(currentInterval).catch(() => {});
     }
   };
 
@@ -590,7 +667,11 @@ export default function App() {
                 onAddOrder={(newOrder) => {
                   const err = session && checkOrder(session.role, session.address, newOrder.side, currentInterval, orders);
                   if (err) return alert(err);
-                  setOrders([...orders, { ...newOrder, participant: session ? session.address : newOrder.participant }]);
+                  setOrders((prev) => {
+                    const exists = prev.some((o) => o.orderId === newOrder.orderId);
+                    return exists ? prev : [...prev, { ...newOrder, participant: session ? session.address : newOrder.participant }];
+                  });
+                  fetchOrders(currentInterval).catch(() => {});
                 }}
                 onClearMarket={handleClearMarket}
                 clearingResult={clearingResult}

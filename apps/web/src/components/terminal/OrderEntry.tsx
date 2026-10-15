@@ -7,8 +7,9 @@ import { hexToBytes, formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle2, FileCheck, Wallet, ShieldAlert, Info } from 'lucide-react';
-import { SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import { SUPPORTED_NETWORKS, DEFAULT_CHAIN_ID, getContract } from '@/config/contracts';
 import { formatSlotTimeRangeIST } from '@/utils/formatters';
+import { apiFetch } from '@/lib/api';
 
 export interface OrderEntryProps {
   currentInterval: number;
@@ -187,8 +188,31 @@ export const OrderEntry: React.FC<OrderEntryProps> = ({
         pricePaisePerKWh: BigInt(pricePaise),
       });
 
+      const verifyingContract = getContract('BatchSettlement', DEFAULT_CHAIN_ID)?.address;
+      const orderPayload = {
+        zoneId,
+        intervalIdx: currentInterval,
+        side: side === OrderSide.BUY ? 0 : 1,
+        quantityWh: qtyWh.toString(),
+        pricePaisePerKWh: pricePaise.toString(),
+        expiry,
+        nonce: nonce.toString(),
+        signature,
+        participant: maker,
+        verifyingContract,
+      };
+
+      const res = await apiFetch<{ orderId: string; status: string }>(
+        '/api/v1/orders',
+        session?.token,
+        {
+          method: 'POST',
+          body: JSON.stringify(orderPayload),
+        }
+      );
+
       const newOrder: Order = {
-        orderId: `ord-${side === OrderSide.BUY ? 'b' : 's'}-${Date.now().toString().slice(-4)}`,
+        orderId: res.orderId,
         participant: maker,
         zoneId,
         intervalIdx: currentInterval,
